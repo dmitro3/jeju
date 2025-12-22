@@ -28,12 +28,13 @@ import {processStorageEvents} from './storage-processor'
 import {processCrossServiceEvents} from './cross-service-processor'
 import {processOracleEvents} from './oracle-processor'
 import {processDEXEvents} from './dex-processor'
-import {processModerationEvent, initModerationContracts} from './moderation-processor'
-import {
-    processNetworkRegistryEvent,
-    processRegistryHubEvent,
-    processEntryFederatedEvent
-} from './federation-processor'
+import {processModerationEvent} from './moderation-processor'
+// Federation processor functions available for future use
+// import {
+//     processNetworkRegistryEvent,
+//     processRegistryHubEvent,
+//     processEntryFederatedEvent
+// } from './federation-processor'
 import {
     getEventCategory, getEventName,
     ERC20_TRANSFER, ERC1155_TRANSFER_SINGLE, ERC1155_TRANSFER_BATCH
@@ -256,7 +257,8 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx: Process
 
                     if (fromAddr !== ZERO_ADDRESS) {
                         const fromBalance = getOrCreateTokenBalance(fromAddr.toLowerCase(), log.address.toLowerCase(), blockEntity, blockTimestamp)
-                        fromBalance.balance = fromBalance.balance - value
+                        // Prevent negative balance (defensive check for malformed events)
+                        fromBalance.balance = fromBalance.balance >= value ? fromBalance.balance - value : 0n
                         fromBalance.transferCount++
                         fromBalance.lastUpdated = blockTimestamp
                     }
@@ -318,6 +320,9 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx: Process
                 }
             }
             else if (eventSig === ERC1155_TRANSFER_SINGLE && log.data) {
+                // Validate data length for ERC1155 TransferSingle (2 uint256 = 128 hex chars + 0x prefix)
+                if (log.data.length < 130) continue
+                
                 contractEntity.isERC1155 = true
                 contractEntity.contractType = ContractType.ERC1155
 
@@ -427,7 +432,8 @@ processor.run(new TypeormDatabase({supportHotBlocks: true}), async (ctx: Process
         for (const trace of block.traces) {
             if (!trace.transaction) continue
 
-            const txEntity = transactions.find(t => t.hash === trace.transaction!.hash)
+            const txHash = trace.transaction.hash
+            const txEntity = transactions.find(t => t.hash === txHash)
             if (!txEntity) continue
 
             // Map Subsquid trace types to our TraceType enum

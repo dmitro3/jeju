@@ -19,26 +19,25 @@
 
 import { EventEmitter } from 'events';
 import { Connection, Keypair } from '@solana/web3.js';
-import { createPublicClient, createWalletClient, http, type Address } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, type Address } from 'viem';
 import type { ChainId, StrategyConfig, ArbitrageOpportunity, CrossChainArbOpportunity, StrategyType } from './autocrat-types';
 
 // Strategy imports
 import { DexArbitrageStrategy } from './strategies/dex-arbitrage';
 import { CrossChainArbStrategy } from './strategies/cross-chain-arb';
-import { SolanaArbStrategy, SOLANA_CHAIN_ID } from './strategies/solana-arb';
+import { SolanaArbStrategy } from './strategies/solana-arb';
 import { LiquidityManager, type UnifiedPosition, type RebalanceAction, type LiquidityManagerConfig } from './strategies/liquidity-manager';
 import { YieldFarmingStrategy, type YieldOpportunity, type YieldFarmingConfig } from './strategies/yield-farming';
 import { SolanaDexAggregator } from './solana/dex-adapters';
 
 // Engine imports
-import { EventCollector, type SyncEvent, type SwapEvent } from './engine/collector';
+import { EventCollector } from './engine/collector';
 import { TransactionExecutor } from './engine/executor';
 import { RiskManager } from './engine/risk-manager';
 
 // Contract integrations (EIL/XLP/OIF)
 import { XLPManager, type XLPConfig, type XLPProfile, type LiquidityRequest } from './contracts/eil-xlp';
-import { OIFSolver, type OIFSolverConfig, type OpenIntent, IntentStatus } from './contracts/oif-solver';
+import { OIFSolver, type OIFSolverConfig, type OpenIntent } from './contracts/oif-solver';
 import { createLogger } from '../sdk/logger';
 
 const log = createLogger('UnifiedBot');
@@ -740,10 +739,7 @@ export class UnifiedBot extends EventEmitter {
 
   private async monitorLoop(): Promise<void> {
     while (this.running) {
-      // Collect opportunities from all strategies
-      const opps = this.getOpportunities();
-      
-      // Log summary every minute
+      // Collect opportunities and log summary every minute
       if (Date.now() % 60000 < 10000) {
         const stats = this.getStats();
         log.info('Bot status', { 

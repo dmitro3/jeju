@@ -27,9 +27,16 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, waitForTransactionReceipt, deployContract, getBlockNumber, getBalance, getChainId, getCode, getBlock, getFeeData, formatEther, parseEther, formatUnits, decodeEventLog, keccak256, stringToBytes, type Address, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther, formatUnits, decodeEventLog, keccak256, stringToBytes, type Address, type PublicClient, type WalletClient } from 'viem';
+
+// NOTE: viem 2.x changed export patterns. Functions like readContract, writeContract,
+// getBlockNumber, getBalance, etc. are now client methods, not standalone functions.
+// Usage: publicClient.getBlockNumber() instead of getBlockNumber(publicClient)
+// The functions are still available as standalone but imported from viem/actions:
+// import { readContract, writeContract, getBlockNumber } from 'viem/actions'
+import { readContract, waitForTransactionReceipt, deployContract, getBlockNumber, getBalance, getChainId, getBytecode, getBlock } from 'viem/actions';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import {
   JEJU_LOCALNET,
   L1_LOCALNET,
@@ -71,7 +78,7 @@ let localnetAvailable = false;
 try {
   const chain = inferChainFromRpcUrl(TEST_CONFIG.l2RpcUrl);
   const publicClient = createPublicClient({ chain, transport: http(TEST_CONFIG.l2RpcUrl) });
-  await getBlockNumber(publicClient);
+  await publicClient.getBlockNumber();
   localnetAvailable = true;
 } catch {
   console.log(`Localnet not available at ${TEST_CONFIG.l2RpcUrl}, skipping full system tests`);
@@ -147,7 +154,7 @@ describe.skipIf(!localnetAvailable)('Localnet Full System Integration', () => {
     let isOPStack = false;
 
     it('should check for L2StandardBridge predeploy', async () => {
-      const code = await getCode(l2PublicClient, { address: OP_PREDEPLOYS.L2StandardBridge as Address });
+      const code = await getBytecode(l2PublicClient, { address: OP_PREDEPLOYS.L2StandardBridge as Address });
       isOPStack = code !== '0x';
       if (isOPStack) {
         console.log(`   ✅ L2StandardBridge deployed (OP-Stack chain)`);
@@ -159,7 +166,7 @@ describe.skipIf(!localnetAvailable)('Localnet Full System Integration', () => {
     });
 
     it('should check for WETH predeploy', async () => {
-      const code = await getCode(l2PublicClient, { address: OP_PREDEPLOYS.WETH as Address });
+      const code = await getBytecode(l2PublicClient, { address: OP_PREDEPLOYS.WETH as Address });
       if (code !== '0x') {
         console.log(`   ✅ WETH deployed`);
       } else {
@@ -169,7 +176,7 @@ describe.skipIf(!localnetAvailable)('Localnet Full System Integration', () => {
     });
 
     it('should check for L2CrossDomainMessenger predeploy', async () => {
-      const code = await getCode(l2PublicClient, { address: OP_PREDEPLOYS.L2CrossDomainMessenger as Address });
+      const code = await getBytecode(l2PublicClient, { address: OP_PREDEPLOYS.L2CrossDomainMessenger as Address });
       if (code !== '0x') {
         console.log(`   ✅ L2CrossDomainMessenger deployed`);
       } else {
@@ -431,10 +438,10 @@ describe.skipIf(!localnetAvailable)('Localnet Full System Integration', () => {
     });
 
     it('should verify L2 gas price oracle', async () => {
-      const feeData = await getFeeData(l2PublicClient);
-      expect(feeData.gasPrice).toBeTruthy();
+      const gasPrice = await l2PublicClient.getGasPrice();
+      expect(gasPrice).toBeTruthy();
       
-      console.log(`   ⛽ Current gas price: ${formatUnits(feeData.gasPrice!, 'gwei')} gwei`);
+      console.log(`   ⛽ Current gas price: ${formatUnits(gasPrice, 'gwei')} gwei`);
     });
   });
 

@@ -106,7 +106,7 @@ export default function BridgeHistory() {
 
   const { data: transfers = [], isLoading, error, refetch } = useQuery({
     queryKey: ['bridge-history', address],
-    queryFn: () => fetchBridgeHistory(address!),
+    queryFn: () => address ? fetchBridgeHistory(address) : Promise.resolve([]),
     enabled: !!address,
     refetchInterval: 30000,
   });

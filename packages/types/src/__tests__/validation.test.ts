@@ -77,15 +77,15 @@ describe('AddressSchema', () => {
     123,
   ];
 
-  test.each(validAddresses)('accepts valid address: %s', (address) => {
+  test.each(validAddresses)('accepts valid address: %s', (address: string) => {
     const result = AddressSchema.safeParse(address);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data).toBe(address);
+      expect(result.data as string).toBe(address);
     }
   });
 
-  test.each(invalidAddresses)('rejects invalid address: %s', (address) => {
+  test.each(invalidAddresses)('rejects invalid address: %s', (address: string | number | null | undefined) => {
     const result = AddressSchema.safeParse(address);
     expect(result.success).toBe(false);
   });
@@ -127,12 +127,12 @@ describe('HexSchema', () => {
     123,
   ];
 
-  test.each(validHexStrings)('accepts valid hex: %s', (hex) => {
+  test.each(validHexStrings)('accepts valid hex: %s', (hex: string) => {
     const result = HexSchema.safeParse(hex);
     expect(result.success).toBe(true);
   });
 
-  test.each(invalidHexStrings)('rejects invalid hex: %s', (hex) => {
+  test.each(invalidHexStrings)('rejects invalid hex: %s', (hex: string | number | null | undefined) => {
     const result = HexSchema.safeParse(hex);
     expect(result.success).toBe(false);
   });
@@ -161,7 +161,7 @@ describe('HashSchema', () => {
     null,
   ];
 
-  test.each(validHashes)('accepts valid 32-byte hash: %s', (hash) => {
+  test.each(validHashes)('accepts valid 32-byte hash: %s', (hash: string) => {
     const result = HashSchema.safeParse(hash);
     expect(result.success).toBe(true);
     if (result.success) {
@@ -169,7 +169,7 @@ describe('HashSchema', () => {
     }
   });
 
-  test.each(invalidHashes)('rejects invalid hash: %s', (hash) => {
+  test.each(invalidHashes)('rejects invalid hash: %s', (hash: string | null) => {
     const result = HashSchema.safeParse(hash);
     expect(result.success).toBe(false);
   });
@@ -480,11 +480,11 @@ describe('ChainIdSchema', () => {
   const validChainIds = [1, 10, 137, 42161, 8453, 84532];
   const invalidChainIds = [0, -1, 1.5];
 
-  test.each(validChainIds)('accepts valid chain ID: %d', (chainId) => {
+  test.each(validChainIds)('accepts valid chain ID: %d', (chainId: number) => {
     expect(ChainIdSchema.safeParse(chainId).success).toBe(true);
   });
 
-  test.each(invalidChainIds)('rejects invalid chain ID: %d', (chainId) => {
+  test.each(invalidChainIds)('rejects invalid chain ID: %d', (chainId: number) => {
     expect(ChainIdSchema.safeParse(chainId).success).toBe(false);
   });
 });
@@ -555,12 +555,15 @@ describe('expect (expectValue)', () => {
 describe('expectTrue', () => {
   test('does not throw when true', () => {
     expect(() => expectTrue(true, 'should be true')).not.toThrow();
-    expect(() => expectTrue(1 === 1, 'should be true')).not.toThrow();
+    const one: number = 1;
+    expect(() => expectTrue(one === 1, 'should be true')).not.toThrow();
   });
 
   test('throws when false', () => {
     expect(() => expectTrue(false, 'was false')).toThrow('was false');
-    expect(() => expectTrue(1 === 2, 'one is not two')).toThrow('one is not two');
+    const one: number = 1;
+    const two: number = 2;
+    expect(() => expectTrue(one === two, 'one is not two')).toThrow('one is not two');
   });
 });
 

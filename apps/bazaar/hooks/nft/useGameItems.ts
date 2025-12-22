@@ -15,10 +15,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient, useWalletClient } from 'wagmi'
 import { request, gql } from 'graphql-request'
 import { ItemsAbi } from '@jejunetwork/contracts'
-import { encodeFunctionData, type Address } from 'viem'
+import { type Address } from 'viem'
 import { useSponsorshipStatus } from '../useGasless'
 
 const INDEXER_URL = process.env.NEXT_PUBLIC_INDEXER_URL || 'http://localhost:4350/graphql'
+import type { GameItem } from '@/schemas/games'
+
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
 function isValidContract(address: Address | undefined): address is Address {
@@ -44,20 +46,8 @@ const ITEMS_QUERY = gql`
   }
 `
 
-export interface GameItem {
-  id: string
-  tokenId: string
-  name: string
-  rarity: number
-  attack: number
-  defense: number
-  strength: number
-  stackable: boolean
-  balance: string
-  owner: string
-  originalMinter?: string
-  mintedAt?: number
-}
+// Re-export GameItem type for backwards compatibility
+export type { GameItem } from '@/schemas/games'
 
 /**
  * Fetch items from Items.sol or return empty in web2 mode
@@ -173,8 +163,9 @@ export function useMintItem(contract: Address | undefined, onMint?: (itemId: big
         setIsSponsored(true)
       }
 
+      if (!contract) throw new Error('Contract address required');
       writeContract({
-        address: contract!,
+        address: contract,
         abi: ItemsAbi,
         functionName: 'mintItem',
         args: [itemId, amount, chainData.instanceId, chainData.signature],
@@ -235,8 +226,9 @@ export function useBurnItem(contract: Address | undefined, onBurn?: (itemId: big
         setIsSponsored(true)
       }
 
+      if (!contract) throw new Error('Contract address required');
       writeContract({
-        address: contract!,
+        address: contract,
         abi: ItemsAbi,
         functionName: 'burn',
         args: [address, itemId, amount],
@@ -269,16 +261,5 @@ export function useBurnItem(contract: Address | undefined, onBurn?: (itemId: big
   }
 }
 
-/**
- * Rarity display helper
- */
-export function getRarityInfo(rarity: number) {
-  const r = [
-    { name: 'Common', color: 'text-gray-400', bgClass: 'bg-gray-500/20' },
-    { name: 'Uncommon', color: 'text-green-400', bgClass: 'bg-green-500/20' },
-    { name: 'Rare', color: 'text-blue-400', bgClass: 'bg-blue-500/20' },
-    { name: 'Epic', color: 'text-purple-400', bgClass: 'bg-purple-500/20' },
-    { name: 'Legendary', color: 'text-yellow-400', bgClass: 'bg-yellow-500/20' },
-  ]
-  return r[rarity] || { name: 'Unknown', color: 'text-gray-400', bgClass: 'bg-gray-500/20' }
-}
+// Re-export getRarityInfo from centralized lib for backwards compatibility
+export { getRarityInfo } from '@/lib/games'

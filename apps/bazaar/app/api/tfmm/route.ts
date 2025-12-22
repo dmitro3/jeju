@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
   // Get specific pool
   if (pool) {
     const foundPool = getTFMMPool(pool)
-    expectExists(foundPool, `Pool not found: ${pool}`)
+    expectExists(foundPool, 'Pool not found')
     return NextResponse.json({ pool: foundPool })
   }
 

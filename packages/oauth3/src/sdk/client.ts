@@ -18,6 +18,7 @@ import {
   type Hex,
   type PublicClient,
 } from 'viem';
+import { OAuth3SessionSchema } from '../validation.js';
 import {
   AuthProvider,
   type OAuth3Identity,
@@ -154,6 +155,20 @@ export class OAuth3Client {
   private jns: OAuth3JNSService | null = null;
   private discoveredApp: DiscoveredApp | null = null;
   private currentNode: DiscoveredNode | null = null;
+
+  /**
+   * Timing-safe comparison of two strings
+   * SECURITY: Prevents timing attacks by always comparing all characters
+   */
+  private timingSafeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
+  }
 
   constructor(config: OAuth3Config) {
     // Validate required fields
@@ -422,7 +437,8 @@ export class OAuth3Client {
           return;
         }
 
-        if (!code || returnedState !== state) {
+        // SECURITY: Use timing-safe comparison for state parameter to prevent CSRF timing attacks
+        if (!code || !returnedState || !this.timingSafeCompare(returnedState, state)) {
           return;
         }
 
@@ -749,8 +765,19 @@ export class OAuth3Client {
   private setSession(session: OAuth3Session): void {
     this.session = session;
     
+    // SECURITY: Only store non-sensitive session data in localStorage
+    // The session from the server should already be a public session without signing keys
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined' && typeof localStorage.setItem === 'function') {
-      localStorage.setItem('oauth3_session', JSON.stringify(session));
+      // Store only the session metadata needed to identify the session
+      const publicSessionData = {
+        sessionId: session.sessionId,
+        identityId: session.identityId,
+        smartAccount: session.smartAccount,
+        expiresAt: session.expiresAt,
+        capabilities: session.capabilities,
+        signingPublicKey: session.signingPublicKey,
+      };
+      localStorage.setItem('oauth3_session', JSON.stringify(publicSessionData));
     }
   }
 
@@ -769,7 +796,25 @@ export class OAuth3Client {
     const stored = localStorage.getItem('oauth3_session');
     if (!stored) return;
 
-    const session = JSON.parse(stored) as OAuth3Session;
+    // SECURITY: Validate session data with Zod schema to prevent prototype pollution
+    // and insecure deserialization attacks
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(stored);
+    } catch {
+      // Invalid JSON - clear corrupted data
+      localStorage.removeItem('oauth3_session');
+      return;
+    }
+
+    const result = OAuth3SessionSchema.safeParse(parsed);
+    if (!result.success) {
+      // Invalid session structure - clear corrupted data
+      localStorage.removeItem('oauth3_session');
+      return;
+    }
+
+    const session = result.data as OAuth3Session;
     
     if (session.expiresAt > Date.now()) {
       this.session = session;

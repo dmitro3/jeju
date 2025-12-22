@@ -37,12 +37,9 @@ import {
   estimateYield,
   getDefaultStrategy,
   getRiskTiers,
-  isRiskSleeveDeployed,
-  isLiquidityRouterDeployed,
   getRiskSleeveAddress,
   getLiquidityRouterAddress,
   RiskTier,
-  RISK_TIER_NAMES,
 } from './lib/liquidity-api.js';
 import { poolService, type V2Pool, type PaymasterPool } from './services/pool-service.js';
 import { getProviderInfo } from '@jejunetwork/shared';
@@ -80,10 +77,8 @@ import {
   expect,
   expectAddress,
   expectChainId,
-  expectPositiveNumber,
   validateBody,
   validateQuery,
-  formatError,
   toResponseData,
 } from './lib/validation.js';
 
@@ -93,8 +88,16 @@ const WS_PORT = PORTS.websocket;
 // Only env var needed: payment recipient address (optional)
 const PAYMENT_RECIPIENT = (process.env.GATEWAY_PAYMENT_RECIPIENT || '0x0000000000000000000000000000000000000000') as Address;
 
-app.use(cors());
-app.use(express.json());
+// SECURITY: Configure CORS based on environment
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production';
+const corsOptions = isProduction && CORS_ORIGINS?.length 
+  ? { origin: CORS_ORIGINS } 
+  : {};
+
+app.use(cors(corsOptions));
+// SECURITY: Limit request body size to prevent DoS attacks
+app.use(express.json({ limit: '1mb' }));
 app.use(rateLimit());
 app.use(banCheck({ skipPaths: ['/health', '/.well-known', '/public', '/a2a'] })); // Ban check for API routes
 

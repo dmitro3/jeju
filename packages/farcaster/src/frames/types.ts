@@ -76,22 +76,34 @@ export interface FrameErrorResponse {
   code?: string;
 }
 
+/**
+ * Escape HTML special characters to prevent XSS attacks
+ */
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 export function generateFrameMetaTags(metadata: FrameMetadata): string {
   const tags: string[] = [
-    `<meta property="fc:frame" content="${metadata.version}" />`,
-    `<meta property="fc:frame:image" content="${metadata.image}" />`,
+    `<meta property="fc:frame" content="${escapeHtml(metadata.version)}" />`,
+    `<meta property="fc:frame:image" content="${escapeHtml(metadata.image)}" />`,
   ];
 
   if (metadata.imageAspectRatio) {
-    tags.push(`<meta property="fc:frame:image:aspect_ratio" content="${metadata.imageAspectRatio}" />`);
+    tags.push(`<meta property="fc:frame:image:aspect_ratio" content="${escapeHtml(metadata.imageAspectRatio)}" />`);
   }
 
   if (metadata.postUrl) {
-    tags.push(`<meta property="fc:frame:post_url" content="${metadata.postUrl}" />`);
+    tags.push(`<meta property="fc:frame:post_url" content="${escapeHtml(metadata.postUrl)}" />`);
   }
 
   if (metadata.inputText) {
-    tags.push(`<meta property="fc:frame:input:text" content="${metadata.inputText}" />`);
+    tags.push(`<meta property="fc:frame:input:text" content="${escapeHtml(metadata.inputText)}" />`);
   }
 
   if (metadata.state) {
@@ -101,12 +113,12 @@ export function generateFrameMetaTags(metadata: FrameMetadata): string {
   if (metadata.buttons) {
     metadata.buttons.forEach((button, index) => {
       const i = index + 1;
-      tags.push(`<meta property="fc:frame:button:${i}" content="${button.label}" />`);
+      tags.push(`<meta property="fc:frame:button:${i}" content="${escapeHtml(button.label)}" />`);
       if (button.action) {
-        tags.push(`<meta property="fc:frame:button:${i}:action" content="${button.action}" />`);
+        tags.push(`<meta property="fc:frame:button:${i}:action" content="${escapeHtml(button.action)}" />`);
       }
       if (button.target) {
-        tags.push(`<meta property="fc:frame:button:${i}:target" content="${button.target}" />`);
+        tags.push(`<meta property="fc:frame:button:${i}:target" content="${escapeHtml(button.target)}" />`);
       }
     });
   }
@@ -115,16 +127,18 @@ export function generateFrameMetaTags(metadata: FrameMetadata): string {
 }
 
 export function createFrameResponse(metadata: FrameMetadata, title = 'Jeju Frame'): string {
+  const safeTitle = escapeHtml(title);
+  const safeImage = escapeHtml(metadata.image);
   return `<!DOCTYPE html>
 <html>
 <head>
-  <title>${title}</title>
-  <meta property="og:title" content="${title}" />
-  <meta property="og:image" content="${metadata.image}" />
+  <title>${safeTitle}</title>
+  <meta property="og:title" content="${safeTitle}" />
+  <meta property="og:image" content="${safeImage}" />
   ${generateFrameMetaTags(metadata)}
 </head>
 <body>
-  <h1>${title}</h1>
+  <h1>${safeTitle}</h1>
 </body>
 </html>`;
 }

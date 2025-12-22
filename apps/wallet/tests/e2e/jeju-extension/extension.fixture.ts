@@ -40,7 +40,7 @@ interface ExtensionFixtures {
 
 export const test = base.extend<ExtensionFixtures>({
   // Create context with extension loaded
-  extensionContext: async ({}, use) => {
+  extensionContext: async (_, use) => {
     const extensionPath = ensureExtensionBuilt();
     
     // Launch browser with extension

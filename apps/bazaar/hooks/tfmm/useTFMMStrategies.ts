@@ -4,32 +4,6 @@ import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 
 import { type Address } from 'viem'
 import { useCallback } from 'react'
 
-// Strategy Rule ABI
-const STRATEGY_RULE_ABI = [
-  {
-    name: 'getStrategyConfig',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'lookbackPeriod', type: 'uint256' },
-      { name: 'updateInterval', type: 'uint256' },
-      { name: 'maxWeightChange', type: 'uint256' },
-      { name: 'enabled', type: 'bool' },
-    ],
-  },
-  {
-    name: 'getLastUpdate',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'timestamp', type: 'uint256' },
-      { name: 'weights', type: 'uint256[]' },
-    ],
-  },
-] as const
-
 // Weight Update Runner ABI
 const WEIGHT_UPDATE_RUNNER_ABI = [
   {
@@ -103,7 +77,7 @@ export const STRATEGY_CONFIGS: Record<StrategyType, Omit<StrategyConfig, 'lookba
   },
 }
 
-export function useTFMMStrategies(weightUpdateRunnerAddress: Address | null) {
+export function useTFMMStrategies(_weightUpdateRunnerAddress: Address | null) {
   // Mock data for development - will be replaced with on-chain queries
   const strategies: StrategyConfig[] = [
     {

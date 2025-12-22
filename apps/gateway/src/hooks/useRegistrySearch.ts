@@ -173,7 +173,7 @@ export function useRegistrySearch(options: UseRegistrySearchOptions = {}): UseRe
         clearTimeout(debounceRef.current);
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     results,

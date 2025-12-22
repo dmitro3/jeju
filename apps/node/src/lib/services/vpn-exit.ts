@@ -524,11 +524,27 @@ class NATTable {
   }
 
   private allocatePort(): number {
-    const port = this.portCounter++;
-    if (this.portCounter > 60999) {
-      this.portCounter = 32768;
+    const maxAttempts = 28232; // 60999 - 32768 + 1 = full ephemeral range
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+      const port = this.portCounter++;
+      if (this.portCounter > 60999) {
+        this.portCounter = 32768;
+      }
+      
+      // Check if port is already in use (check both TCP and UDP reverse mappings)
+      const tcpKey = this.makeReverseKey(port, 'tcp');
+      const udpKey = this.makeReverseKey(port, 'udp');
+      
+      if (!this.entries.has(tcpKey) && !this.entries.has(udpKey)) {
+        return port;
+      }
+      
+      attempts++;
     }
-    return port;
+    
+    throw new Error('NAT port exhaustion: no available ports in ephemeral range');
   }
 
   private cleanup(): void {

@@ -84,7 +84,7 @@ test.describe('Error Boundaries & Edge Cases', () => {
       
       // Should show error message or stay on page
       const body = await page.textContent('body')
-      const hasErrorHandling = body?.includes('Transaction failed') || 
+      const _hasErrorHandling = body?.includes('Transaction failed') || 
                               body?.includes('rejected') ||
                               body?.includes('Create Token') // Still on form
       

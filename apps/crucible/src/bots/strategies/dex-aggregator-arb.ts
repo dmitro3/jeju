@@ -23,7 +23,6 @@ import {
   type WalletClient,
   encodeFunctionData,
   parseAbi,
-  formatUnits,
   parseUnits,
 } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -71,8 +70,8 @@ const UNISWAP_QUOTER: Record<number, Address> = {
   8453: '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
 };
 
-// Aave V3 pool addresses (for flash loans)
-const AAVE_POOL: Record<number, Address> = {
+// Aave V3 pool addresses (for flash loans) - reserved for future use
+const _AAVE_POOL: Record<number, Address> = {
   1: '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2',
   42161: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',
   10: '0x794a61358D6845594F94dc1DB02A252b5b4814aD',

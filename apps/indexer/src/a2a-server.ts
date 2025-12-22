@@ -344,10 +344,110 @@ async function executeSkill(skillId: string, params: Record<string, unknown>): P
 // A2A Server
 // ============================================================================
 
+// Request body size limit (1MB)
+const MAX_BODY_SIZE = 1024 * 1024;
+
+// Simple in-memory rate limiter for A2A server
+const a2aRateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const A2A_RATE_LIMIT = 100; // requests per minute
+const A2A_RATE_WINDOW = 60_000; // 1 minute
+
+// Cleanup expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, { resetAt }] of a2aRateLimitStore) {
+    if (now > resetAt) a2aRateLimitStore.delete(key);
+  }
+}, 60_000).unref();
+
 export function createIndexerA2AServer(): Hono {
   const app = new Hono();
 
-  app.use('/*', cors());
+  // SECURITY: Global error handler for JSON parse errors and other exceptions
+  app.onError((err, c) => {
+    console.error('[A2A] Error:', err.message);
+    
+    // Handle JSON parse errors
+    if (err.message.includes('JSON') || err.message.includes('Unexpected')) {
+      return c.json({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32700, message: 'Parse error: Invalid JSON' },
+      }, 400);
+    }
+    
+    // Handle validation errors
+    if (err.message.includes('Validation') || err.name === 'BadRequestError') {
+      return c.json({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: err.message },
+      }, 400);
+    }
+    
+    // Don't expose internal error details
+    return c.json({
+      jsonrpc: '2.0',
+      id: null,
+      error: { code: -32603, message: 'Internal error' },
+    }, 500);
+  });
+
+  // SECURITY: Configure CORS with allowlist - defaults to permissive for local dev
+  const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean);
+  
+  if (CORS_ORIGINS?.length) {
+    app.use('/*', cors({ origin: CORS_ORIGINS, credentials: true }));
+  } else {
+    // Permissive CORS for local development when CORS_ORIGINS not set
+    app.use('/*', cors());
+  }
+  
+  // SECURITY: Request body size limit middleware
+  app.use('/*', async (c, next) => {
+    const contentLength = c.req.header('content-length');
+    if (contentLength && parseInt(contentLength) > MAX_BODY_SIZE) {
+      return c.json({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'Request body too large' },
+      }, 413);
+    }
+    return next();
+  });
+  
+  // SECURITY: Rate limiting middleware
+  app.use('/*', async (c, next) => {
+    // Skip rate limiting for agent card and info endpoints
+    if (c.req.path === '/' || c.req.path === '/.well-known/agent-card.json') return next();
+    
+    // Use IP or Agent ID for rate limiting
+    const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const agentId = c.req.header('x-agent-id');
+    const clientKey = agentId ? `agent:${agentId}` : `ip:${forwarded || 'unknown'}`;
+    
+    const now = Date.now();
+    let record = a2aRateLimitStore.get(clientKey);
+    if (!record || now > record.resetAt) {
+      record = { count: 0, resetAt: now + A2A_RATE_WINDOW };
+      a2aRateLimitStore.set(clientKey, record);
+    }
+    record.count++;
+    
+    c.header('X-RateLimit-Limit', String(A2A_RATE_LIMIT));
+    c.header('X-RateLimit-Remaining', String(Math.max(0, A2A_RATE_LIMIT - record.count)));
+    c.header('X-RateLimit-Reset', String(Math.ceil(record.resetAt / 1000)));
+    
+    if (record.count > A2A_RATE_LIMIT) {
+      return c.json({
+        jsonrpc: '2.0',
+        id: null,
+        error: { code: -32600, message: 'Rate limit exceeded' },
+      }, 429);
+    }
+    
+    return next();
+  });
 
   app.get('/.well-known/agent-card.json', (c) => c.json(AGENT_CARD));
 

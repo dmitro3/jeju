@@ -3,7 +3,9 @@
  * Tests for V8 isolate-based worker execution
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
+import { generateWorkerConfig, wrapHandlerAsWorker } from '../src/workers/workerd/config-generator';
+import { DEFAULT_WORKERD_CONFIG } from '../src/workers/workerd/types';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { Hono } from 'hono';
@@ -187,8 +189,6 @@ describe('Workerd API', () => {
 });
 
 describe('Config Generator', () => {
-  const { generateWorkerConfig, wrapHandlerAsWorker } = require('../src/workers/workerd/config-generator');
-
   test('generates valid capnp config', () => {
     const worker: WorkerdWorkerDefinition = {
       id: 'test-123',
@@ -254,8 +254,6 @@ export default {
 
 describe('Types', () => {
   test('WorkerdConfig has required fields', () => {
-    const { DEFAULT_WORKERD_CONFIG } = require('../src/workers/workerd/types');
-    
     expect(DEFAULT_WORKERD_CONFIG.binaryPath).toBeDefined();
     expect(DEFAULT_WORKERD_CONFIG.workDir).toBeDefined();
     expect(DEFAULT_WORKERD_CONFIG.portRange).toBeDefined();

@@ -6,7 +6,7 @@
  */
 
 import { CastBuilder, type CastOptions } from './cast-builder';
-import { HubSubmitter, FailoverHubSubmitter, type SubmitResult, type HubEndpoint } from './submitter';
+import { HubSubmitter, FailoverHubSubmitter, type HubEndpoint } from './submitter';
 import {
   buildMessage,
   MessageType,
@@ -14,9 +14,7 @@ import {
   UserDataType,
   getFarcasterTimestamp,
   createCastId,
-  messageBytesToHex,
   hexToMessageBytes,
-  type Message,
   type FarcasterNetwork,
 } from './message-builder';
 import type { Hex } from 'viem';

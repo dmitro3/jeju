@@ -16,7 +16,7 @@ import {
   resetContentScreeningPipeline,
 } from '../content-screening';
 import { MailboxStorage } from '../storage';
-import type { EmailContent, EmailEnvelope, EmailFlags, MailboxIndex } from '../types';
+import type { EmailContent, EmailEnvelope } from '../types';
 
 // ============ Content Screening Tests ============
 
@@ -60,7 +60,7 @@ describe('ContentScreeningPipeline', () => {
       expect(result.passed).toBe(true);
       expect(result.action).toBe('allow');
       expect(result.flags.length).toBe(0);
-    } catch (e) {
+    } catch (_e) {
       // AI endpoint not available - skip test
       console.log('Skipping content screening test - AI endpoint not available');
     }
@@ -90,7 +90,7 @@ describe('ContentScreeningPipeline', () => {
       );
       // Should flag as spam or scam (when AI is available)
       expect(result.scores.spam > 0.5 || result.scores.scam > 0.5).toBe(true);
-    } catch (e) {
+    } catch (_e) {
       console.log('Skipping spam detection test - AI endpoint not available');
     }
   });
@@ -125,7 +125,7 @@ describe('ContentScreeningPipeline', () => {
         '0x1234567890123456789012345678901234567890' as Address
       );
       expect(result.scores.scam > 0.3).toBe(true);
-    } catch (e) {
+    } catch (_e) {
       console.log('Skipping phishing detection test - AI endpoint not available');
     }
   });
@@ -150,10 +150,10 @@ describe('ContentScreeningPipeline', () => {
         await pipeline.screenEmail(envelope, spamContent, address);
       }
 
-      const flags = pipeline.getAccountFlags(address);
+      const _flags = pipeline.getAccountFlags(address);
       // Flags may be 0 if AI returns defaults due to connection issues
       expect(pipeline.getAccountEmailCount(address)).toBe(5);
-    } catch (e) {
+    } catch (_e) {
       console.log('Skipping account flags test - AI endpoint not available');
     }
   });
@@ -183,11 +183,13 @@ describe('MailboxStorage', () => {
 
   beforeEach(() => {
     const mockBackend = {
-      upload: async (data: Buffer): Promise<string> => {
+      upload: async (_data: Buffer): Promise<string> => {
         return `cid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       },
       download: async (): Promise<Buffer> => Buffer.from('{}'),
-      delete: async (): Promise<void> => {},
+      delete: async (_cid: string): Promise<void> => {
+        // Intentionally empty - mock backend doesn't need to track deletions
+      },
     };
     
     storage = new MailboxStorage(mockBackend);
@@ -319,7 +321,9 @@ describe('Filter Rules', () => {
     const mockBackend = {
       upload: async (): Promise<string> => `cid-${Date.now()}`,
       download: async (): Promise<Buffer> => Buffer.from('{}'),
-      delete: async (): Promise<void> => {},
+      delete: async (_cid: string): Promise<void> => {
+        // Intentionally empty - mock backend doesn't need to track deletions
+      },
     };
     
     storage = new MailboxStorage(mockBackend);

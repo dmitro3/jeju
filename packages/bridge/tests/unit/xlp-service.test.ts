@@ -9,19 +9,20 @@
  * - Edge cases
  */
 
-import { describe, expect, it, beforeEach } from "bun:test";
-import {
-	XLPService,
-	createXLPService,
-	isSolanaChain,
-	getSolanaTokenMint,
-	getEvmTokenAddress,
-	type FillRequest,
-} from "../../src/xlp/xlp-service.js";
+import { beforeEach, describe, expect, it } from "bun:test";
 import type { Hex } from "viem";
+import {
+	createXLPService,
+	type FillRequest,
+	getEvmTokenAddress,
+	getSolanaTokenMint,
+	isSolanaChain,
+	type XLPService,
+} from "../../src/xlp/xlp-service.js";
 
 // Mock private key for testing (DO NOT use in production)
-const MOCK_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
+const MOCK_PRIVATE_KEY =
+	"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
 
 describe("XLP Service", () => {
 	describe("isSolanaChain", () => {
@@ -175,7 +176,7 @@ describe("XLP Service", () => {
 			service.start();
 			// Should not throw on double start
 			service.start();
-			
+
 			service.stop();
 			// Should not throw on double stop
 			service.stop();
@@ -185,7 +186,8 @@ describe("XLP Service", () => {
 	describe("Fill Request Validation", () => {
 		it("should accept valid fill request", () => {
 			const request: FillRequest = {
-				orderId: "0x1234567890123456789012345678901234567890123456789012345678901234",
+				orderId:
+					"0x1234567890123456789012345678901234567890123456789012345678901234",
 				sourceChain: 1,
 				destChain: 8453,
 				token: "USDC",
@@ -200,7 +202,8 @@ describe("XLP Service", () => {
 
 		it("should validate amount is positive", () => {
 			const request: FillRequest = {
-				orderId: "0x1234567890123456789012345678901234567890123456789012345678901234",
+				orderId:
+					"0x1234567890123456789012345678901234567890123456789012345678901234",
 				sourceChain: 1,
 				destChain: 8453,
 				token: "USDC",
@@ -216,7 +219,8 @@ describe("XLP Service", () => {
 
 		it("should validate max fill delay is reasonable", () => {
 			const request: FillRequest = {
-				orderId: "0x1234567890123456789012345678901234567890123456789012345678901234",
+				orderId:
+					"0x1234567890123456789012345678901234567890123456789012345678901234",
 				sourceChain: 1,
 				destChain: 8453,
 				token: "USDC",
@@ -281,4 +285,3 @@ describe("XLP Service", () => {
 		});
 	});
 });
-

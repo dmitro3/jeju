@@ -12,7 +12,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 import { validateBody, validateParams } from '../server/routes/shared';
 
 // ============================================================================
@@ -245,20 +245,30 @@ export class IngressController {
     const backend = pathRule.backend;
 
     switch (backend.type) {
-      case 'worker':
-        return this.routeToWorker(request, backend.workerId!, pathRule);
+      case 'worker': {
+        if (!backend.workerId) throw new Error('Worker backend requires workerId');
+        return this.routeToWorker(request, backend.workerId, pathRule);
+      }
 
-      case 'container':
-        return this.routeToContainer(request, backend.containerId!, pathRule);
+      case 'container': {
+        if (!backend.containerId) throw new Error('Container backend requires containerId');
+        return this.routeToContainer(request, backend.containerId, pathRule);
+      }
 
-      case 'service':
-        return this.routeToService(request, backend.serviceId!, pathRule);
+      case 'service': {
+        if (!backend.serviceId) throw new Error('Service backend requires serviceId');
+        return this.routeToService(request, backend.serviceId, pathRule);
+      }
 
-      case 'static':
-        return this.routeToStatic(request, backend.staticCid!, pathRule);
+      case 'static': {
+        if (!backend.staticCid) throw new Error('Static backend requires staticCid');
+        return this.routeToStatic(request, backend.staticCid, pathRule);
+      }
 
-      case 'redirect':
-        return Response.redirect(backend.redirectUrl!, 302);
+      case 'redirect': {
+        if (!backend.redirectUrl) throw new Error('Redirect backend requires redirectUrl');
+        return Response.redirect(backend.redirectUrl, 302);
+      }
 
       default:
         return new Response('Bad Gateway', { status: 502 });
@@ -282,7 +292,7 @@ export class IngressController {
     });
   }
 
-  private async routeToContainer(request: Request, containerId: string, pathRule: PathRule): Promise<Response> {
+  private async routeToContainer(_request: Request, containerId: string, _pathRule: PathRule): Promise<Response> {
     // Route to container
     return new Response(JSON.stringify({ 
       backend: 'container',
@@ -292,7 +302,7 @@ export class IngressController {
     });
   }
 
-  private async routeToService(request: Request, serviceId: string, pathRule: PathRule): Promise<Response> {
+  private async routeToService(request: Request, serviceId: string, _pathRule: PathRule): Promise<Response> {
     // Route via service mesh
     return new Response(JSON.stringify({ 
       backend: 'service',
@@ -330,7 +340,7 @@ export class IngressController {
     }
   }
 
-  private async checkRateLimit(request: Request, config: RateLimitConfig): Promise<boolean> {
+  private async checkRateLimit(_request: Request, _config: RateLimitConfig): Promise<boolean> {
     // Simple in-memory rate limiting
     // In production, use distributed rate limiter
     return true;

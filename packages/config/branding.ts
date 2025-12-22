@@ -5,7 +5,7 @@
  * Fork this and edit branding.json to customize your network.
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -140,7 +140,17 @@ function findConfigDir(): string {
   }
 
   // Return first location for error message in loadBrandingFile
-  return locations[0];
+  // The array is always populated, so first element is guaranteed
+  const firstLocation = locations[0];
+  if (!firstLocation) {
+    throw new Error('No config locations defined');
+  }
+  return firstLocation;
+}
+
+/** Safely read a file with error handling */
+function safeReadFile(path: string): string {
+  return readFileSync(path, 'utf-8');
 }
 
 function loadBrandingFile(): BrandingConfig {
@@ -154,7 +164,7 @@ function loadBrandingFile(): BrandingConfig {
     );
   }
 
-  const content = readFileSync(brandingPath, 'utf-8');
+  const content = safeReadFile(brandingPath);
   return BrandingConfigSchema.parse(JSON.parse(content));
 }
 

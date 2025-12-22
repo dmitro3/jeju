@@ -1,9 +1,8 @@
 export {
-  FederatedIdentityBridge,
-  createFederatedIdentityBridge,
-  type FederatedIdentityConfig,
-  type SolanaAgent,
-  type FederatedAgent,
-  type CrossChainIdentityLink,
-} from './federated-bridge.js';
-
+	type CrossChainIdentityLink,
+	createFederatedIdentityBridge,
+	type FederatedAgent,
+	FederatedIdentityBridge,
+	type FederatedIdentityConfig,
+	type SolanaAgent,
+} from "./federated-bridge.js";

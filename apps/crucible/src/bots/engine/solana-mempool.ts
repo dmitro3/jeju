@@ -43,7 +43,6 @@ const MONITORED_PROGRAMS = {
 };
 
 // Minimum value for backrun opportunities
-const MIN_SWAP_VALUE_SOL = 1; // 1 SOL minimum
 const MIN_PROFIT_LAMPORTS = 100000; // 0.0001 SOL minimum profit
 
 // ============ Types ============
@@ -270,7 +269,7 @@ export class SolanaMempoolMonitor extends EventEmitter {
   }
 
   private subscribeToBlocks(): void {
-    this.connection.onSlotChange((slotInfo) => {
+    this.connection.onSlotChange((_slotInfo) => {
       // Clean up expired opportunities on each slot
       const now = Date.now();
       for (const [id, opp] of this.opportunities) {
@@ -712,7 +711,7 @@ export class SolanaMempoolMonitor extends EventEmitter {
       return { success: false, error: 'Failed to get swap tx' };
     }
 
-    const { swapTransaction, lastValidBlockHeight } = await swapResponse.json() as { 
+    const { swapTransaction } = await swapResponse.json() as { 
       swapTransaction: string;
       lastValidBlockHeight: number;
     };

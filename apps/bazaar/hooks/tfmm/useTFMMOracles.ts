@@ -1,8 +1,7 @@
 'use client'
 
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { useReadContract } from 'wagmi'
 import { formatUnits, type Address } from 'viem'
-import { useCallback, useMemo } from 'react'
 
 // Oracle Registry ABI
 const ORACLE_REGISTRY_ABI = [
@@ -84,13 +83,6 @@ export interface OracleStatus {
   isValid: boolean
 }
 
-const ORACLE_TYPE_MAP: Record<number, OracleType> = {
-  0: 'chainlink',
-  1: 'pyth',
-  2: 'twap',
-  3: 'custom',
-}
-
 // Mock oracle data for development
 const MOCK_ORACLES: Omit<OracleConfig, 'price' | 'isStale' | 'lastUpdate'>[] = [
   {
@@ -122,7 +114,7 @@ const MOCK_ORACLES: Omit<OracleConfig, 'price' | 'isStale' | 'lastUpdate'>[] = [
   },
 ]
 
-export function useTFMMOracles(oracleRegistryAddress: Address | null) {
+export function useTFMMOracles(_oracleRegistryAddress: Address | null) {
   // Mock data for development
   const oracles: OracleConfig[] = MOCK_ORACLES.map((oracle) => ({
     ...oracle,

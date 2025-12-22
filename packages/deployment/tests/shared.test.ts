@@ -5,7 +5,7 @@
  * Uses property-based testing for thorough coverage.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect } from "bun:test";
 import { z } from "zod";
 
 // ============ Types & Schemas (re-exported for testing) ============
@@ -53,11 +53,11 @@ function getRequiredNetwork(env: Record<string, string | undefined>): NetworkTyp
   return result.data;
 }
 
-function createCommandValidator<T extends readonly string[]>(
+function createCommandValidator<T extends readonly [string, ...string[]]>(
   validCommands: T,
   scriptName: string
 ): (argv: string[]) => T[number] {
-  const CommandSchema = z.enum(validCommands as unknown as [string, ...string[]]);
+  const CommandSchema = z.enum(validCommands);
   return (argv: string[]): T[number] => {
     const command = argv[2];
     const result = CommandSchema.safeParse(command);
@@ -148,7 +148,7 @@ describe("getRequiredNetwork", () => {
   });
 
   it("should throw without 'got:' when value is empty string", () => {
-    const error = expect(() => getRequiredNetwork({ NETWORK: "" })).toThrow();
+    expect(() => getRequiredNetwork({ NETWORK: "" })).toThrow();
   });
 });
 
@@ -305,7 +305,7 @@ describe("Property-based tests for validation", () => {
       {},
       [],
       Symbol("test"),
-      () => {},
+      () => { /* test function */ },
     ];
 
     for (const input of invalidInputs) {

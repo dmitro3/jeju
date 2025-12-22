@@ -18,6 +18,7 @@ import type {
 import { getEmailRelayService } from './relay';
 import { getContentScreeningPipeline } from './content-screening';
 import { bridgeOperationsTotal } from './metrics';
+import { createHmac, createHash } from 'crypto';
 
 // ============ Configuration ============
 
@@ -194,7 +195,6 @@ export class Web2Bridge {
     payload: string,
     service: string
   ): Record<string, string> {
-    const { createHmac, createHash } = require('crypto') as typeof import('crypto');
     
     const accessKeyId = this.config.sesAccessKeyId ?? process.env.AWS_ACCESS_KEY_ID ?? '';
     const secretAccessKey = this.config.sesSecretAccessKey ?? process.env.AWS_SECRET_ACCESS_KEY ?? '';

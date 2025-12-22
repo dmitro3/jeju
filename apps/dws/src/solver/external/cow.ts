@@ -422,9 +422,14 @@ export class CowProtocolSolver extends EventEmitter {
       return { success: false, error: 'Chain not supported' };
     }
 
+    const account = client.wallet.account;
+    if (!account) {
+      return { success: false, error: 'No account configured' };
+    }
+    
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account,
       address: token,
       abi: [{
         type: 'function',
@@ -651,7 +656,7 @@ export class CowProtocolSolver extends EventEmitter {
           console.log(`🐮 CoW auction ${auction.id}: ${auction.orders.length} orders on chain ${chainId}`);
           this.emit('auction', auction);
         }
-      } catch (err) {
+      } catch (_err) {
         // Silently handle errors - API might be temporarily unavailable
       }
     }

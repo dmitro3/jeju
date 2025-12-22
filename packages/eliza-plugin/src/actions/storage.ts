@@ -10,7 +10,16 @@ import {
   type State,
 } from "@elizaos/core";
 import { JEJU_SERVICE_NAME, type JejuService } from "../service";
-import { getMessageText, validateServiceExists } from "../validation";
+import type { JsonValue } from "@jejunetwork/sdk";
+import {
+  getMessageText,
+  validateServiceExists,
+  isUrlSafeToFetch,
+  fetchWithTimeout,
+  safeJsonParse,
+  truncateOutput,
+  MAX_JSON_SIZE,
+} from "../validation";
 
 export const uploadFileAction: Action = {
   name: "UPLOAD_FILE",
@@ -38,10 +47,30 @@ export const uploadFileAction: Action = {
 
     const text = getMessageText(message);
 
-    // Check for JSON data to upload
+    // Check for JSON data to upload (with size limit)
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const jsonData = JSON.parse(jsonMatch[0]);
+      const jsonString = jsonMatch[0];
+      
+      // Check size before parsing
+      if (jsonString.length > MAX_JSON_SIZE) {
+        callback?.({
+          text: `JSON data too large. Maximum size is ${MAX_JSON_SIZE / 1000}KB.`,
+        });
+        return;
+      }
+      
+      let jsonData: Record<string, JsonValue>;
+      try {
+        jsonData = safeJsonParse<Record<string, JsonValue>>(jsonString);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : "Invalid JSON";
+        callback?.({
+          text: `Invalid JSON format: ${errorMessage}`,
+        });
+        return;
+      }
+
       const result = await client.storage.uploadJson(jsonData);
 
       callback?.({
@@ -54,13 +83,34 @@ Gateway URL: ${result.gatewayUrl}`,
       return;
     }
 
-    // Check for URL to content
+    // Check for URL to content (with SSRF protection)
     const urlMatch = text.match(/https?:\/\/[^\s]+/);
     if (urlMatch) {
-      callback?.({ text: `Fetching content from ${urlMatch[0]}...` });
+      const targetUrl = urlMatch[0];
 
-      const response = await fetch(urlMatch[0]);
-      const data = new Uint8Array(await response.arrayBuffer());
+      // Validate URL is safe to fetch (prevent SSRF)
+      if (!isUrlSafeToFetch(targetUrl)) {
+        callback?.({
+          text: "Cannot fetch from internal or private URLs for security reasons.",
+        });
+        return;
+      }
+
+      callback?.({ text: `Fetching content from ${targetUrl}...` });
+
+      // Use timeout-protected fetch with redirect blocking
+      const response = await fetchWithTimeout(targetUrl, {}, 30000);
+      const arrayBuffer = await response.arrayBuffer();
+      
+      // Limit downloaded content size (10MB max)
+      if (arrayBuffer.byteLength > 10 * 1024 * 1024) {
+        callback?.({
+          text: "Content too large. Maximum download size is 10MB.",
+        });
+        return;
+      }
+      
+      const data = new Uint8Array(arrayBuffer);
       const result = await client.storage.upload(data);
 
       callback?.({
@@ -147,20 +197,42 @@ export const retrieveFileAction: Action = {
     callback?.({ text: `Retrieving ${cid}...` });
 
     const data = await client.storage.retrieve(cid);
+    
+    // Limit retrieved content size for display
+    if (data.length > 10 * 1024 * 1024) {
+      callback?.({
+        text: `Retrieved large file (${data.length} bytes). Content too large to display.`,
+        content: {
+          cid,
+          size: data.length,
+          gatewayUrl: client.storage.getGatewayUrl(cid),
+        },
+      });
+      return;
+    }
+    
     const text_content = new TextDecoder().decode(data);
 
-    // Parse as JSON if it looks like JSON
+    // Parse as JSON if it looks like JSON (with safe parsing)
     const isJson =
       text_content.trim().startsWith("{") ||
       text_content.trim().startsWith("[");
-    const parsed: Record<string, unknown> | string = isJson
-      ? (JSON.parse(text_content) as Record<string, unknown>)
-      : text_content;
+    let parsed: Record<string, unknown> | unknown[] | string = text_content;
+    if (isJson && text_content.length < MAX_JSON_SIZE) {
+      try {
+        parsed = safeJsonParse<Record<string, unknown> | unknown[]>(text_content);
+      } catch {
+        // Not valid JSON despite looking like it, keep as string
+        parsed = text_content;
+      }
+    }
+
+    const displayContent = truncateOutput(text_content, 2000);
 
     callback?.({
       text: `Retrieved content (${data.length} bytes):
 
-${text_content.slice(0, 1000)}${text_content.length > 1000 ? "..." : ""}`,
+${displayContent}`,
       content: {
         cid,
         size: data.length,

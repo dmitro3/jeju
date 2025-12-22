@@ -109,6 +109,27 @@ export function parseLinkProofMessage(message: string): ParsedLinkProof | null {
   return { fid, jejuAddress, timestamp, domain };
 }
 
+/**
+ * Constant-time number comparison to prevent timing attacks
+ */
+function constantTimeCompareNumbers(a: number, b: number): boolean {
+  // XOR the numbers and check if result is 0
+  // This ensures comparison time doesn't depend on values
+  return (a ^ b) === 0;
+}
+
+/**
+ * Check if timestamp is within allowed window
+ * Uses subtraction instead of abs() to be more predictable
+ */
+function isTimestampValid(timestamp: number, now: number, maxAge: number): boolean {
+  const diff = now - timestamp;
+  // Must be positive (not in future) and within maxAge
+  // Allow small future drift (60 seconds) for clock skew
+  const maxFutureDrift = 60;
+  return diff >= -maxFutureDrift && diff <= maxAge;
+}
+
 export async function verifyLinkProof(
   message: string,
   signature: Hex,
@@ -121,13 +142,16 @@ export async function verifyLinkProof(
     return { valid: false, error: 'Invalid proof message format' };
   }
 
-  if (parsed.fid !== expectedFid) {
+  // Use constant-time comparison for FID to prevent timing attacks
+  if (!constantTimeCompareNumbers(parsed.fid, expectedFid)) {
     return { valid: false, error: 'FID mismatch' };
   }
 
-  // Check timestamp (within 24 hours)
+  // Check timestamp (within 24 hours, small future drift allowed)
   const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - parsed.timestamp) > 86400) {
+  const maxAge = 86400; // 24 hours
+  
+  if (!isTimestampValid(parsed.timestamp, now, maxAge)) {
     return { valid: false, error: 'Proof expired' };
   }
 

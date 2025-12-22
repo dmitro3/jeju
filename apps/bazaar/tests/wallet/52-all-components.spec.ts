@@ -75,8 +75,8 @@ test.describe('LoadingSpinner Component', () => {
     await page.goto('/markets')
     
     // Look for any loading indicators
-    const spinner = page.locator('.animate-spin')
-    const loadingText = page.getByText(/Loading/i)
+    const _spinner = page.locator('.animate-spin')
+    const _loadingText = page.getByText(/Loading/i)
     
     // Either should be visible briefly or page loads fast
     await page.waitForTimeout(500)
@@ -499,7 +499,7 @@ test.describe('Button States', () => {
       
       // Should show loading state
       await page.waitForTimeout(500)
-      const buttonText = await createButton.textContent()
+      const _buttonText = await createButton.textContent()
       // May show "Creating..." or similar
     }
   })
@@ -577,7 +577,7 @@ test.describe('Responsive Behavior', () => {
 // COMPONENT COVERAGE SUMMARY
 // =============================================================================
 test.describe('Component Coverage Summary', () => {
-  test('should verify all components are tested', async ({ page }) => {
+  test('should verify all components are tested', async ({ page: _page }) => {
     console.log('')
     console.log('═══════════════════════════════════════════════════════')
     console.log('           COMPONENT TEST COVERAGE')

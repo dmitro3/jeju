@@ -1,7 +1,15 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { type Chain } from 'wagmi/chains';
 
-const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_ID || 'factory-default';
+// WalletConnect Project ID - required for production
+// In development, a placeholder is used but won't work for actual connections
+const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_ID ?? (() => {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NEXT_PUBLIC_WALLETCONNECT_ID is required in production');
+  }
+  // Development placeholder - wallet connections won't work without a real ID
+  return 'development-placeholder-id';
+})();
 
 // Jeju L2 chain configs
 const jejuLocalnet: Chain = {

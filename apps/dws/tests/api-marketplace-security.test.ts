@@ -11,7 +11,7 @@
  * Note: Some tests require CovenantSQL for state operations.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import type { Address } from 'viem';
 
 // Check if CQL is available
@@ -24,7 +24,6 @@ import {
   sanitizeResponse,
   createSanitizationConfig,
   checkForLeaks,
-  extractPotentialKeys,
   DEFAULT_KEY_PATTERNS,
   // Access Control
   isDomainAllowed,
@@ -40,9 +39,6 @@ import {
   storeKey,
   decryptKeyForRequest,
   getKeyMetadata,
-  // Proxy (mocked for security tests)
-  proxyRequest,
-  type ProxyRequest,
   type AccessControl,
 } from '../src/api-marketplace';
 

@@ -4,7 +4,8 @@
  * The client name (JejuClient, etc.) comes from branding config.
  */
 
-import type { Hex, Address, Account } from "viem";
+import type { Hex, Address } from "viem";
+import type { LocalAccount } from "viem/accounts";
 import type { NetworkType } from "@jejunetwork/types";
 import { createWallet, type JejuWallet } from "./wallet";
 import { createComputeModule, type ComputeModule } from "./compute";
@@ -62,8 +63,8 @@ export interface JejuClientConfig {
   privateKey?: Hex;
   /** Mnemonic phrase */
   mnemonic?: string;
-  /** Pre-configured account */
-  account?: Account;
+  /** Pre-configured local account (from viem/accounts) */
+  account?: LocalAccount;
   /** Enable ERC-4337 smart account (default: true) */
   smartAccount?: boolean;
   /** Custom RPC URL override */

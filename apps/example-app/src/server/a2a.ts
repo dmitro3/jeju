@@ -17,7 +17,7 @@ import {
   addressSchema,
   todoIdSchema,
 } from '../schemas';
-import { expectValid, ValidationError } from '../utils/validation';
+import { expectValid, ValidationError, sanitizeErrorMessage } from '../utils/validation';
 import { prioritizeTodos, getTopPriorities } from '../utils';
 import type { A2ASkillParams } from '../schemas';
 
@@ -93,9 +93,16 @@ export function createA2AServer(): Hono {
   const app = new Hono();
   const todoService = getTodoService();
   const cronService = getCronService();
+  
+  // Determine if we're in localnet for error message detail level
+  const networkName = getNetworkName();
+  const isLocalnet = networkName === 'localnet' || networkName === 'Jeju';
 
-  // Error handler
+  // Error handler with sanitized messages
   app.onError((err, c) => {
+    // Log full error for debugging (server-side only)
+    console.error('[A2A Error]', err);
+    
     if (err instanceof ValidationError) {
       return c.json({
         jsonrpc: '2.0',
@@ -103,10 +110,13 @@ export function createA2AServer(): Hono {
         error: { code: -32602, message: err.message },
       });
     }
+    
+    // Return sanitized message to client
+    const safeMessage = sanitizeErrorMessage(err, isLocalnet);
     return c.json({
       jsonrpc: '2.0',
       id: null,
-      error: { code: -32603, message: err.message || 'Internal error' },
+      error: { code: -32603, message: safeMessage },
     });
   });
 

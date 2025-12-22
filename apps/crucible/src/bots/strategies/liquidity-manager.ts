@@ -14,7 +14,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Connection, Keypair } from '@solana/web3.js';
 import { createPublicClient, http, type PublicClient, type Address, parseAbi } from 'viem';
 import type { ChainId, Token, StrategyConfig } from '../autocrat-types';
 import { 
@@ -113,7 +113,7 @@ const UNISWAP_V3_POSITIONS_NFT: Record<number, Address> = {
   8453: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1',
 };
 
-const UNISWAP_V3_FACTORY: Record<number, Address> = {
+const _UNISWAP_V3_FACTORY: Record<number, Address> = {
   1: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
   42161: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
   10: '0x1F98431c8aD98523631AE4a59f267346ea31F984',
@@ -523,13 +523,14 @@ export class LiquidityManager extends EventEmitter {
         // For Solana, harvesting is usually part of remove/add cycle
         return { success: true, txHash: 'harvest-simulated' };
 
-      case 'REMOVE':
+      case 'REMOVE': {
         const txHash = await adapter.removeLiquidity(
           position.id,
           position.liquidity ?? 0n,
           this.solanaKeypair
         );
         return { success: true, txHash };
+      }
 
       case 'RERANGE':
         // Would need to remove and re-add with new ticks

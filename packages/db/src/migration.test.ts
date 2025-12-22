@@ -343,33 +343,33 @@ describe('createIndex', () => {
     });
 
     it('should create unique index on multiple columns', () => {
-      const { up } = createIndex('idx_unique_combo', 'table', ['col1', 'col2', 'col3'], true);
+      const { up } = createIndex('idx_unique_combo', 'items', ['col1', 'col2', 'col3'], true);
 
-      expect(up).toBe('CREATE UNIQUE INDEX idx_unique_combo ON table (col1, col2, col3)');
+      expect(up).toBe('CREATE UNIQUE INDEX idx_unique_combo ON items (col1, col2, col3)');
     });
   });
 
   describe('non-unique indexes', () => {
     it('should create non-unique index when unique is false', () => {
-      const { up } = createIndex('idx_normal', 'table', ['col'], false);
+      const { up } = createIndex('idx_normal', 'items', ['col'], false);
 
-      expect(up).toBe('CREATE INDEX idx_normal ON table (col)');
+      expect(up).toBe('CREATE INDEX idx_normal ON items (col)');
       expect(up).not.toContain('UNIQUE');
     });
 
     it('should create non-unique index when unique is undefined', () => {
-      const { up } = createIndex('idx_normal', 'table', ['col']);
+      const { up } = createIndex('idx_normal', 'items', ['col']);
 
-      expect(up).toBe('CREATE INDEX idx_normal ON table (col)');
+      expect(up).toBe('CREATE INDEX idx_normal ON items (col)');
       expect(up).not.toContain('UNIQUE');
     });
   });
 
   describe('edge cases', () => {
     it('should handle column names with underscores', () => {
-      const { up } = createIndex('idx_test', 'table', ['first_name', 'last_name']);
+      const { up } = createIndex('idx_test', 'items', ['first_name', 'last_name']);
 
-      expect(up).toBe('CREATE INDEX idx_test ON table (first_name, last_name)');
+      expect(up).toBe('CREATE INDEX idx_test ON items (first_name, last_name)');
     });
 
     it('should handle table names with underscores', () => {
@@ -380,9 +380,9 @@ describe('createIndex', () => {
 
     it('should handle many columns', () => {
       const columns = ['a', 'b', 'c', 'd', 'e'];
-      const { up } = createIndex('idx_many', 'table', columns);
+      const { up } = createIndex('idx_many', 'items', columns);
 
-      expect(up).toBe('CREATE INDEX idx_many ON table (a, b, c, d, e)');
+      expect(up).toBe('CREATE INDEX idx_many ON items (a, b, c, d, e)');
     });
   });
 });

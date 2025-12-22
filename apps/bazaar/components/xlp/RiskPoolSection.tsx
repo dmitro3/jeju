@@ -218,7 +218,7 @@ function RiskPoolCard({
                 step="0.01"
                 placeholder="0.0"
                 value={depositAmount}
-                onChange={(e) => setDepositAmount(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setDepositAmount(e.target.value)}
                 disabled={isLoading}
               />
               <Button type="submit" disabled={isLoading || !depositAmount}>
@@ -237,7 +237,7 @@ function RiskPoolCard({
                     step="0.01"
                     placeholder="0.0"
                     value={withdrawAmount}
-                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setWithdrawAmount(e.target.value)}
                     disabled={isLoading}
                   />
                   <Button type="submit" variant="outline" disabled={isLoading || !withdrawAmount}>

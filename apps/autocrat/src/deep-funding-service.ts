@@ -12,13 +12,20 @@
  */
 
 import {
+  createPublicClient,
+  createWalletClient,
+  http,
   type Address,
+  type Chain,
   type Hash,
   type PublicClient,
+  type Transport,
   type WalletClient,
   parseAbi,
 } from 'viem';
-import { type DependencyWeight, getDependencyScanner } from './dependency-scanner';
+import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
+import { base, baseSepolia, localhost } from 'viem/chains';
+import { getDependencyScanner } from './dependency-scanner';
 import { getContributorService, type ContributorProfile } from './contributor-service';
 
 // ============ Types ============
@@ -83,10 +90,20 @@ export interface WeightVote {
 }
 
 export interface DeepFundingServiceConfig {
-  publicClient: PublicClient;
-  walletClient?: WalletClient;
+  rpcUrl: string;
   distributorAddress: Address;
   jejuDaoId: string;
+  operatorKey?: string;
+}
+
+function inferChainFromRpcUrl(rpcUrl: string): Chain {
+  if (rpcUrl.includes('base-sepolia') || rpcUrl.includes('84532')) {
+    return baseSepolia;
+  }
+  if (rpcUrl.includes('base') && !rpcUrl.includes('localhost')) {
+    return base;
+  }
+  return localhost;
 }
 
 export interface FundingRecommendation {
@@ -164,29 +181,51 @@ const DEPTH_DECAY_BPS = 2000; // 20% decay per level
 // ============ Service Class ============
 
 export class DeepFundingService {
-  private publicClient: PublicClient;
-  private walletClient: WalletClient | null;
-  private distributorAddress: Address;
-  private jejuDaoId: string;
+  private readonly publicClient: PublicClient<Transport, Chain>;
+  private readonly walletClient: WalletClient<Transport, Chain>;
+  private readonly account: PrivateKeyAccount | null;
+  private readonly chain: Chain;
+  private readonly distributorAddress: Address;
 
   constructor(config: DeepFundingServiceConfig) {
-    this.publicClient = config.publicClient;
-    this.walletClient = config.walletClient || null;
+    const chain = inferChainFromRpcUrl(config.rpcUrl);
+    this.chain = chain;
     this.distributorAddress = config.distributorAddress;
-    this.jejuDaoId = config.jejuDaoId;
+
+    this.publicClient = createPublicClient({
+      chain,
+      transport: http(config.rpcUrl),
+    }) as PublicClient<Transport, Chain>;
+
+    if (config.operatorKey) {
+      this.account = privateKeyToAccount(config.operatorKey as `0x${string}`);
+      this.walletClient = createWalletClient({
+        account: this.account,
+        chain,
+        transport: http(config.rpcUrl),
+      }) as WalletClient<Transport, Chain>;
+    } else {
+      this.account = null;
+      this.walletClient = createWalletClient({
+        chain,
+        transport: http(config.rpcUrl),
+      }) as WalletClient<Transport, Chain>;
+    }
   }
 
   // ============ Fee Deposit ============
 
   async depositFees(daoId: string, source: string, amount: bigint): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'depositFees',
       args: [daoId as `0x${string}`, source],
       value: amount,
+      account: this.account,
     });
 
     return hash;
@@ -198,13 +237,15 @@ export class DeepFundingService {
     amount: bigint,
     source: string
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'depositTokenFees',
       args: [daoId as `0x${string}`, token, amount, source],
+      account: this.account,
     });
 
     return hash;
@@ -217,13 +258,15 @@ export class DeepFundingService {
     contributorId: string,
     weight: number
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'setContributorWeight',
       args: [daoId as `0x${string}`, contributorId as `0x${string}`, BigInt(weight)],
+      account: this.account,
     });
 
     return hash;
@@ -238,11 +281,12 @@ export class DeepFundingService {
     transitiveDepth: number,
     usageCount: number
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const maintainerId = maintainerContributorId || ('0x' + '0'.repeat(64));
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'registerDependency',
@@ -255,6 +299,7 @@ export class DeepFundingService {
         BigInt(transitiveDepth),
         BigInt(usageCount),
       ],
+      account: this.account,
     });
 
     return hash;
@@ -267,9 +312,10 @@ export class DeepFundingService {
     reason: string,
     reputation: number
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'voteOnWeight',
@@ -280,6 +326,7 @@ export class DeepFundingService {
         reason,
         BigInt(reputation),
       ],
+      account: this.account,
     });
 
     return hash;
@@ -288,13 +335,15 @@ export class DeepFundingService {
   // ============ Epoch Management ============
 
   async finalizeEpoch(daoId: string): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'finalizeEpoch',
       args: [daoId as `0x${string}`],
+      account: this.account,
     });
 
     return hash;
@@ -308,9 +357,10 @@ export class DeepFundingService {
     epochs: number[],
     recipient: Address
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'claimContributorRewards',
@@ -320,6 +370,7 @@ export class DeepFundingService {
         epochs.map(BigInt),
         recipient,
       ],
+      account: this.account,
     });
 
     return hash;
@@ -330,13 +381,15 @@ export class DeepFundingService {
     depHash: string,
     recipient: Address
   ): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'claimDependencyRewards',
       args: [daoId as `0x${string}`, depHash as `0x${string}`, recipient],
+      account: this.account,
     });
 
     return hash;
@@ -345,9 +398,10 @@ export class DeepFundingService {
   // ============ Configuration ============
 
   async setDAOConfig(daoId: string, config: FeeDistributionConfig): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'setDAOConfig',
@@ -362,19 +416,22 @@ export class DeepFundingService {
           reserveBps: BigInt(config.reserveBps),
         },
       ],
+      account: this.account,
     });
 
     return hash;
   }
 
   async authorizeDepositor(depositor: Address, authorized: boolean): Promise<Hash> {
-    if (!this.walletClient) throw new Error('Wallet client required');
+    if (!this.account) throw new Error('Operator key required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
       address: this.distributorAddress,
       abi: DEEP_FUNDING_DISTRIBUTOR_ABI,
       functionName: 'authorizeDepositor',
       args: [depositor, authorized],
+      account: this.account,
     });
 
     return hash;
@@ -608,7 +665,7 @@ export class DeepFundingService {
    * Generate dependency funding recommendations from repo scan
    */
   async generateDependencyRecommendations(
-    daoId: string,
+    _daoId: string,
     repoOwner: string,
     repoName: string
   ): Promise<DependencyFundingRecommendation[]> {

@@ -204,9 +204,12 @@ export function getContentTypeId(content: MessageContent): string {
 export function validateImage(content: ImageContent): boolean {
   return (
     typeof content.url === 'string' &&
-    content.url.startsWith('http') &&
+    content.url.startsWith('https://') &&  // Require HTTPS for security
+    content.url.length <= 2048 &&  // Reasonable URL length limit
     content.width > 0 &&
+    content.width <= 10000 &&  // Reasonable dimension limits
     content.height > 0 &&
+    content.height <= 10000 &&
     ['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(content.mimeType)
   );
 }
@@ -217,8 +220,13 @@ export function validateImage(content: ImageContent): boolean {
 export function validateFile(content: FileContent): boolean {
   return (
     typeof content.url === 'string' &&
+    content.url.startsWith('https://') &&  // Require HTTPS
+    content.url.length <= 2048 &&
     typeof content.name === 'string' &&
     content.name.length > 0 &&
+    content.name.length <= 255 &&  // Reasonable filename length
+    // Prevent path traversal in filename
+    !/[/\\]/.test(content.name) &&
     content.size > 0 &&
     content.size < 100 * 1024 * 1024 // Max 100MB
   );

@@ -34,10 +34,10 @@ test.describe('Wallet UI (Live)', () => {
 
     // Should have loaded some assets (in dev mode Vite injects assets differently)
     // Check for either bundled files or Vite's module system
-    const hasJs = resources.some(r => r.includes('.js') || r.includes('.tsx') || r.includes('.ts'));
-    const hasCss = resources.some(r => r.includes('.css') || r.includes('style'));
+    const _hasJs = resources.some(r => r.includes('.js') || r.includes('.tsx') || r.includes('.ts'));
+    const _hasCss = resources.some(r => r.includes('.css') || r.includes('style'));
     
-    // At minimum the page should load successfully
+    // At minimum the page should load successfully (hasJs and hasCss are for debugging)
     expect(resources.length).toBeGreaterThan(0);
   });
 

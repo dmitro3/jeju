@@ -392,7 +392,6 @@ Low to medium risk profile`
     expect(data.votes.length).toBe(5);
     
     // Each vote should have required fields
-    const expectedAgents = ['TREASURY', 'CODE', 'COMMUNITY', 'SECURITY', 'LEGAL'];
     for (const vote of data.votes) {
       expect(['APPROVE', 'REJECT', 'ABSTAIN']).toContain(vote.vote);
       expect(typeof vote.reasoning).toBe('string');

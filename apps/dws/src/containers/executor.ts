@@ -148,7 +148,7 @@ async function resolveImage(imageRef: string): Promise<ResolvedImage> {
 
   // Check cache first
   const isDigest = tagOrDigest?.startsWith('sha256:');
-  const cacheKey = isDigest ? tagOrDigest! : `${namespace}/${name}:${tagOrDigest}`;
+  const cacheKey = isDigest ? tagOrDigest : `${namespace}/${name}:${tagOrDigest}`;
 
   const cachedImage = cache.getCachedImage(cacheKey);
   if (cachedImage) {

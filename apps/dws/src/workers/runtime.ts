@@ -326,8 +326,9 @@ export class WorkerRuntime {
 
   private async downloadCode(cid: string): Promise<string> {
     // Check cache first
-    if (this.codeCache.has(cid)) {
-      return this.codeCache.get(cid)!;
+    const cached = this.codeCache.get(cid);
+    if (cached) {
+      return cached;
     }
 
     // Download from storage
@@ -461,7 +462,7 @@ export class WorkerRuntime {
   }
 
   getStats() {
-    let totalFunctions = this.functions.size;
+    const totalFunctions = this.functions.size;
     let totalInstances = 0;
     let activeInstances = 0;
 

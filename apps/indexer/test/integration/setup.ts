@@ -18,9 +18,10 @@ export async function getTestDataSource(): Promise<DataSource> {
   if (testDataSource?.isInitialized) return testDataSource;
 
   const models = await import('../../src/model');
+  type EntityClass = new (...args: unknown[]) => object;
   const entities = Object.values(models).filter(
-    (v): boolean => typeof v === 'function' && v.prototype?.constructor !== undefined
-  ) as Function[];
+    (v): v is EntityClass => typeof v === 'function' && v.prototype?.constructor !== undefined
+  );
 
   testDataSource = new DataSource({
     type: 'postgres',

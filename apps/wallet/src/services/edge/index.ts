@@ -543,7 +543,7 @@ export class WalletEdgeService {
 
     if (platform.category === 'desktop' && '__TAURI__' in globalThis) {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('edge_cache_delete', { key }).catch(() => {});
+      await invoke('edge_cache_delete', { key }).catch(() => { /* Error handled silently */ });
     } else if (typeof indexedDB !== 'undefined') {
       const db = await this.getIndexedDB();
       const tx = db.transaction('cache', 'readwrite');
@@ -599,7 +599,7 @@ export class WalletEdgeService {
     });
 
     this.torrentClient = {
-      start: async () => {},
+      start: async () => { /* WebTorrent client is already started */ },
       stop: async () => new Promise<void>((resolve) => client.destroy(() => resolve())),
       seed: async (data, opts) => new Promise((resolve, reject) => {
         const torrent = client.seed(data, opts);
@@ -632,8 +632,8 @@ export class WalletEdgeService {
     const { invoke } = await import('@tauri-apps/api/core');
 
     this.proxyService = {
-      start: async () => invoke('start_proxy_service'),
-      stop: async () => invoke('stop_proxy_service'),
+      start: async () => { await invoke('start_proxy_service'); },
+      stop: async () => { await invoke('stop_proxy_service'); },
       getMetrics: () => ({ activeConnections: 0, bytesTransferred: 0 }),
     };
 

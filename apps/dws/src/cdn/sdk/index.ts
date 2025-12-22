@@ -25,8 +25,8 @@
  * ```
  */
 
-import { createPublicClient, createWalletClient, http, type Address, type Chain, type HttpTransport } from 'viem';
-import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
+import { createPublicClient, createWalletClient, getContract, http, type Address, type Chain } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { parseAbi } from 'viem';
 import { createHash } from 'crypto';
 import { readdir, stat, readFile } from 'fs/promises';
@@ -108,19 +108,19 @@ const CDN_BILLING_ABI = parseAbi([
 // ============================================================================
 
 // Define specific chain for local development
-const localChain: Chain = {
+const localChain = {
   id: 31337,
   name: 'local',
   nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
   rpcUrls: { default: { http: ['http://localhost:8545'] } },
-};
+} as const satisfies Chain;
 
 export class CDNClient {
-  private account: PrivateKeyAccount;
-  private publicClient: ReturnType<typeof createPublicClient<HttpTransport, typeof localChain>>;
-  private walletClient: ReturnType<typeof createWalletClient<HttpTransport, typeof localChain, PrivateKeyAccount>>;
-  private registryAddress: Address;
-  private billingAddress: Address;
+  private account;
+  private publicClient;
+  private walletClient;
+  private registryContract;
+  private billingContract;
   private coordinatorUrl: string;
   private ipfsGateway: string;
 
@@ -138,8 +138,21 @@ export class CDNClient {
       transport: http(config.rpcUrl),
     });
     
-    this.registryAddress = (config.registryAddress ?? '0x0000000000000000000000000000000000000000') as Address;
-    this.billingAddress = (config.billingAddress ?? '0x0000000000000000000000000000000000000000') as Address;
+    const registryAddress = (config.registryAddress ?? '0x0000000000000000000000000000000000000000') as Address;
+    const billingAddress = (config.billingAddress ?? '0x0000000000000000000000000000000000000000') as Address;
+    
+    // Create typed contract instances - use walletClient for both read/write
+    this.registryContract = getContract({
+      address: registryAddress,
+      abi: CDN_REGISTRY_ABI,
+      client: this.walletClient,
+    });
+    
+    this.billingContract = getContract({
+      address: billingAddress,
+      abi: CDN_BILLING_ABI,
+      client: this.walletClient,
+    });
     
     this.coordinatorUrl = config.coordinatorUrl ?? 'http://localhost:4021';
     this.ipfsGateway = config.ipfsGateway ?? 'https://ipfs.io';
@@ -175,12 +188,10 @@ export class CDNClient {
     const siteId = await this.registerSite(options.domain, uploadResult.cid);
 
     // 5. Update content hash
-    const updateHash = await this.walletClient.writeContract({
-      address: this.registryAddress,
-      abi: CDN_REGISTRY_ABI,
-      functionName: 'updateSiteContent',
-      args: [siteId as `0x${string}`, contentHash as `0x${string}`],
-    });
+    const updateHash = await this.registryContract.write.updateSiteContent([
+      siteId as `0x${string}`,
+      contentHash as `0x${string}`,
+    ]);
     await this.publicClient.waitForTransactionReceipt({ hash: updateHash });
 
     // 6. Optional: Invalidate existing cache
@@ -338,32 +349,17 @@ export class CDNClient {
    */
   private async registerSite(domain: string, origin: string): Promise<string> {
     // Check if site already exists
-    const existingSites = await this.publicClient.readContract({
-      address: this.registryAddress,
-      abi: CDN_REGISTRY_ABI,
-      functionName: 'getOwnerSites',
-      args: [this.account.address],
-    }) as `0x${string}`[];
+    const existingSites = await this.registryContract.read.getOwnerSites([this.account.address]);
     
     for (const siteId of existingSites) {
-      const site = await this.publicClient.readContract({
-        address: this.registryAddress,
-        abi: CDN_REGISTRY_ABI,
-        functionName: 'getSite',
-        args: [siteId],
-      }) as { domain: string; siteId: `0x${string}` };
+      const site = await this.registryContract.read.getSite([siteId]);
       if (site.domain === domain) {
         return siteId;
       }
     }
 
     // Create new site
-    const hash = await this.walletClient.writeContract({
-      address: this.registryAddress,
-      abi: CDN_REGISTRY_ABI,
-      functionName: 'createSite',
-      args: [domain, `ipfs://${origin}`],
-    });
+    const hash = await this.registryContract.write.createSite([domain, `ipfs://${origin}`]);
     const receipt = await this.publicClient.waitForTransactionReceipt({ hash });
     
     // Extract siteId from event (first log should be the SiteCreated event)
@@ -507,12 +503,7 @@ export class CDNClient {
    * Get site info
    */
   async getSite(siteId: string): Promise<CDNSiteConfig | null> {
-    const site = await this.publicClient.readContract({
-      address: this.registryAddress,
-      abi: CDN_REGISTRY_ABI,
-      functionName: 'getSite',
-      args: [siteId as `0x${string}`],
-    }) as { siteId: `0x${string}`; owner: Address; domain: string; origin: string; contentHash: `0x${string}`; createdAt: bigint; updatedAt: bigint; active: boolean };
+    const site = await this.registryContract.read.getSite([siteId as `0x${string}`]);
     if (!site || !site.active) {
       return null;
     }
@@ -571,12 +562,7 @@ export class CDNClient {
    * List all sites for the connected wallet
    */
   async listSites(): Promise<`0x${string}`[]> {
-    return this.publicClient.readContract({
-      address: this.registryAddress,
-      abi: CDN_REGISTRY_ABI,
-      functionName: 'getOwnerSites',
-      args: [this.account.address],
-    }) as Promise<`0x${string}`[]>;
+    return this.registryContract.read.getOwnerSites([this.account.address]);
   }
 
   // ============================================================================
@@ -587,38 +573,21 @@ export class CDNClient {
    * Deposit funds for CDN usage
    */
   async deposit(amount: bigint): Promise<`0x${string}`> {
-    const hash = await this.walletClient.writeContract({
-      address: this.billingAddress,
-      abi: CDN_BILLING_ABI,
-      functionName: 'deposit',
-      value: amount,
-    });
-    return hash;
+    return this.billingContract.write.deposit([], { value: amount });
   }
 
   /**
    * Get current balance
    */
   async getBalance(): Promise<bigint> {
-    return this.publicClient.readContract({
-      address: this.billingAddress,
-      abi: CDN_BILLING_ABI,
-      functionName: 'getBalance',
-      args: [this.account.address],
-    });
+    return this.billingContract.read.getBalance([this.account.address]);
   }
 
   /**
    * Withdraw unused balance
    */
   async withdraw(amount: bigint): Promise<`0x${string}`> {
-    const hash = await this.walletClient.writeContract({
-      address: this.billingAddress,
-      abi: CDN_BILLING_ABI,
-      functionName: 'withdraw',
-      args: [amount],
-    });
-    return hash;
+    return this.billingContract.write.withdraw([amount]);
   }
 }
 

@@ -13,9 +13,10 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, formatEther, parseEther, formatUnits, getChainId, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther, formatUnits, type Address } from 'viem';
+import { readContract, getChainId } from 'viem/actions';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 
 // Import shared utilities
 import { 
@@ -25,8 +26,8 @@ import {
   createPaymentPayload,
   PAYMENT_TIERS,
   type PaymentPayload 
-} from '../../../scripts/shared/x402';
-import { Logger } from '../../../scripts/shared/logger';
+} from '../../../packages/deployment/scripts/shared/x402';
+import { Logger } from '../../../packages/deployment/scripts/shared/logger';
 import { TEST_WALLETS, JEJU_LOCALNET } from '../shared/constants';
 
 const logger = new Logger({ prefix: 'payment-e2e' });

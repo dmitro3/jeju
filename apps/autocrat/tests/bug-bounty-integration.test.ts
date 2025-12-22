@@ -12,7 +12,6 @@ import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test';
 
 // Set longer timeout for API calls (60 seconds)
 setDefaultTimeout(60000);
-import { parseEther, formatEther } from 'viem';
 
 // ============ Environment Check ============
 

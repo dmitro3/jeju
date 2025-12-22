@@ -4,10 +4,61 @@
  * HTTP API for DC operations.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context, type Next } from 'hono';
 import { z } from 'zod';
 import type { DirectCastClient } from './client';
 import type { DirectCastEmbed } from './types';
+
+// ============ Rate Limiting ============
+
+interface RateLimitEntry {
+  count: number;
+  windowStart: number;
+}
+
+class RateLimiter {
+  private limits: Map<string, RateLimitEntry> = new Map();
+  private readonly windowMs: number;
+  private readonly maxRequests: number;
+  
+  constructor(windowMs: number = 60000, maxRequests: number = 60) {
+    this.windowMs = windowMs;
+    this.maxRequests = maxRequests;
+    
+    // Cleanup old entries periodically
+    setInterval(() => this.cleanup(), windowMs * 2);
+  }
+  
+  isAllowed(key: string): boolean {
+    const now = Date.now();
+    const entry = this.limits.get(key);
+    
+    if (!entry || now - entry.windowStart > this.windowMs) {
+      this.limits.set(key, { count: 1, windowStart: now });
+      return true;
+    }
+    
+    if (entry.count >= this.maxRequests) {
+      return false;
+    }
+    
+    entry.count++;
+    return true;
+  }
+  
+  private cleanup(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.limits) {
+      if (now - entry.windowStart > this.windowMs) {
+        this.limits.delete(key);
+      }
+    }
+  }
+}
+
+// Separate rate limiters for different operation types
+const messageSendLimiter = new RateLimiter(60000, 30);  // 30 messages per minute
+const readLimiter = new RateLimiter(60000, 120);        // 120 reads per minute
 
 // ============ Schemas ============
 
@@ -43,7 +94,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   // ============ Middleware ============
   
   // Require authenticated client
-  app.use('*', async (c, next) => {
+  app.use('*', async (c: Context, next: Next): Promise<Response | void> => {
     const client = getClient();
     if (!client) {
       return c.json({ error: 'Not authenticated' }, 401);
@@ -55,7 +106,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   // ============ Conversations ============
   
   // List conversations
-  app.get('/conversations', async (c) => {
+  app.get('/conversations', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     const conversations = await client.getConversations();
     
@@ -66,7 +117,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   });
   
   // Get conversation by FID
-  app.get('/conversations/:fid', async (c) => {
+  app.get('/conversations/:fid', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     const fid = parseInt(c.req.param('fid'));
     
@@ -79,18 +130,27 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   });
   
   // Archive conversation
-  app.post('/conversations/:fid/archive', async (c) => {
+  app.post('/conversations/:fid/archive', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     const fid = parseInt(c.req.param('fid'));
+    
+    if (isNaN(fid) || fid <= 0) {
+      return c.json({ error: 'Invalid FID' }, 400);
+    }
     
     await client.archiveConversation(fid);
     return c.json({ success: true });
   });
   
   // Mute/unmute conversation
-  app.post('/conversations/:fid/mute', async (c) => {
+  app.post('/conversations/:fid/mute', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     const fid = parseInt(c.req.param('fid'));
+    
+    if (isNaN(fid) || fid <= 0) {
+      return c.json({ error: 'Invalid FID' }, 400);
+    }
+    
     const { muted } = await c.req.json() as { muted?: boolean };
     
     await client.muteConversation(fid, muted ?? true);
@@ -100,8 +160,16 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   // ============ Messages ============
   
   // Get messages in conversation
-  app.get('/conversations/:fid/messages', async (c) => {
+  app.get('/conversations/:fid/messages', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
+    const clientState = client.getState();
+    
+    // Rate limit read operations
+    const rateLimitKey = `read:${clientState.fid}`;
+    if (!readLimiter.isAllowed(rateLimitKey)) {
+      return c.json({ error: 'Rate limit exceeded. Please wait before making more requests.' }, 429);
+    }
+    
     const fid = parseInt(c.req.param('fid'));
     
     if (isNaN(fid) || fid <= 0) {
@@ -115,7 +183,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
     });
     
     if (!parsed.success) {
-      return c.json({ error: 'Invalid pagination params', details: parsed.error.issues }, 400);
+      return c.json({ error: 'Invalid pagination params' }, 400);
     }
     
     const messages = await client.getMessages(fid, parsed.data);
@@ -130,6 +198,14 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   // Send message
   app.post('/conversations/:fid/messages', async (c) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
+    const clientState = client.getState();
+    
+    // Rate limit by sender FID
+    const rateLimitKey = `send:${clientState.fid}`;
+    if (!messageSendLimiter.isAllowed(rateLimitKey)) {
+      return c.json({ error: 'Rate limit exceeded. Please wait before sending more messages.' }, 429);
+    }
+    
     const fid = parseInt(c.req.param('fid'));
     
     if (isNaN(fid) || fid <= 0) {
@@ -140,7 +216,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
     const parsed = SendDCSchema.safeParse({ ...body, recipientFid: fid });
     
     if (!parsed.success) {
-      return c.json({ error: 'Invalid request', details: parsed.error.issues }, 400);
+      return c.json({ error: 'Invalid request' }, 400);
     }
     
     const message = await client.send({
@@ -154,9 +230,13 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   });
   
   // Mark as read
-  app.post('/conversations/:fid/read', async (c) => {
+  app.post('/conversations/:fid/read', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     const fid = parseInt(c.req.param('fid'));
+    
+    if (isNaN(fid) || fid <= 0) {
+      return c.json({ error: 'Invalid FID' }, 400);
+    }
     
     await client.markAsRead(fid);
     return c.json({ success: true });
@@ -177,7 +257,7 @@ export function createDCApi(getClient: () => DirectCastClient | null): Hono {
   });
   
   // Publish encryption key
-  app.post('/publish-key', async (c) => {
+  app.post('/publish-key', async (c: Context) => {
     const client = c.get('dcClient' as never) as DirectCastClient;
     await client.publishEncryptionKey();
     
@@ -196,7 +276,7 @@ export function createDCServer(client: DirectCastClient, port: number = 3300) {
   const app = createDCApi(() => client);
   
   // Health check
-  app.get('/health', (c) => c.json({ status: 'ok' }));
+  app.get('/health', (c: Context) => c.json({ status: 'ok' }));
   
   console.log(`[DC API] Starting server on port ${port}`);
   

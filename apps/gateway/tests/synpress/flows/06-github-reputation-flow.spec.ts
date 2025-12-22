@@ -82,11 +82,11 @@ test.describe('Leaderboard API Integration', () => {
 
   test('should fetch leaderboard data successfully', async ({ page }) => {
     // Intercept API calls to the leaderboard endpoint
-    let apiCalled = false;
+    let _apiCalled = false;
     
     page.on('response', (response) => {
       if (response.url().includes('/api/leaderboard') || response.url().includes('/api/attestation')) {
-        apiCalled = true;
+        _apiCalled = true;
       }
     });
     

@@ -7,7 +7,7 @@
  * - OIF solver integration for intent-based operations
  */
 
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Address, encodeFunctionData, parseAbi, type Chain } from 'viem';
+import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient, type Address, parseAbi, type Chain } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import type { ChainId } from '../autocrat-types';
 

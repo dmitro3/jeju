@@ -30,6 +30,10 @@ import { JEJU_CHAIN_ID } from '@/config/chains'
 const ENTRYPOINT_V07 = '0x0000000071727De22E5E9d8BAf0edAc6f37da032' as const
 const BUNDLER_URL = process.env.NEXT_PUBLIC_BUNDLER_URL || null
 
+// Client-side rate limiting to prevent abuse
+const MIN_TX_INTERVAL_MS = 3000; // Minimum 3 seconds between transactions
+const lastTxTimestamp = { value: 0 };
+
 // ============ ABIs ============
 
 const SPONSORED_PAYMASTER_ABI = [
@@ -251,6 +255,22 @@ export function useGaslessWrite<TAbi extends Abi>(): {
       functionName: string
       args?: readonly unknown[]
     }): Promise<`0x${string}` | null> => {
+      // Client-side rate limiting to prevent abuse
+      const now = Date.now();
+      const timeSinceLastTx = now - lastTxTimestamp.value;
+      if (timeSinceLastTx < MIN_TX_INTERVAL_MS) {
+        const waitTime = Math.ceil((MIN_TX_INTERVAL_MS - timeSinceLastTx) / 1000);
+        setResult({
+          hash: undefined,
+          isPending: false,
+          isSuccess: false,
+          error: new Error(`Please wait ${waitTime}s before next transaction`),
+          isSponsored: false,
+        });
+        return null;
+      }
+      lastTxTimestamp.value = now;
+
       const validatedAddress = expect(address, 'Wallet not connected');
       const validatedPublicClient = expect(publicClient, 'Public client not available');
       const validatedWalletClient = expect(walletClient, 'Wallet client not available');

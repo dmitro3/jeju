@@ -5,8 +5,6 @@ import { expect, expectPositive } from '@/lib/validation'
 import { BondingCurveAbi } from '@jejunetwork/contracts'
 import {
   parseBondingCurveStats,
-  formatPrice,
-  formatBasisPoints,
   type BondingCurveStats,
 } from '@/lib/launchpad'
 
@@ -22,7 +20,7 @@ export interface BondingCurveQuote {
  * Hook to interact with a bonding curve token
  */
 export function useBondingCurve(bondingCurveAddress: Address | null) {
-  const { address, isConnected } = useAccount()
+  const { isConnected } = useAccount()
   const enabled = !!bondingCurveAddress
 
   // Write contract hook

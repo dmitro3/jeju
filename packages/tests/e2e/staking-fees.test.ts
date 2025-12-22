@@ -15,19 +15,21 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, waitForTransactionReceipt, formatEther, parseEther, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther, type Address } from 'viem';
+import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
+import { TEST_ACCOUNTS, JEJU_RPC_URL } from '../shared/utils';
 
 // Test configuration
-const RPC_URL = process.env.JEJU_RPC_URL || 'http://localhost:9545';
+const RPC_URL = process.env.JEJU_RPC_URL || JEJU_RPC_URL;
 const STAKING_TOKEN_ADDRESS = process.env.STAKING_TOKEN_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 const STAKING_ADDRESS = process.env.STAKING_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 
-// Test wallets (from Anvil default accounts)
-const DEPLOYER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const STAKER1_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
-const STAKER2_KEY = '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a';
+// Test wallets from shared constants (Anvil defaults)
+const DEPLOYER_KEY = TEST_ACCOUNTS.deployer.privateKey;
+const STAKER1_KEY = TEST_ACCOUNTS.user1.privateKey;
+const STAKER2_KEY = TEST_ACCOUNTS.user2.privateKey;
 
 const STAKING_TOKEN_ABI = [
   'function balanceOf(address account) view returns (uint256)',

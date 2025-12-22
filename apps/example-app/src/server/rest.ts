@@ -18,8 +18,9 @@ import {
   bulkDeleteSchema,
   todoIdSchema,
 } from '../schemas';
-import { expectValid, expectDefined, ValidationError } from '../utils/validation';
+import { expectValid, expectDefined, ValidationError, sanitizeErrorMessage } from '../utils/validation';
 import { constructAuthMessage, TIMESTAMP_WINDOW_MS } from '../utils';
+import { getNetworkName } from '@jejunetwork/config';
 
 interface AuthContext {
   Variables: {
@@ -79,12 +80,21 @@ export function createRESTRoutes(): Hono<AuthContext> {
     return next();
   });
 
-  // Error handler for validation errors
+  // Error handler for validation errors with sanitized messages
+  const networkName = getNetworkName();
+  const isLocalnet = networkName === 'localnet' || networkName === 'Jeju';
+  
   app.onError((err, c) => {
     if (err instanceof ValidationError) {
       return c.json({ error: err.message, code: 'VALIDATION_ERROR' }, 400);
     }
-    return c.json({ error: err.message || 'Internal server error', code: 'INTERNAL_ERROR' }, 500);
+    
+    // Log full error for debugging (server-side only)
+    console.error('[REST Error]', err);
+    
+    // Return sanitized message to client
+    const safeMessage = sanitizeErrorMessage(err, isLocalnet);
+    return c.json({ error: safeMessage, code: 'INTERNAL_ERROR' }, 500);
   });
 
   // List todos with validated query parameters

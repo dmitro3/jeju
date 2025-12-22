@@ -8,6 +8,25 @@
 import { z, type ZodError } from 'zod';
 import { NextRequest, NextResponse } from 'next/server';
 
+// Export access control helpers
+export {
+  extractAuthHeaders,
+  requireAuth,
+  isOwner,
+  generateAuthMessage,
+  type AuthContext,
+} from './access-control';
+
+// Export BigInt conversion utilities
+export {
+  bigIntToNumber,
+  bigIntToNumberSafe,
+  bigIntTimestampToMs,
+  bigIntEpochToNumber,
+  isSafeInteger,
+  formatBigInt,
+} from './bigint-utils';
+
 /**
  * Validate request body against a Zod schema
  * Throws immediately on validation failure (fail-fast)
@@ -75,14 +94,44 @@ function formatZodError(error: ZodError): string {
 }
 
 /**
- * Create an error response
+ * Sanitize error message to prevent information leakage
+ * Removes stack traces, file paths, and internal details
+ */
+function sanitizeErrorMessage(message: string): string {
+  // Remove file paths (Unix and Windows)
+  let sanitized = message.replace(/\/[^\s:]+\.(ts|js|tsx|jsx)/g, '[file]');
+  sanitized = sanitized.replace(/[A-Z]:\\[^\s:]+\.(ts|js|tsx|jsx)/gi, '[file]');
+  
+  // Remove stack traces
+  sanitized = sanitized.replace(/\s+at\s+.*$/gm, '');
+  
+  // Remove internal error details that shouldn't be exposed
+  if (sanitized.includes('ENOENT') || sanitized.includes('EACCES')) {
+    return 'Resource not available';
+  }
+  if (sanitized.includes('ECONNREFUSED')) {
+    return 'Service temporarily unavailable';
+  }
+  
+  // Truncate overly long messages
+  if (sanitized.length > 200) {
+    sanitized = sanitized.substring(0, 200) + '...';
+  }
+  
+  return sanitized.trim();
+}
+
+/**
+ * Create an error response with sanitized message
  */
 export function errorResponse(message: string, status: number = 400): NextResponse {
+  const sanitizedMessage = sanitizeErrorMessage(message);
+  
   return NextResponse.json(
     {
       error: {
-        code: 'VALIDATION_ERROR',
-        message,
+        code: status === 401 ? 'UNAUTHORIZED' : status === 403 ? 'FORBIDDEN' : status === 404 ? 'NOT_FOUND' : 'VALIDATION_ERROR',
+        message: sanitizedMessage,
       },
     },
     { status }

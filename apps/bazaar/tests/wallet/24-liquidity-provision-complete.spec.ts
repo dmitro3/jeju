@@ -60,7 +60,7 @@ test.describe('Liquidity Provision - Complete Flow', () => {
     await page.waitForTimeout(1000)
     
     // Find token address inputs by label
-    const token0Label = page.getByText('Token 0 Address')
+    const _token0Label = page.getByText('Token 0 Address')
     const token0Input = page.locator('input[type="text"]').first()
     
     await token0Input.fill('0x0000000000000000000000000000000000000000')

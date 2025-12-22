@@ -47,11 +47,11 @@ export function getRequiredAwsRegion(): string {
 /**
  * Create a command validator for CLI scripts
  */
-export function createCommandValidator<T extends readonly string[]>(
+export function createCommandValidator<T extends readonly [string, ...string[]]>(
   validCommands: T,
   scriptName: string
 ): () => T[number] {
-  const CommandSchema = z.enum(validCommands as unknown as [string, ...string[]]);
+  const CommandSchema = z.enum(validCommands);
   return (): T[number] => {
     const command = process.argv[2];
     const result = CommandSchema.safeParse(command);

@@ -121,8 +121,10 @@ const CATEGORY_PATTERNS: Array<[RegExp, OracleFeedCategory]> = [
 ];
 
 function categoryFromSymbol(symbol: string): OracleFeedCategory {
+  // Limit input length to prevent potential regex performance issues
+  const trimmedSymbol = symbol.slice(0, 100);
   for (const [pattern, category] of CATEGORY_PATTERNS) {
-    if (pattern.test(symbol)) return category;
+    if (pattern.test(trimmedSymbol)) return category;
   }
   return OracleFeedCategory.SPOT_PRICE;
 }
@@ -316,7 +318,6 @@ export async function processOracleEvents(ctx: ProcessorContext<Store>): Promise
       }
 
       if (eventSig === EVENTS.REPORT_REJECTED) {
-        const feedId = log.topics[1];
         const reportHash = log.topics[2];
         const report = reports.get(reportHash) || await ctx.store.get(OracleReport, reportHash);
         if (report) {
@@ -469,7 +470,6 @@ export async function processOracleEvents(ctx: ProcessorContext<Store>): Promise
           data: log.data as `0x${string}`,
         }) as { args: { operatorId: string; agentId: bigint; tag: string; score: number } };
         const operatorId = log.topics[1];
-        const agentId = BigInt(log.topics[2]);
         const tag = args.tag;
         const score = Number(args.score);
         const op = operators.get(operatorId) || await ctx.store.get(OracleOperator, operatorId);

@@ -313,11 +313,21 @@ export class TwitterAdapter implements PlatformAdapter {
       body.reply = { in_reply_to_tweet_id: replyToId };
     }
     
-    const response = await this.apiRequest<{ id: string }>('POST', '/tweets', body);
-    if (!response?.data?.id) {
-      throw new Error('Failed to post tweet: no ID returned');
+    const response = await this.apiRequest('POST', '/tweets', body);
+    
+    // Validate response schema to prevent insecure deserialization
+    const TweetResponseSchema = z.object({
+      data: z.object({
+        id: z.string().min(1),
+      }),
+    });
+    
+    const validated = TweetResponseSchema.safeParse(response);
+    if (!validated.success) {
+      throw new Error('Failed to post tweet: invalid response');
     }
-    return response.data.id;
+    
+    return validated.data.data.id;
   }
 
   private async deleteTweet(tweetId: string): Promise<void> {
@@ -337,11 +347,21 @@ export class TwitterAdapter implements PlatformAdapter {
       message: { text },
     };
     
-    const response = await this.apiRequest<{ dm_event_id: string }>('POST', '/dm_conversations/with/:participant_id/messages', body);
-    if (!response?.data?.dm_event_id) {
-      throw new Error('Failed to send direct message: no event ID returned');
+    const response = await this.apiRequest('POST', '/dm_conversations/with/:participant_id/messages', body);
+    
+    // Validate response schema to prevent insecure deserialization
+    const DMResponseSchema = z.object({
+      data: z.object({
+        dm_event_id: z.string().min(1),
+      }),
+    });
+    
+    const validated = DMResponseSchema.safeParse(response);
+    if (!validated.success) {
+      throw new Error('Failed to send direct message: invalid response');
     }
-    return response.data.dm_event_id;
+    
+    return validated.data.data.dm_event_id;
   }
 
   private async fetchUser(userId: string): Promise<TwitterUser | null> {

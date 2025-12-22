@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
-import { createServer } from 'http';
+import { createServer, type IncomingMessage } from 'http';
 import type { Intent } from '@jejunetwork/types';
+import { z } from 'zod';
 
 interface WebSocketClient {
   ws: WebSocket;
@@ -21,10 +22,29 @@ interface SolverUpdate {
   timestamp: number;
 }
 
-type WSMessage = 
-  | { action: 'subscribe'; channel: string; chainId?: number }
-  | { action: 'unsubscribe'; channel: string }
-  | { action: 'ping' };
+// SECURITY: Strict schema validation for WebSocket messages
+const WSMessageSchema = z.discriminatedUnion('action', [
+  z.object({ action: z.literal('subscribe'), channel: z.string().min(1).max(50), chainId: z.number().int().positive().optional() }),
+  z.object({ action: z.literal('unsubscribe'), channel: z.string().min(1).max(50) }),
+  z.object({ action: z.literal('ping') }),
+]);
+
+type WSMessage = z.infer<typeof WSMessageSchema>;
+
+// SECURITY: Connection and message limits
+const MAX_CONNECTIONS = 1000;
+const MAX_MESSAGE_SIZE = 4096; // 4KB max message size
+const VALID_CHANNELS = new Set(['intents', 'solvers', 'stats']);
+
+// SECURITY: Allowed origins (configure via env in production)
+const ALLOWED_ORIGINS = process.env.WS_ALLOWED_ORIGINS?.split(',').filter(Boolean) || [];
+const isProduction = process.env.NODE_ENV === 'production';
+
+function isOriginAllowed(origin: string | undefined): boolean {
+  if (!isProduction || ALLOWED_ORIGINS.length === 0) return true;
+  if (!origin) return false;
+  return ALLOWED_ORIGINS.some(allowed => origin === allowed || origin.endsWith(`.${allowed}`));
+}
 
 export class IntentWebSocketServer {
   private wss: WebSocketServer;
@@ -33,11 +53,32 @@ export class IntentWebSocketServer {
 
   constructor(port: number = 4012) {
     const server = createServer();
-    this.wss = new WebSocketServer({ server });
-    this.wss.on('connection', (ws) => this.handleConnection(ws));
+    this.wss = new WebSocketServer({ 
+      server,
+      // SECURITY: Limit max payload size
+      maxPayload: MAX_MESSAGE_SIZE,
+      // SECURITY: Verify client callback for origin validation
+      verifyClient: (info: { origin: string; secure: boolean; req: IncomingMessage }) => {
+        // SECURITY: Enforce connection limit
+        if (this.clients.size >= MAX_CONNECTIONS) {
+          console.warn('[WebSocket] Connection rejected: max connections reached');
+          return false;
+        }
+        // SECURITY: Validate origin in production
+        if (!isOriginAllowed(info.origin)) {
+          console.warn(`[WebSocket] Connection rejected: invalid origin ${info.origin}`);
+          return false;
+        }
+        return true;
+      },
+    });
+    this.wss.on('connection', (ws, req) => this.handleConnection(ws, req));
 
     server.listen(port, () => {
       console.log(`📡 WebSocket server running on ws://localhost:${port}`);
+      if (isProduction && ALLOWED_ORIGINS.length > 0) {
+        console.log(`   Origin whitelist: ${ALLOWED_ORIGINS.join(', ')}`);
+      }
     });
 
     this.heartbeatInterval = setInterval(() => {
@@ -47,23 +88,56 @@ export class IntentWebSocketServer {
     }, 30000);
   }
 
-  private handleConnection(ws: WebSocket): void {
+  private handleConnection(ws: WebSocket, _req: IncomingMessage): void {
     const client: WebSocketClient = { ws, subscriptions: new Set(), chainFilters: new Set() };
     this.clients.set(ws, client);
 
     ws.on('message', (data: RawData) => {
-      this.handleMessage(client, JSON.parse(data.toString()) as WSMessage);
+      // SECURITY: Check message size (redundant with maxPayload but explicit)
+      const dataStr = data.toString();
+      if (dataStr.length > MAX_MESSAGE_SIZE) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Message too large' }));
+        return;
+      }
+
+      // SECURITY: Safe JSON parsing with try-catch
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(dataStr);
+      } catch {
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }));
+        return;
+      }
+
+      // SECURITY: Validate message schema
+      const result = WSMessageSchema.safeParse(parsed);
+      if (!result.success) {
+        ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
+        return;
+      }
+
+      this.handleMessage(client, result.data);
     });
 
     ws.on('close', () => this.clients.delete(ws));
     ws.on('error', (error: Error) => console.error('WebSocket error:', error.message));
 
-    ws.send(JSON.stringify({ type: 'connected', channels: ['intents', 'solvers', 'stats'], timestamp: Date.now() }));
+    ws.send(JSON.stringify({ type: 'connected', channels: Array.from(VALID_CHANNELS), timestamp: Date.now() }));
   }
 
   private handleMessage(client: WebSocketClient, message: WSMessage): void {
     switch (message.action) {
       case 'subscribe':
+        // SECURITY: Validate channel name
+        if (!VALID_CHANNELS.has(message.channel)) {
+          client.ws.send(JSON.stringify({ type: 'error', message: 'Invalid channel' }));
+          return;
+        }
+        // SECURITY: Limit subscriptions per client
+        if (client.subscriptions.size >= 10) {
+          client.ws.send(JSON.stringify({ type: 'error', message: 'Too many subscriptions' }));
+          return;
+        }
         client.subscriptions.add(message.channel);
         if (message.chainId) client.chainFilters.add(message.chainId);
         client.ws.send(JSON.stringify({ type: 'subscribed', channel: message.channel, chainId: message.chainId }));

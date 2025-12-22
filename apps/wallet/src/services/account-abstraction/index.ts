@@ -126,7 +126,11 @@ class AccountAbstractionService {
   // Create smart account
   async createSmartAccount(owner: Address, chainId: SupportedChainId): Promise<SmartAccount> {
     await this.getSmartAccountAddress(owner, chainId);
-    return this.accounts.get(`${chainId}:${owner}`)!;
+    const account = this.accounts.get(`${chainId}:${owner}`);
+    if (!account) {
+      throw new Error(`Failed to create smart account for ${owner} on chain ${chainId}`);
+    }
+    return account;
   }
 
   // Build UserOperation

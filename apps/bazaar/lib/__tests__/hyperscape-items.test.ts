@@ -6,7 +6,7 @@
  */
 
 import { describe, test, expect } from 'bun:test'
-import { getRarityInfo } from '@/hooks/nft/useGameItems'
+import { getRarityInfo } from '@/lib/games'
 
 describe('Game Items', () => {
   describe('getRarityInfo', () => {

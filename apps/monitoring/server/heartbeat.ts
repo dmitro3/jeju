@@ -4,10 +4,26 @@
  * @notice Sends regular heartbeats to node explorer
  */
 
-import { createPublicClient, http, getBlockNumber, signMessage, type Address } from 'viem';
+import { createPublicClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '@jejunetwork/deployment/scripts/shared/chain-utils';
 import { z } from 'zod';
+
+// Schema for eth_syncing JSON-RPC response
+const EthSyncingResponseSchema = z.object({
+  jsonrpc: z.literal('2.0'),
+  id: z.number(),
+  result: z.union([
+    z.literal(false),
+    z.object({
+      startingBlock: z.string().optional(),
+      currentBlock: z.string().optional(),
+      highestBlock: z.string().optional(),
+    }),
+  ]),
+});
+
+type EthSyncingResult = z.infer<typeof EthSyncingResponseSchema>['result'];
 
 // Validate and parse environment config
 const NODE_ID = process.env.NODE_ID;
@@ -48,21 +64,38 @@ async function sendHeartbeat(): Promise<void> {
   const publicClient = createPublicClient({ chain, transport: http(CONFIG.RPC_URL) });
   const account = privateKeyToAccount(CONFIG.OPERATOR_PRIVATE_KEY as `0x${string}`);
   
+  // Get chain ID for replay protection
+  const chainId = await publicClient.getChainId();
+  
   // Get node stats
-  const blockNumber = await getBlockNumber(publicClient);
+  const blockNumber = await publicClient.getBlockNumber();
   const peerCount = await publicClient.request({ method: 'net_peerCount' }) as string;
-  const isSyncing = await publicClient.request({ method: 'eth_syncing' }) as boolean | object;
+  
+  // eth_syncing is valid JSON-RPC but viem types are incomplete - validate with schema
+  const syncingResult = await fetch(CONFIG.RPC_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_syncing', params: [], id: 1 }),
+  });
+  const syncingRawData: unknown = await syncingResult.json();
+  const syncingParsed = EthSyncingResponseSchema.safeParse(syncingRawData);
+  
+  let isSyncing: EthSyncingResult = false;
+  if (syncingParsed.success) {
+    isSyncing = syncingParsed.data.result;
+  } else {
+    console.warn(`Warning: Invalid eth_syncing response, assuming not syncing: ${syncingParsed.error.message}`);
+  }
   
   const startTime = Date.now();
-  await getBlockNumber(publicClient); // Test response time
+  await publicClient.getBlockNumber(); // Test response time
   const responseTime = Date.now() - startTime;
+  const timestamp = Date.now();
   
-  // Sign heartbeat
-  const message = `Heartbeat: ${CONFIG.NODE_ID}:${Date.now()}`;
-  const signature = await signMessage({
-    account,
-    message,
-  });
+  // Sign heartbeat with chain ID included for replay protection across chains
+  // Format: "Heartbeat:v1:{chainId}:{nodeId}:{timestamp}:{blockNumber}"
+  const message = `Heartbeat:v1:${chainId}:${CONFIG.NODE_ID}:${timestamp}:${blockNumber}`;
+  const signature = await account.signMessage({ message });
   
   // Send to explorer
   const response = await fetch(`${CONFIG.NODE_EXPLORER_API}/nodes/heartbeat`, {
@@ -70,11 +103,14 @@ async function sendHeartbeat(): Promise<void> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       node_id: CONFIG.NODE_ID,
+      chain_id: chainId,
       block_number: blockNumber,
       peer_count: parseInt(peerCount, 16),
       is_syncing: isSyncing !== false,
       response_time: responseTime,
+      timestamp,
       signature,
+      message, // Include message for signature verification
     }),
   });
   
@@ -82,7 +118,7 @@ async function sendHeartbeat(): Promise<void> {
     throw new Error(`Heartbeat failed: ${response.status} ${response.statusText}`);
   }
   
-  const rawData = await response.json();
+  const rawData: unknown = await response.json();
   const parsed = HeartbeatResponseSchema.safeParse(rawData);
   if (!parsed.success) {
     throw new Error(`Invalid heartbeat response: ${parsed.error.message}`);

@@ -5,9 +5,7 @@
  * match known deployments by checking basic contract properties.
  */
 
-import { describe, it, expect, beforeAll } from 'bun:test';
-import { createPublicClient, http } from 'viem';
-import { mainnet } from 'viem/chains';
+import { describe, it, expect } from 'bun:test';
 
 import { ACROSS_SPOKE_POOLS } from '../../src/solver/external/across';
 import { UNISWAPX_REACTORS } from '../../src/solver/external/uniswapx';
@@ -20,7 +18,7 @@ describe('Live Contract Address Validation', () => {
   // Verify addresses are checksummed correctly
   it('Across addresses should be valid checksummed addresses', () => {
     const validAddress = /^0x[a-fA-F0-9]{40}$/;
-    for (const [chainId, address] of Object.entries(ACROSS_SPOKE_POOLS)) {
+    for (const [_chainId, address] of Object.entries(ACROSS_SPOKE_POOLS)) {
       expect(address).toMatch(validAddress);
       // All Across addresses start with 0x and have correct format
       expect(address.length).toBe(42);
@@ -29,7 +27,7 @@ describe('Live Contract Address Validation', () => {
 
   it('UniswapX addresses should be valid checksummed addresses', () => {
     const validAddress = /^0x[a-fA-F0-9]{40}$/;
-    for (const [chainId, address] of Object.entries(UNISWAPX_REACTORS)) {
+    for (const [_chainId, address] of Object.entries(UNISWAPX_REACTORS)) {
       expect(address).toMatch(validAddress);
       expect(address.length).toBe(42);
     }
@@ -37,7 +35,7 @@ describe('Live Contract Address Validation', () => {
 
   it('CoW addresses should be valid checksummed addresses', () => {
     const validAddress = /^0x[a-fA-F0-9]{40}$/;
-    for (const [chainId, address] of Object.entries(COW_SETTLEMENT)) {
+    for (const [_chainId, address] of Object.entries(COW_SETTLEMENT)) {
       expect(address).toMatch(validAddress);
       expect(address.length).toBe(42);
     }

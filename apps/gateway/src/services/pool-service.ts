@@ -5,8 +5,6 @@ import {
   TokenPairSchema,
   expect,
   formatError,
-  type SwapQuoteRequest,
-  type TokenPair,
 } from '../lib/validation.js';
 import { ZERO_ADDRESS } from '../lib/contracts.js';
 const MAX_POOLS_TO_FETCH = 100;

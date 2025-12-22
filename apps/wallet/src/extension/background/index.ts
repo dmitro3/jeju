@@ -16,8 +16,6 @@ import type {
   AddEthereumChainParameter,
   CrossChainTransferData,
   SubmitIntentData,
-  PopupResponse,
-  ConnectionResponse,
   BroadcastEventData,
   ExtensionMessageResponse,
   EIP1193Param,
@@ -146,7 +144,6 @@ const SubmitIntentSchema = z.object({
 // Types
 // ============================================================================
 
-type MessageType = z.infer<typeof MessageTypeSchema>;
 type Message = z.infer<typeof MessageSchema>;
 type WalletState = z.infer<typeof WalletStateSchema>;
 
@@ -417,6 +414,19 @@ type PopupParams =
   | CrossChainTransferData
   | SubmitIntentData;
 
+// Track pending popup requests to prevent reentrancy
+const pendingPopupRequests = new Map<string, { 
+  resolve: (result: { approved: boolean; hash?: Hex; signature?: Hex; requestId?: string; intentId?: Hex }) => void;
+  windowId?: number;
+  createdAt: number;
+}>();
+
+// Popup timeout (5 minutes)
+const POPUP_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Maximum concurrent popup requests per type to prevent DoS
+const MAX_PENDING_POPUPS = 10;
+
 // Popup management
 async function openPopup(path: string, params?: PopupParams): Promise<void> {
   expectNonEmpty(path, 'path');
@@ -442,13 +452,30 @@ async function openPopupWithResult(
 ): Promise<{ approved: boolean; hash?: Hex; signature?: Hex; requestId?: string; intentId?: Hex }> {
   expectNonEmpty(path, 'path');
   
+  // Prevent too many pending requests (DoS protection)
+  if (pendingPopupRequests.size >= MAX_PENDING_POPUPS) {
+    // Clean up old timed-out requests first
+    const now = Date.now();
+    for (const [reqId, req] of pendingPopupRequests) {
+      if (now - req.createdAt > POPUP_TIMEOUT_MS) {
+        req.resolve({ approved: false });
+        pendingPopupRequests.delete(reqId);
+      }
+    }
+    
+    // If still too many, reject
+    if (pendingPopupRequests.size >= MAX_PENDING_POPUPS) {
+      throw new Error('Too many pending approval requests');
+    }
+  }
+  
   const requestId = crypto.randomUUID();
   const url = new URL(chrome.runtime.getURL('popup.html'));
   url.hash = `/${path}`;
   url.searchParams.set('requestId', requestId);
   url.searchParams.set('data', JSON.stringify(params));
 
-  await chrome.windows.create({
+  const window = await chrome.windows.create({
     url: url.toString(),
     type: 'popup',
     width: 420,
@@ -457,10 +484,32 @@ async function openPopupWithResult(
   });
 
   return new Promise((resolve) => {
+    // Store the pending request
+    pendingPopupRequests.set(requestId, { 
+      resolve, 
+      windowId: window.id,
+      createdAt: Date.now(),
+    });
+    
+    // Set up timeout to prevent hanging promises
+    const timeoutId = setTimeout(() => {
+      if (pendingPopupRequests.has(requestId)) {
+        pendingPopupRequests.delete(requestId);
+        chrome.runtime.onMessage.removeListener(listener);
+        resolve({ approved: false });
+      }
+    }, POPUP_TIMEOUT_MS);
+    
     const listener = (msg: unknown) => {
+      // Only process if it matches the expected schema and request ID
+      if (!msg || typeof msg !== 'object' || !('type' in msg)) return;
+      if ((msg as { type: string }).type !== 'popup_response') return;
+      
       const validated = expectSchema(msg, PopupResponseSchema, 'popup_response');
       if (validated.requestId === requestId) {
+        clearTimeout(timeoutId);
         chrome.runtime.onMessage.removeListener(listener);
+        pendingPopupRequests.delete(requestId);
         resolve({
           approved: validated.approved,
           hash: validated.hash,

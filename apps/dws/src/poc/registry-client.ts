@@ -465,7 +465,7 @@ export class MockPoCRegistryClient {
     return entry?.endorsements ?? [];
   }
 
-  clearCache(): void {}
+  clearCache(): void { /* no-op */ }
 
   getDataSourceInfo(): { validatorAddress: Address; offChainEndpoints: string[] } {
     return { validatorAddress: '0x0000000000000000000000000000000000000000', offChainEndpoints: [] };

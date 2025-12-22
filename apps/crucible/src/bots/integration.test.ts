@@ -9,8 +9,7 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { DEFAULT_BOTS, getDefaultBotsForNetwork, createTradingBotOptions } from './default-bots';
-import type { DefaultBotConfig } from './default-bots';
+import { DEFAULT_BOTS, getDefaultBotsForNetwork, createTradingBotOptions, DEFAULT_CHAINS } from './default-bots';
 import type { ChainId } from './autocrat-types';
 
 describe('Trading Bot Integration', () => {
@@ -53,8 +52,6 @@ describe('Trading Bot Integration', () => {
     });
 
     test('should validate chain configurations are accessible', () => {
-      const { DEFAULT_CHAINS } = require('./default-bots');
-      
       (Object.values(DEFAULT_CHAINS) as Array<{ rpcUrl: string; blockTime: number; chainId: number }>).forEach(chain => {
         expect(chain.rpcUrl).toMatch(/^https?:\/\//);
         expect(chain.blockTime).toBeGreaterThan(0);

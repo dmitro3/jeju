@@ -14,7 +14,6 @@ import type {
   BlobCommitment,
   Chunk,
   BlobSubmissionRequest,
-  BlobSubmissionResult,
   BlobRetrievalRequest,
   BlobRetrievalResult,
   ErasureConfig,

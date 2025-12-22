@@ -87,17 +87,41 @@ export function createLogger(service: string, config?: LoggerConfig): Logger {
   };
 }
 
-// Singleton loggers cache
+// Singleton loggers cache with max size to prevent memory leaks
+const MAX_LOGGERS_CACHE_SIZE = 1000;
 const loggers = new Map<string, Logger>();
 
 /**
  * Get or create a logger for a service (cached)
+ * 
+ * Note: The cache is bounded to prevent memory leaks from dynamic service names.
+ * If the cache is full, the oldest loggers are evicted.
  */
 export function getLogger(service: string): Logger {
-  if (!loggers.has(service)) {
-    loggers.set(service, createLogger(service));
+  const existing = loggers.get(service);
+  if (existing) {
+    return existing;
   }
-  return loggers.get(service)!;
+  
+  // Evict oldest loggers if cache is full
+  if (loggers.size >= MAX_LOGGERS_CACHE_SIZE) {
+    // Delete the first (oldest) entry
+    const firstKey = loggers.keys().next().value;
+    if (firstKey) {
+      loggers.delete(firstKey);
+    }
+  }
+  
+  const newLogger = createLogger(service);
+  loggers.set(service, newLogger);
+  return newLogger;
+}
+
+/**
+ * Clear the logger cache (useful for testing)
+ */
+export function clearLoggerCache(): void {
+  loggers.clear();
 }
 
 // Default logger for quick usage

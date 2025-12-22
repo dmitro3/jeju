@@ -5,7 +5,7 @@
  * Tests the unified DWS-based inference shared by Autocrat, Otto, and Crucible.
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { autocratAgentRuntime, checkDWSCompute, dwsGenerate } from '../src/agents/runtime';
 
 describe('Agent Runtime', () => {

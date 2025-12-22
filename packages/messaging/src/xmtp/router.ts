@@ -14,7 +14,6 @@ import type {
   XMTPEnvelope,
   RouteConfig,
   RouteResult,
-  XMTPNodeStats,
 } from './types';
 import type { Address } from 'viem';
 
@@ -52,6 +51,9 @@ export interface RouterStats {
 
 // ============ Router Class ============
 
+// Maximum pending messages to prevent memory exhaustion
+const MAX_PENDING_MESSAGES = 10000;
+
 /**
  * Routes XMTP messages through Jeju relay network
  */
@@ -59,8 +61,9 @@ export class XMTPMessageRouter {
   private config: RouteConfig;
   private relayNodes: Map<string, RelayNode> = new Map();
   private stats: RouterStats;
-  private pendingMessages: Map<string, { envelope: XMTPEnvelope; attempts: number }> = new Map();
+  private pendingMessages: Map<string, { envelope: XMTPEnvelope; attempts: number; queuedAt: number }> = new Map();
   private healthCheckInterval: NodeJS.Timeout | null = null;
+  private pendingCleanupInterval: NodeJS.Timeout | null = null;
   
   constructor(config?: Partial<RouteConfig>) {
     this.config = {
@@ -103,6 +106,10 @@ export class XMTPMessageRouter {
   async shutdown(): Promise<void> {
     if (this.healthCheckInterval) {
       clearInterval(this.healthCheckInterval);
+    }
+    
+    if (this.pendingCleanupInterval) {
+      clearInterval(this.pendingCleanupInterval);
     }
     
     // Flush pending messages
@@ -237,16 +244,39 @@ export class XMTPMessageRouter {
     // All retries failed
     this.stats.failedDeliveries++;
     
-    // Queue for later
-    this.pendingMessages.set(envelope.id, {
-      envelope,
-      attempts: this.config.maxRetries,
-    });
+    // Queue for later if under limit
+    if (this.pendingMessages.size < MAX_PENDING_MESSAGES) {
+      this.pendingMessages.set(envelope.id, {
+        envelope,
+        attempts: this.config.maxRetries,
+        queuedAt: Date.now(),
+      });
+    } else {
+      // Drop oldest pending messages to make room
+      this.evictOldestPendingMessages(1);
+      this.pendingMessages.set(envelope.id, {
+        envelope,
+        attempts: this.config.maxRetries,
+        queuedAt: Date.now(),
+      });
+    }
     
     return {
       success: false,
       error: lastError,
     };
+  }
+  
+  /**
+   * Evict oldest pending messages
+   */
+  private evictOldestPendingMessages(count: number): void {
+    const sorted = Array.from(this.pendingMessages.entries())
+      .sort(([, a], [, b]) => a.queuedAt - b.queuedAt);
+    
+    for (let i = 0; i < count && i < sorted.length; i++) {
+      this.pendingMessages.delete(sorted[i][0]);
+    }
   }
   
   /**
@@ -286,7 +316,7 @@ export class XMTPMessageRouter {
   /**
    * Select the best node for routing
    */
-  private selectBestNode(envelope: XMTPEnvelope): RelayNode | null {
+  private selectBestNode(_envelope: XMTPEnvelope): RelayNode | null {
     const healthyNodes = Array.from(this.relayNodes.values())
       .filter(n => n.isHealthy);
     
@@ -361,8 +391,16 @@ export class XMTPMessageRouter {
    */
   async retryPending(): Promise<number> {
     let retried = 0;
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours max age
+    const now = Date.now();
     
     for (const [id, pending] of this.pendingMessages) {
+      // Remove messages older than 24 hours
+      if (now - pending.queuedAt > maxAge) {
+        this.pendingMessages.delete(id);
+        continue;
+      }
+      
       const result = await this.route(pending.envelope);
       
       if (result.success) {

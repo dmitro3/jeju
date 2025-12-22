@@ -283,7 +283,11 @@ export function createOracleModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): OracleModule {
-  const oracleRegistryAddress = requireContract("oracle", "OracleRegistry", network);
+  const oracleRegistryAddress = requireContract(
+    "oracle",
+    "OracleRegistry",
+    network,
+  );
 
   const MAX_PRICE_AGE = 3600n; // 1 hour
   const MIN_OBSERVATIONS = 10;

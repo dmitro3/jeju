@@ -300,20 +300,30 @@ Return JSON:
     matchingPool: bigint,
     totalProjects: number
   ): bigint {
+    // Guard against invalid inputs
     if (stakes.length === 0) return BigInt(0);
+    if (matchingPool <= 0n) return BigInt(0);
+    if (totalProjects <= 0) return BigInt(0);
 
     // Sum of square roots
     let sumSqrt = BigInt(0);
     for (const stake of stakes) {
-      sumSqrt += this.bigintSqrt(stake.amount);
+      // Guard against negative stakes (shouldn't happen but fail-safe)
+      if (stake.amount > 0n) {
+        sumSqrt += this.bigintSqrt(stake.amount);
+      }
     }
+
+    // Guard: if no valid stakes, return 0
+    if (sumSqrt === 0n) return BigInt(0);
 
     // Square the sum
     const quadraticScore = sumSqrt * sumSqrt;
 
     // Calculate share of matching pool
-    // In a real implementation, this would compare against all projects
-    const matchingShare = (matchingPool * quadraticScore) / (quadraticScore * BigInt(totalProjects) + BigInt(1));
+    // Guard: divisor is guaranteed positive (quadraticScore > 0, totalProjects > 0, +1)
+    const divisor = quadraticScore * BigInt(totalProjects) + BigInt(1);
+    const matchingShare = (matchingPool * quadraticScore) / divisor;
 
     return matchingShare;
   }

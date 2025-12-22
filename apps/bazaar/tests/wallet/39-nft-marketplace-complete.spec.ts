@@ -11,10 +11,8 @@ import { basicSetup } from '../../synpress.config'
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
 const { expect } = test
 
-const MARKETPLACE_ADDRESS = '0x537e697c7AB75A26f9ECF0Ce810e3154dFcaaf44'
-
 test.describe('NFT Marketplace - Complete Flows', () => {
-  test('should navigate to Items marketplace', async ({ page }) => {
+  test('should navigate to Items marketplace', async ({ page: _page }) => {
     await page.goto('/items')
     await page.waitForTimeout(1000)
     
@@ -47,7 +45,7 @@ test.describe('NFT Marketplace - Complete Flows', () => {
     console.log('✅ Item filters work')
   })
 
-  test('should have sorting dropdown', async ({ page }) => {
+  test('should have sorting dropdown', async ({ page: _page }) => {
     await page.goto('/items')
     await page.waitForTimeout(1000)
     
@@ -120,7 +118,7 @@ test.describe('NFT Marketplace - Complete Flows', () => {
     }
   })
 
-  test('DOCUMENTATION: NFT marketplace hooks created', async ({ page }) => {
+  test('DOCUMENTATION: NFT marketplace hooks created', async ({ page: _page }) => {
     console.log('')
     console.log('═══════════════════════════════════════════════════════')
     console.log('            NFT MARKETPLACE - STATUS')

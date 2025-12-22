@@ -12,7 +12,27 @@ import type { Context, Next } from 'hono';
 import type { Address } from 'viem';
 import { createPublicClient, http, verifyMessage, getAddress } from 'viem';
 import { z } from 'zod';
+import { timingSafeEqual } from 'crypto';
 import { getChain } from '../chains';
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Both strings are normalized to lowercase before comparison.
+ */
+function constantTimeAddressCompare(a: string, b: string): boolean {
+  const normalizedA = a.toLowerCase();
+  const normalizedB = b.toLowerCase();
+  
+  // Ensure same length (addresses should be same length)
+  if (normalizedA.length !== normalizedB.length) {
+    return false;
+  }
+  
+  const bufA = Buffer.from(normalizedA, 'utf8');
+  const bufB = Buffer.from(normalizedB, 'utf8');
+  
+  return timingSafeEqual(bufA, bufB);
+}
 
 const X402PaymentPayloadSchema = z.object({
   scheme: z.string(),
@@ -242,7 +262,50 @@ export function erc8004Middleware(options: { requireRegistration?: boolean; requ
 // ============================================================================
 
 let x402Config: X402Config | null = null;
-const usedNonces = new Set<string>();
+
+// Bounded nonce cache to prevent DoS via memory exhaustion
+// Uses Map to track timestamps for expiration-based eviction
+const MAX_NONCE_CACHE_SIZE = 100000;
+const NONCE_TTL_MS = 600000; // 10 minutes - nonces older than this are evicted
+const usedNonces = new Map<string, number>(); // nonce -> timestamp
+
+function cleanupExpiredNonces(): void {
+  const now = Date.now();
+  const expiredThreshold = now - NONCE_TTL_MS;
+  
+  for (const [nonce, timestamp] of usedNonces) {
+    if (timestamp < expiredThreshold) {
+      usedNonces.delete(nonce);
+    }
+  }
+}
+
+function addNonce(nonce: string): boolean {
+  // Check if already used
+  if (usedNonces.has(nonce)) {
+    return false;
+  }
+  
+  // Cleanup if approaching max size
+  if (usedNonces.size >= MAX_NONCE_CACHE_SIZE) {
+    cleanupExpiredNonces();
+    
+    // If still too large after cleanup, evict oldest entries
+    if (usedNonces.size >= MAX_NONCE_CACHE_SIZE) {
+      const entries = Array.from(usedNonces.entries())
+        .sort((a, b) => a[1] - b[1]);
+      
+      // Remove oldest 10% of entries
+      const toRemove = Math.ceil(entries.length * 0.1);
+      for (let i = 0; i < toRemove; i++) {
+        usedNonces.delete(entries[i][0]);
+      }
+    }
+  }
+  
+  usedNonces.set(nonce, Date.now());
+  return true;
+}
 
 export function configureX402(config: X402Config): void {
   x402Config = config;
@@ -330,12 +393,12 @@ export async function verifyX402Payment(
     return { valid: false, error: 'Resource mismatch' };
   }
 
-  // Validate recipient
-  if (payload.payTo.toLowerCase() !== x402Config.paymentRecipient.toLowerCase()) {
+  // Validate recipient using constant-time comparison to prevent timing attacks
+  if (!constantTimeAddressCompare(payload.payTo, x402Config.paymentRecipient)) {
     return { valid: false, error: 'Wrong payment recipient' };
   }
 
-  // Validate nonce hasn't been used
+  // Validate nonce hasn't been used (uses bounded cache with auto-eviction)
   const nonceKey = `${payload.nonce}`;
   if (usedNonces.has(nonceKey)) {
     return { valid: false, error: 'Nonce already used' };
@@ -359,8 +422,10 @@ export async function verifyX402Payment(
     return { valid: false, error: 'Signature verification failed' };
   }
 
-  // Mark nonce as used
-  usedNonces.add(nonceKey);
+  // Mark nonce as used (bounded cache prevents DoS)
+  if (!addNonce(nonceKey)) {
+    return { valid: false, error: 'Nonce already used' };
+  }
 
   return { valid: true, signer };
 }

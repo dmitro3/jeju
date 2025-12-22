@@ -32,7 +32,9 @@ async function checkOpNode(): Promise<boolean> {
 }
 
 function generateJwtSecret(): string {
-  return Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  // Use cryptographically secure random bytes for JWT secret
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 async function main(): Promise<void> {

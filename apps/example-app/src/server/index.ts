@@ -39,6 +39,7 @@ import { banCheckMiddleware } from '../middleware/ban-check';
 const envSchema = z.object({
   PORT: z.string().regex(/^\d+$/).transform(Number).default('4500'),
   APP_NAME: z.string().default('Decentralized App Template'),
+  CORS_ORIGINS: z.string().optional(),
 });
 
 const env = expectValid(envSchema, process.env, 'Environment variables');
@@ -47,13 +48,30 @@ const PORT = env.PORT;
 const APP_NAME = env.APP_NAME;
 const VERSION = '1.0.0';
 
+// Determine CORS origins based on environment
+const network = getNetworkName();
+const isLocalnet = network === 'localnet' || network === 'Jeju';
+
+// In production, require explicit CORS origins or restrict to same-origin
+// In localnet, allow common development origins
+const getAllowedOrigins = (): string | string[] => {
+  if (env.CORS_ORIGINS) {
+    return env.CORS_ORIGINS.split(',').map(o => o.trim());
+  }
+  if (isLocalnet) {
+    return ['http://localhost:4500', 'http://localhost:4501', 'http://localhost:3000'];
+  }
+  // Production: only same-origin unless explicitly configured
+  return [];
+};
+
 const app = new Hono();
 
-// CORS
+// CORS with environment-aware configuration
 app.use(
   '/*',
   cors({
-    origin: '*',
+    origin: getAllowedOrigins(),
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowHeaders: [
       'Content-Type',
@@ -68,11 +86,73 @@ app.use(
   }),
 );
 
-// Request ID middleware
+// Request ID middleware with cryptographically secure random
 app.use('/*', async (c, next) => {
-  const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  // Use crypto.randomUUID() for cryptographically secure request IDs
+  const requestId = `req-${crypto.randomUUID()}`;
   c.header('X-Request-Id', requestId);
   await next();
+});
+
+// Simple in-memory rate limiting
+// In production, use Redis-based rate limiting via the cache service
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100', 10);
+const rateLimitStore: Map<string, { count: number; resetAt: number }> = new Map();
+
+// Clean up expired entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitStore.entries()) {
+    if (entry.resetAt < now) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+// Rate limiting middleware
+app.use('/*', async (c, next) => {
+  // Skip rate limiting for health checks and docs
+  if (c.req.path === '/health' || c.req.path === '/docs' || c.req.path === '/') {
+    return next();
+  }
+  
+  // SECURITY: Only use IP for rate limiting at pre-authentication stage
+  // Using x-jeju-address header would allow attackers to spoof addresses
+  // and bypass rate limits. Authenticated rate limits can be applied 
+  // per-address after authentication middleware.
+  const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() || 
+                   c.req.header('x-real-ip') || 
+                   'unknown';
+  const rateLimitKey = `ip:${clientIp}`;
+  
+  const now = Date.now();
+  let entry = rateLimitStore.get(rateLimitKey);
+  
+  if (!entry || entry.resetAt < now) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitStore.set(rateLimitKey, entry);
+  }
+  
+  entry.count++;
+  
+  // Set rate limit headers
+  c.header('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS.toString());
+  c.header('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT_MAX_REQUESTS - entry.count).toString());
+  c.header('X-RateLimit-Reset', Math.ceil(entry.resetAt / 1000).toString());
+  
+  if (entry.count > RATE_LIMIT_MAX_REQUESTS) {
+    return c.json(
+      { 
+        error: 'Too Many Requests', 
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+      },
+      429
+    );
+  }
+  
+  return next();
 });
 
 // Ban check middleware - blocks banned users
@@ -205,8 +285,6 @@ app.get('/health', async (c) => {
   };
 
   // In localnet, always return 200 to allow testing even without all services
-  const network = getNetworkName();
-  const isLocalnet = network === 'localnet' || network === 'Jeju';
   const statusCode = isLocalnet ? 200 : overallStatus === 'unhealthy' ? 503 : 200;
   return c.json(response, statusCode);
 });
@@ -328,14 +406,86 @@ app.get('/docs', (c) =>
   }),
 );
 
-// Webhook handlers for cron callbacks
+// Webhook authentication middleware
+// Webhooks must include a secret header that matches the configured webhook secret
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || (isLocalnet ? 'dev-webhook-secret' : '');
+
+// Constant-time string comparison using crypto.subtle
+// This prevents timing attacks by ensuring comparison takes the same time
+// regardless of where the strings differ
+const constantTimeEqual = async (a: string, b: string): Promise<boolean> => {
+  // Convert strings to Uint8Arrays
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  
+  // Create fixed-size buffers to prevent length leakage
+  // Use HMAC with both values and compare digests
+  const key = await crypto.subtle.generateKey(
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const [aHash, bHash] = await Promise.all([
+    crypto.subtle.sign('HMAC', key, aBytes),
+    crypto.subtle.sign('HMAC', key, bBytes),
+  ]);
+  
+  // Compare the hashes in constant time
+  const aView = new Uint8Array(aHash);
+  const bView = new Uint8Array(bHash);
+  
+  let result = 0;
+  for (let i = 0; i < aView.length; i++) {
+    result |= aView[i] ^ bView[i];
+  }
+  
+  return result === 0;
+};
+
+const validateWebhookSecret = async (c: Parameters<Parameters<typeof app.post>[1]>[0]): Promise<boolean> => {
+  // In localnet without configured secret, allow all webhooks
+  if (isLocalnet && !process.env.WEBHOOK_SECRET) {
+    return true;
+  }
+  
+  // Require webhook secret in production
+  if (!WEBHOOK_SECRET) {
+    console.error('[Webhook] WEBHOOK_SECRET not configured');
+    return false;
+  }
+  
+  const providedSecret = c.req.header('x-webhook-secret');
+  if (!providedSecret) {
+    console.warn('[Webhook] Missing x-webhook-secret header');
+    return false;
+  }
+  
+  // Use constant-time comparison that doesn't leak length
+  return constantTimeEqual(providedSecret, WEBHOOK_SECRET);
+};
+
+// Webhook handlers for cron callbacks with authentication
 app.post('/webhooks/reminder/:id', async (c) => {
+  if (!(await validateWebhookSecret(c))) {
+    return c.json({ error: 'Unauthorized', code: 'WEBHOOK_AUTH_FAILED' }, 401);
+  }
+  
   const reminderId = c.req.param('id');
+  if (!reminderId || reminderId.length === 0) {
+    return c.json({ error: 'Reminder ID required' }, 400);
+  }
+  
   await handleReminderWebhook(reminderId);
   return c.json({ success: true });
 });
 
 app.post('/webhooks/cleanup', async (c) => {
+  if (!(await validateWebhookSecret(c))) {
+    return c.json({ error: 'Unauthorized', code: 'WEBHOOK_AUTH_FAILED' }, 401);
+  }
+  
   await handleCleanupWebhook();
   return c.json({ success: true });
 });

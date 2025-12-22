@@ -142,8 +142,11 @@ export function sanitizeString(
 export function sanitizeObject(
   obj: JSONValue | string | null | undefined,
   config: SanitizationConfig
-): JSONValue | null {
-  if (obj === null || obj === undefined) {
+): JSONValue | null | undefined {
+  if (obj === undefined) {
+    return undefined;
+  }
+  if (obj === null) {
     return null;
   }
 

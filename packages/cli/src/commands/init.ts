@@ -6,16 +6,21 @@
  * - REST API, A2A, and MCP protocols
  * - x402 payment support
  * - Synpress tests
+ * 
+ * Security notes:
+ * - App names are validated against strict patterns
+ * - Output directories are validated for path traversal
  */
 
 import { Command } from 'commander';
 import prompts from 'prompts';
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, lstatSync } from 'fs';
+import { join, relative, resolve, normalize } from 'path';
 import chalk from 'chalk';
 import { execa } from 'execa';
 import { logger } from '../lib/logger';
 import { findMonorepoRoot } from '../lib/system';
+import { validateAppName } from '../lib/security';
 
 interface InitConfig {
   name: string;
@@ -41,7 +46,7 @@ const vendorSubcommand = new Command('vendor')
 
 async function createVendorManifest(appName: string): Promise<void> {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/vendor/create-vendor-manifest.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/infrastructure/create-vendor-manifest.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Vendor manifest script not found');
@@ -82,17 +87,28 @@ Examples:
     let config: InitConfig;
 
     if (options.yes && nameArg) {
-      // Quick mode with defaults
+      // Quick mode with defaults - validate app name
+      const validName = validateAppName(nameArg);
+      
+      // Validate and resolve output directory
+      const outputDir = resolve(normalize(options.dir || join(process.cwd(), validName)));
+      
+      // Ensure output is under cwd for safety
+      const cwd = resolve(process.cwd());
+      if (!outputDir.startsWith(cwd) && !options.dir) {
+        throw new Error('Output directory must be within current working directory');
+      }
+      
       config = {
-        name: nameArg,
-        displayName: formatDisplayName(nameArg),
-        jnsName: `${nameArg}.jeju`,
-        databaseId: `${nameArg}-db`,
-        description: `A decentralized ${nameArg} application`,
+        name: validName,
+        displayName: formatDisplayName(validName),
+        jnsName: `${validName}.jeju`,
+        databaseId: `${validName}-db`,
+        description: `A decentralized ${validName} application`,
         x402Enabled: options.x402 !== false,
         oauth3Enabled: true,
-        oauth3AppId: `${nameArg}.oauth3.jeju`,
-        outputDir: options.dir || join(process.cwd(), nameArg),
+        oauth3AppId: `${validName}.oauth3.jeju`,
+        outputDir,
       };
     } else {
       // Interactive prompts
@@ -103,10 +119,12 @@ Examples:
           message: 'App name (lowercase, hyphens allowed):',
           initial: nameArg || 'my-dapp',
           validate: (value: string) => {
-            if (!/^[a-z][a-z0-9-]*$/.test(value)) {
-              return 'Name must be lowercase, start with letter, and only contain letters, numbers, and hyphens';
+            try {
+              validateAppName(value);
+              return true;
+            } catch (err) {
+              return (err as Error).message;
             }
-            return true;
           },
         },
         {
@@ -119,19 +137,19 @@ Examples:
           type: 'text',
           name: 'description',
           message: 'Description:',
-          initial: (prev: string, values: { name: string }) => `A decentralized ${values.name} application`,
+          initial: (_prev: string, values: { name: string }) => `A decentralized ${values.name} application`,
         },
         {
           type: 'text',
           name: 'jnsName',
           message: 'JNS domain name:',
-          initial: (prev: string, values: { name: string }) => `${values.name}.jeju`,
+          initial: (_prev: string, values: { name: string }) => `${values.name}.jeju`,
         },
         {
           type: 'text',
           name: 'databaseId',
           message: 'Database ID:',
-          initial: (prev: string, values: { name: string }) => `${values.name}-db`,
+          initial: (_prev: string, values: { name: string }) => `${values.name}-db`,
         },
         {
           type: 'confirm',
@@ -146,16 +164,16 @@ Examples:
           initial: true,
         },
         {
-          type: (prev: boolean) => prev ? 'text' : null,
+          type: (_prev: boolean) => _prev ? 'text' : null,
           name: 'oauth3AppId',
           message: 'OAuth3 App ID:',
-          initial: (prev: string, values: { name: string }) => `${values.name}.oauth3.jeju`,
+          initial: (_prev: string, values: { name: string }) => `${values.name}.oauth3.jeju`,
         },
         {
           type: 'text',
           name: 'outputDir',
           message: 'Output directory:',
-          initial: (prev: string, values: { name: string }) => 
+          initial: (_prev: string, values: { name: string }) => 
             options.dir || join(process.cwd(), values.name),
         },
       ]);
@@ -170,6 +188,9 @@ Examples:
         answers.oauth3AppId = '';
       }
 
+      // Validate and resolve output directory
+      answers.outputDir = resolve(normalize(answers.outputDir));
+      
       config = answers as InitConfig;
     }
 
@@ -236,28 +257,54 @@ function formatDisplayName(name: string): string {
 async function copyTemplate(templateDir: string, outputDir: string, config: InitConfig): Promise<void> {
   const skipFiles = ['node_modules', '.git', 'dist', 'bun.lockb', '.turbo'];
   
+  // Resolve paths to prevent traversal
+  const resolvedTemplateDir = resolve(templateDir);
+  const resolvedOutputDir = resolve(outputDir);
+  
   function copyRecursive(src: string, dest: string) {
-    const stat = statSync(src);
+    // Ensure src is within template directory
+    const resolvedSrc = resolve(src);
+    if (!resolvedSrc.startsWith(resolvedTemplateDir)) {
+      throw new Error('Path traversal detected in template');
+    }
     
-    if (stat.isDirectory()) {
-      const baseName = src.split('/').pop() || '';
+    // Ensure dest is within output directory
+    const resolvedDest = resolve(dest);
+    if (!resolvedDest.startsWith(resolvedOutputDir)) {
+      throw new Error('Path traversal detected in output');
+    }
+    
+    // SECURITY: Check for symlinks to prevent symlink attacks
+    // Use lstatSync (doesn't follow symlinks) instead of statSync
+    const lstat = lstatSync(resolvedSrc);
+    
+    // Reject symlinks entirely to prevent attacks that could read/write outside directories
+    if (lstat.isSymbolicLink()) {
+      throw new Error(`Symlink not allowed in template: ${resolvedSrc}`);
+    }
+    
+    if (lstat.isDirectory()) {
+      const baseName = resolvedSrc.split('/').pop() || '';
       if (skipFiles.includes(baseName)) return;
       
-      mkdirSync(dest, { recursive: true });
-      const files = readdirSync(src);
+      mkdirSync(resolvedDest, { recursive: true });
+      const files = readdirSync(resolvedSrc);
       
       for (const file of files) {
-        copyRecursive(join(src, file), join(dest, file));
+        // Skip files with suspicious names
+        if (file.includes('..') || file.includes('\0')) continue;
+        copyRecursive(join(resolvedSrc, file), join(resolvedDest, file));
       }
-    } else {
-      // Read and transform file content
-      let content = readFileSync(src, 'utf-8');
+    } else if (lstat.isFile()) {
+      // Only process regular files, not special files (devices, sockets, etc.)
+      let content = readFileSync(resolvedSrc, 'utf-8');
       content = transformContent(content, config);
-      writeFileSync(dest, content);
+      writeFileSync(resolvedDest, content);
     }
+    // Skip any other file types (devices, sockets, etc.) silently
   }
 
-  copyRecursive(templateDir, outputDir);
+  copyRecursive(resolvedTemplateDir, resolvedOutputDir);
 }
 
 function transformContent(content: string, config: InitConfig): string {

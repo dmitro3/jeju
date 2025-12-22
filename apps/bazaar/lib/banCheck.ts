@@ -103,34 +103,71 @@ interface CacheEntry {
   cachedAt: number
 }
 
+// Security: Bounded cache size to prevent memory exhaustion
+const MAX_CACHE_SIZE = 10000;
 const banCache = new Map<string, CacheEntry>()
 const CACHE_TTL = 10000 // 10 seconds
+
+// Race condition protection: Track in-flight requests
+const inFlightRequests = new Map<string, Promise<BanCheckResult>>()
 
 // ============ Ban Check Functions ============
 
 /**
  * Check if a user is banned
+ * Uses deduplication to prevent race conditions on concurrent requests
  */
 export async function checkUserBan(userAddress: Address): Promise<BanCheckResult> {
   const cacheKey = userAddress.toLowerCase()
+  
+  // Check cache first
   const cached = banCache.get(cacheKey)
   if (cached && Date.now() - cached.cachedAt < CACHE_TTL) {
     return cached.result
   }
 
-  const status = await moderationAPI.checkBanStatus(userAddress)
-  
-  const result: BanCheckResult = {
-    allowed: !status.isBanned,
-    reason: status.reason,
-    banType: status.banType,
-    networkBanned: status.networkBanned,
-    onNotice: status.banType === BanType.ON_NOTICE,
-    canAppeal: status.canAppeal,
+  // Check if request is already in-flight (prevents duplicate concurrent requests)
+  const inFlight = inFlightRequests.get(cacheKey)
+  if (inFlight) {
+    return inFlight
   }
 
-  banCache.set(cacheKey, { result, cachedAt: Date.now() })
-  return result
+  // Create and track the request
+  const requestPromise = (async (): Promise<BanCheckResult> => {
+    const status = await moderationAPI.checkBanStatus(userAddress)
+    
+    // Map string banType to enum if it matches
+    const banTypeValue = Object.values(BanType).includes(status.banType as BanType) 
+      ? status.banType as BanType 
+      : undefined
+    
+    const result: BanCheckResult = {
+      allowed: !status.isBanned,
+      reason: status.reason,
+      banType: banTypeValue,
+      onNotice: status.isOnNotice,
+      canAppeal: status.canAppeal,
+    }
+
+    // Evict oldest entry if at capacity
+    if (banCache.size >= MAX_CACHE_SIZE) {
+      const firstKey = banCache.keys().next().value;
+      if (firstKey) banCache.delete(firstKey)
+    }
+
+    banCache.set(cacheKey, { result, cachedAt: Date.now() })
+    return result
+  })()
+
+  // Track the in-flight request
+  inFlightRequests.set(cacheKey, requestPromise)
+
+  try {
+    return await requestPromise
+  } finally {
+    // Clean up in-flight tracking
+    inFlightRequests.delete(cacheKey)
+  }
 }
 
 /**
@@ -160,8 +197,8 @@ export async function getUserStake(userAddress: Address): Promise<{
   const profile = await moderationAPI.getModeratorProfile(userAddress)
   if (!profile) return null
   return {
-    amount: profile.stakedAmount,
-    stakedAt: profile.stakedAt,
+    amount: BigInt(profile.stakeAmount),
+    stakedAt: BigInt(profile.stakedSince),
     isStaked: profile.isStaked,
   }
 }
@@ -173,22 +210,27 @@ export async function getModeratorReputation(userAddress: Address): Promise<Mode
   const profile = await moderationAPI.getModeratorProfile(userAddress)
   if (!profile) return null
 
-  const wins = Number(profile.successfulReports)
-  const losses = Number(profile.failedReports)
-  const total = wins + losses
-  const winRate = total > 0 ? Math.round((wins / total) * 100) : 50
+  // Map tier string to enum
+  const tierMap: Record<string, ReputationTier> = {
+    'UNTRUSTED': ReputationTier.UNTRUSTED,
+    'LOW': ReputationTier.LOW,
+    'MEDIUM': ReputationTier.MEDIUM,
+    'HIGH': ReputationTier.HIGH,
+    'TRUSTED': ReputationTier.TRUSTED,
+  }
+  const tier = tierMap[profile.tier.toUpperCase()] ?? ReputationTier.UNTRUSTED
 
   return {
-    successfulBans: profile.successfulReports,
-    unsuccessfulBans: profile.failedReports,
-    totalSlashedFrom: profile.totalSlashedFrom ?? 0n,
-    totalSlashedOthers: profile.totalSlashedOthers ?? 0n,
-    reputationScore: profile.reputationScore,
-    lastReportTimestamp: profile.lastReportTime,
-    reportCooldownUntil: profile.cooldownUntil ?? 0n,
-    tier: profile.reputationTier as ReputationTier,
-    netPnL: profile.netPnL ?? 0n,
-    winRate,
+    successfulBans: BigInt(profile.successfulBans),
+    unsuccessfulBans: BigInt(profile.unsuccessfulBans),
+    totalSlashedFrom: BigInt(profile.totalLost),
+    totalSlashedOthers: BigInt(profile.totalEarned),
+    reputationScore: BigInt(profile.reputationScore),
+    lastReportTimestamp: 0n, // Not available in shared type
+    reportCooldownUntil: 0n, // Not available in shared type
+    tier,
+    netPnL: BigInt(profile.netPnL),
+    winRate: profile.winRate,
   }
 }
 
@@ -197,7 +239,8 @@ export async function getModeratorReputation(userAddress: Address): Promise<Mode
  */
 export async function getRequiredStakeForReporter(userAddress: Address): Promise<bigint | null> {
   const profile = await moderationAPI.getModeratorProfile(userAddress)
-  return profile?.requiredStake ?? null
+  if (!profile) return null
+  return BigInt(profile.requiredStake)
 }
 
 /**
@@ -205,7 +248,8 @@ export async function getRequiredStakeForReporter(userAddress: Address): Promise
  */
 export async function getQuorumRequired(userAddress: Address): Promise<bigint | null> {
   const profile = await moderationAPI.getModeratorProfile(userAddress)
-  return profile?.quorumRequired ?? null
+  if (!profile) return null
+  return BigInt(profile.quorumRequired)
 }
 
 /**

@@ -10,6 +10,7 @@
 import type { Address, Hex } from "viem";
 import { createPublicClient, createWalletClient, http } from "viem";
 import type { PublicClient, WalletClient } from "viem";
+import { privateKeyToAccount, type LocalAccount } from "viem/accounts";
 import type { JsonValue } from "../shared/types";
 
 export interface PackageSDKConfig {
@@ -356,6 +357,7 @@ export class JejuPkgSDK {
   private config: PackageSDKConfig;
   private publicClient: PublicClient;
   private walletClient?: WalletClient;
+  private account?: LocalAccount;
 
   constructor(config: PackageSDKConfig) {
     this.config = config;
@@ -364,7 +366,9 @@ export class JejuPkgSDK {
     });
 
     if (config.privateKey) {
+      this.account = privateKeyToAccount(config.privateKey);
       this.walletClient = createWalletClient({
+        account: this.account,
         transport: http(config.rpcUrl),
       });
     }
@@ -507,7 +511,7 @@ export class JejuPkgSDK {
       // Attempt to get error details from JSON response
       const contentType = response.headers.get("content-type");
       if (contentType?.includes("application/json")) {
-        const errorBody = await response.json() as { error?: string };
+        const errorBody = (await response.json()) as { error?: string };
         errorMessage = errorBody.error ?? response.statusText;
       }
       throw new Error(`Failed to publish package: ${errorMessage}`);
@@ -701,13 +705,14 @@ export class JejuPkgSDK {
   // On-chain operations (requires wallet)
 
   async registerScope(scope: string): Promise<Hex> {
-    if (!this.walletClient || !this.config.registryAddress) {
+    if (!this.walletClient || !this.account || !this.config.registryAddress) {
       throw new Error(
         "Wallet client and registry address required for on-chain operations",
       );
     }
 
     const hash = await this.walletClient.writeContract({
+      account: this.account,
       address: this.config.registryAddress,
       abi: PACKAGE_REGISTRY_ABI,
       functionName: "registerScope",
@@ -725,13 +730,14 @@ export class JejuPkgSDK {
     visibility: 0 | 1 | 2,
     manifestCid: string,
   ): Promise<Hex> {
-    if (!this.walletClient || !this.config.registryAddress) {
+    if (!this.walletClient || !this.account || !this.config.registryAddress) {
       throw new Error(
         "Wallet client and registry address required for on-chain operations",
       );
     }
 
     const hash = await this.walletClient.writeContract({
+      account: this.account,
       address: this.config.registryAddress,
       abi: PACKAGE_REGISTRY_ABI,
       functionName: "createPackage",
@@ -743,13 +749,14 @@ export class JejuPkgSDK {
   }
 
   async linkCouncilProposal(packageId: Hex, proposalId: bigint): Promise<Hex> {
-    if (!this.walletClient || !this.config.registryAddress) {
+    if (!this.walletClient || !this.account || !this.config.registryAddress) {
       throw new Error(
         "Wallet client and registry address required for on-chain operations",
       );
     }
 
     const hash = await this.walletClient.writeContract({
+      account: this.account,
       address: this.config.registryAddress,
       abi: PACKAGE_REGISTRY_ABI,
       functionName: "linkCouncilProposal",

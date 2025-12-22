@@ -13,13 +13,10 @@
 
 import type { Address, Hex } from 'viem';
 import { keccak256, toBytes, toHex, concatHex } from 'viem';
-import type { Chunk, BlobCommitment, DAOperatorInfo } from './types';
 import { 
   gfMul, 
   gfPow, 
   gfAdd, 
-  gfDiv,
-  gfInv,
 } from './crypto/reed-solomon-2d';
 
 // ============================================================================
@@ -194,7 +191,7 @@ function computeRowParity(row: Uint8Array[], parityIndex: number): Uint8Array {
 /**
  * Compute column parity using proper GF(2^8) arithmetic
  */
-function computeColumnParity(column: Uint8Array[], parityIndex: number): Uint8Array {
+function _computeColumnParity(column: Uint8Array[], parityIndex: number): Uint8Array {
   const parity = new Uint8Array(FIELD_ELEMENT_SIZE);
   
   for (let i = 0; i < column.length; i++) {
@@ -395,7 +392,7 @@ export function generateLightSampleRequest(
 export function verifySampleResponse(
   request: PeerDASSampleRequest,
   response: PeerDASSampleResponse,
-  blobCommitment: Hex
+  _blobCommitment: Hex
 ): boolean {
   // Check all requested columns are present
   const receivedIndices = new Set(response.columns.map(c => c.index));
@@ -421,7 +418,7 @@ export function verifySampleResponse(
  */
 export function calculateAvailabilityConfidence(
   successfulSamples: number,
-  totalSamples: number
+  _totalSamples: number
 ): number {
   // Probability that data is unavailable given k successful samples
   // Assuming 50% availability threshold
@@ -562,7 +559,11 @@ export class PeerDASBlobManager {
       this.columns.set(blobCommitment, new Map());
     }
     
-    this.columns.get(blobCommitment)!.set(column.index, column);
+    const columnMap = this.columns.get(blobCommitment);
+    if (!columnMap) {
+      throw new Error(`Failed to create column map for blob ${blobCommitment}`);
+    }
+    columnMap.set(column.index, column);
     return true;
   }
 
@@ -592,7 +593,10 @@ export class PeerDASBlobManager {
       return null;
     }
     
-    const columns = this.columns.get(blobCommitment)!;
+    const columns = this.columns.get(blobCommitment);
+    if (!columns) {
+      return null;
+    }
     const columnMap = new Map<ColumnIndex, Uint8Array[]>();
     
     for (const [index, column] of columns) {
@@ -639,7 +643,7 @@ export class PeerDASBlobManager {
     let columnCount = 0;
     let reconstructable = 0;
     
-    for (const [commitment, columns] of this.columns) {
+    for (const [_commitment, columns] of this.columns) {
       columnCount += columns.size;
       if (columns.size >= DATA_COLUMN_COUNT) {
         reconstructable++;

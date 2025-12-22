@@ -12,8 +12,8 @@
 
 import { useState, useEffect, type ComponentType } from 'react';
 import { useAccount, useSignMessage, useDisconnect } from 'wagmi';
-import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
-import { X, Key, User, Wallet, Chrome, Github, Twitter, MessageCircle, Fingerprint, ExternalLink, Loader2, Mail, Phone, type LucideProps } from 'lucide-react';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import { X, Key, Wallet, Chrome, Github, Twitter, MessageCircle, Fingerprint, Loader2, Mail, Phone, type LucideProps } from 'lucide-react';
 import { createSIWEMessage, formatSIWEMessage } from '@jejunetwork/shared/auth/siwe';
 import { isPlatformAuthenticatorAvailable } from '@jejunetwork/shared/auth/passkeys';
 import { CHAIN_ID, OAUTH3_AGENT_URL } from '../../config';
@@ -62,7 +62,7 @@ export function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps) {
 
   const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
-  const { disconnect } = useDisconnect();
+  const { disconnect: _disconnect } = useDisconnect();
   const { openConnectModal } = useConnectModal();
   
   // OAuth3 integration

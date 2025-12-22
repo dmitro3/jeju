@@ -36,7 +36,6 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { arbitrum, base } from 'viem/chains';
 
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz';
-const HYPERLIQUID_WS = 'wss://api.hyperliquid.xyz/ws';
 
 // Minimum funding rate to open position (annualized)
 const MIN_FUNDING_APR = 20; // 20% APR minimum
@@ -153,7 +152,7 @@ export class FundingArbStrategy extends EventEmitter {
     // Initialize EVM clients for spot hedging
     const account = privateKeyToAccount(evmPrivateKey);
 
-    for (const [venue, config] of Object.entries(SPOT_VENUES)) {
+    for (const [_venue, config] of Object.entries(SPOT_VENUES)) {
       const rpcUrl = evmRpcUrls[config.chain];
       if (!rpcUrl) continue;
 

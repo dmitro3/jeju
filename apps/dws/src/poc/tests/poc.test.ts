@@ -36,7 +36,6 @@ import {
   PoCRegistryClient,
 } from '../registry-client';
 import {
-  type TEEQuote,
   type PoCRegistryEntry,
   type PoCVerificationLevel,
   PoCError,
@@ -540,7 +539,7 @@ describe('Quote Parser', () => {
       const parseResult = parseQuote(quoteHex);
       expect(parseResult.success).toBe(true);
       
-      const verifyResult = await verifyQuote(parseResult.quote!);
+      const _verifyResult = await verifyQuote(parseResult.quote!);
       
       // SEV uses RSA-4096 (512 bytes)
       expect(parseResult.quote!.signature.length).toBe(2 + 512 * 2);
@@ -2028,7 +2027,7 @@ describe('Decentralized Registry Client', () => {
       offChainEndpoints: [],
     });
     
-    expect(() => client.subscribeToRevocations(() => {})).toThrow('No off-chain endpoints configured');
+    expect(() => client.subscribeToRevocations(() => { /* no-op */ })).toThrow('No off-chain endpoints configured');
   });
   
   test('mock client getAgentStatus throws for unknown agent', async () => {

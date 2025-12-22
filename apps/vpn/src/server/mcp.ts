@@ -606,13 +606,50 @@ async function callTool(
 
       const proxyRequest = expectValid(ProxyRequestSchema, args, 'proxy request params');
 
+      // SECURITY: Validate URL with DNS resolution to prevent SSRF and DNS rebinding attacks
+      const { validateProxyUrlWithDNS } = await import('./utils/proxy-validation');
+      await validateProxyUrlWithDNS(proxyRequest.url);
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
       const response = await fetch(proxyRequest.url, {
         method: proxyRequest.method,
         headers: proxyRequest.headers,
         body: proxyRequest.body,
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
-      const responseBody = await response.text();
+      // SECURITY: Read response with size limit
+      const MCP_MAX_RESPONSE_SIZE = 10 * 1024 * 1024;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
+      
+      const chunks: Uint8Array[] = [];
+      let totalSize = 0;
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        totalSize += value.length;
+        if (totalSize > MCP_MAX_RESPONSE_SIZE) {
+          reader.cancel();
+          throw new Error(`Response too large. Max size: ${MCP_MAX_RESPONSE_SIZE} bytes`);
+        }
+        chunks.push(value);
+      }
+      
+      const responseBody = new TextDecoder().decode(
+        chunks.reduce((acc, chunk) => {
+          const result = new Uint8Array(acc.length + chunk.length);
+          result.set(acc);
+          result.set(chunk, acc.length);
+          return result;
+        }, new Uint8Array(0))
+      );
 
       return {
         result: {

@@ -13,16 +13,13 @@ import {
   http,
   parseEther,
   formatEther,
-  parseUnits,
-  formatUnits,
   parseAbi,
-  encodeFunctionData,
   type Address,
   type PublicClient,
   type WalletClient,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { rawDeployments, isValidAddress } from '@jejunetwork/contracts'
+import { rawDeployments } from '@jejunetwork/contracts'
 
 // =============================================================================
 // CONFIGURATION
@@ -46,47 +43,12 @@ const localnet = {
 // ABIS
 // =============================================================================
 
-const ERC20_ABI = parseAbi([
-  'function name() view returns (string)',
-  'function symbol() view returns (string)',
-  'function decimals() view returns (uint8)',
-  'function totalSupply() view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function transfer(address to, uint256 amount) returns (bool)',
-  'function mint(address to, uint256 amount)',
-])
-
 const WETH_ABI = parseAbi([
   'function deposit() payable',
   'function withdraw(uint256 amount)',
   'function balanceOf(address account) view returns (uint256)',
   'function approve(address spender, uint256 amount) returns (bool)',
 ])
-
-// V4 Router ABI (simplified for exactInputSingle)
-const V4_SWAP_ROUTER_ABI = parseAbi([
-  'function swap((address,address,uint24,int24,address) key, (bool,int256,uint160) params, bytes hookData) payable returns (int256 delta0, int256 delta1)',
-])
-
-// =============================================================================
-// TYPES
-// =============================================================================
-
-interface PoolKey {
-  currency0: Address
-  currency1: Address
-  fee: number
-  tickSpacing: number
-  hooks: Address
-}
-
-interface SwapParams {
-  zeroForOne: boolean
-  amountSpecified: bigint
-  sqrtPriceLimitX96: bigint
-}
 
 // =============================================================================
 // SETUP

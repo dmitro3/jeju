@@ -6,6 +6,10 @@
  * - Base Sepolia
  * - Ethereum Sepolia
  * - Solana Devnet (via web faucet)
+ * 
+ * Security notes:
+ * - Addresses are validated before use
+ * - Amounts are validated and bounded
  */
 
 import { Command } from 'commander';
@@ -14,6 +18,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { baseSepolia, sepolia } from 'viem/chains';
 import { logger } from '../lib/logger';
 import { loadPrivateKey } from '../lib/keys';
+import { validateAddress } from '../lib/security';
 
 // Chain configurations
 const CHAINS = {
@@ -181,6 +186,16 @@ async function selfFund(chainName: ChainName, targetAddress: string, amountEth: 
     return;
   }
 
+  // Validate target address
+  const validAddress = validateAddress(targetAddress);
+  
+  // Validate amount
+  const amountNum = parseFloat(amountEth);
+  if (isNaN(amountNum) || amountNum <= 0 || amountNum > 100) {
+    logger.error('Invalid amount: must be between 0 and 100 ETH');
+    return;
+  }
+
   const key = loadPrivateKey('deployer');
   if (!key) {
     logger.error('No deployer key found');
@@ -193,7 +208,7 @@ async function selfFund(chainName: ChainName, targetAddress: string, amountEth: 
 
   const account = privateKeyToAccount(key as `0x${string}`);
   
-  if (account.address.toLowerCase() === targetAddress.toLowerCase()) {
+  if (account.address.toLowerCase() === validAddress.toLowerCase()) {
     logger.error('Cannot self-fund to the same address');
     return;
   }
@@ -217,10 +232,11 @@ async function selfFund(chainName: ChainName, targetAddress: string, amountEth: 
     return;
   }
 
-  logger.step(`Sending ${amountEth} ${chain.native} to ${targetAddress.slice(0, 10)}...`);
+  // Log truncated address to avoid exposing full address in logs
+  logger.step(`Sending ${amountEth} ${chain.native} to ${validAddress.slice(0, 10)}...`);
 
   const hash = await walletClient.sendTransaction({
-    to: targetAddress as `0x${string}`,
+    to: validAddress,
     value: amount,
   });
 

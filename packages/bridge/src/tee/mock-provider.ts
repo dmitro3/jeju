@@ -8,6 +8,7 @@
 import { keccak256, toBytes } from "viem";
 import type { TEEAttestation } from "../types/index.js";
 import { toHash32 } from "../types/index.js";
+import { createLogger } from "../utils/logger.js";
 import type {
 	AttestationRequest,
 	AttestationResponse,
@@ -16,7 +17,6 @@ import type {
 	TEECapability,
 	TEEProvider,
 } from "./types.js";
-import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("mock-tee");
 

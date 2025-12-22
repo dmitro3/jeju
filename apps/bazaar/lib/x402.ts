@@ -25,10 +25,10 @@ export {
   checkPayment,
   calculatePercentageFee,
   generate402Headers,
-} from '../../../scripts/shared/x402';
+} from '@jejunetwork/deployment/scripts/shared/x402';
 
 // Import for re-export with extension
-import { createPaymentRequirement as sharedCreatePaymentRequirement } from '../../../scripts/shared/x402';
+import { createPaymentRequirement as sharedCreatePaymentRequirement } from '@jejunetwork/deployment/scripts/shared/x402';
 import type { Address } from 'viem';
 
 // ============ Bazaar-Specific Payment Tiers ============

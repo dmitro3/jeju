@@ -419,7 +419,6 @@ function DraftStep({
 }
 
 function QualityStep({
-  draft,
   assessment,
   loading,
   onAssess,

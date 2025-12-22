@@ -307,10 +307,10 @@ export class GRPOTrainer {
     let totalNeg = 0;
 
     for (let i = 0; i < batches.tokenBatches.length; i++) {
-      const tokens = batches.tokenBatches[i];
-      const labels = batches.labelBatches[i];
+      const _tokens = batches.tokenBatches[i];
+      const _labels = batches.labelBatches[i];
       const advantages = batches.advantageBatches[i];
-      const temperatures = batches.temperatureBatches[i];
+      const _temperatures = batches.temperatureBatches[i];
 
       // Simulate loss computation
       const batchLoss = Math.random() * 0.5;
@@ -355,7 +355,7 @@ export class GRPOTrainer {
     // Start vLLM
     await this.startVllm();
 
-    let pendingBatches: ReturnType<typeof padToGoodOffset>[] = [];
+    const pendingBatches: ReturnType<typeof padToGoodOffset>[] = [];
 
     for (let step = 0; step < this.config.trainingSteps; step++) {
       console.log(`\n[GRPO] Step ${step + 1}/${this.config.trainingSteps}`);
@@ -485,7 +485,7 @@ export class DistributedGRPOTrainer extends GRPOTrainer {
     }
   }
 
-  async reportProgress(epoch: number, step: number): Promise<void> {
+  async reportProgress(_epoch: number, _step: number): Promise<void> {
     if (!this.bridge || !this.runId) {
       return;
     }

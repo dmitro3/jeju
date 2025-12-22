@@ -63,7 +63,7 @@ describe('Pyth Network Configuration', () => {
     });
 
     it('all price IDs should be valid bytes32', () => {
-      for (const [asset, id] of Object.entries(PYTH_PRICE_IDS)) {
+      for (const [, id] of Object.entries(PYTH_PRICE_IDS)) {
         expect(id.length).toBe(66); // 0x + 64 hex chars
         expect(id).toMatch(/^0x[a-f0-9]{64}$/);
       }
@@ -85,7 +85,7 @@ describe('Pyth Network Configuration', () => {
     });
 
     it('all addresses should be valid', () => {
-      for (const [chainId, address] of Object.entries(PYTH_CONTRACTS)) {
+      for (const [, address] of Object.entries(PYTH_CONTRACTS)) {
         expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/);
       }
     });

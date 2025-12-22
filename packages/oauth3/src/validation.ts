@@ -50,7 +50,8 @@ export const OAuth3SessionSchema = z.object({
   smartAccount: AddressSchema,
   expiresAt: z.number().int().positive(),
   capabilities: z.array(z.nativeEnum(SessionCapability)),
-  signingKey: HexSchema,
+  /** Public key for verifying signatures - the signing key stays in the TEE */
+  signingPublicKey: HexSchema,
   attestation: TEEAttestationSchema,
 });
 

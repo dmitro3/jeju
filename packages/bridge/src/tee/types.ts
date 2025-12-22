@@ -49,7 +49,9 @@ export interface ITEEProvider {
 	initialize(): Promise<void>;
 	isAvailable(): Promise<boolean>;
 	requestAttestation(request: AttestationRequest): Promise<AttestationResponse>;
-	verifyAttestation(attestation: AttestationResponse): Promise<AttestationVerification>;
+	verifyAttestation(
+		attestation: AttestationResponse,
+	): Promise<AttestationVerification>;
 	toTEEAttestation(attestation: AttestationResponse): TEEAttestation;
 	getStatus(): Promise<{
 		available: boolean;

@@ -14,13 +14,13 @@
  * - Price/quote fetching
  */
 
-import { Connection, PublicKey, Keypair, Transaction, VersionedTransaction } from '@solana/web3.js';
+import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js';
 import { 
   JupiterQuoteResponseSchema, JupiterSwapResponseSchema, JupiterPriceResponseSchema,
   RaydiumQuoteResponseSchema, RaydiumSwapResponseSchema, RaydiumPoolsResponseSchema, RaydiumLiquidityResponseSchema, RaydiumPositionsResponseSchema,
   OrcaQuoteResponseSchema, OrcaSwapResponseSchema, OrcaPoolsResponseSchema, OrcaPoolResponseSchema, OrcaLiquidityResponseSchema, OrcaPositionsResponseSchema,
   MeteoraQuoteResponseSchema, MeteoraSwapResponseSchema, MeteoraPoolsResponseSchema, MeteoraPoolResponseSchema, MeteoraLiquidityResponseSchema, MeteoraPositionsResponseSchema,
-  parseOrThrow, expect
+  parseOrThrow
 } from '../../schemas';
 
 // ============ Types ============
@@ -673,7 +673,7 @@ export class MeteoraAdapter implements DexAdapter {
   }
 
   async getPools(tokenMints?: string[]): Promise<LiquidityPool[]> {
-    let url = `${METEORA_API}/pair/all`;
+    const url = `${METEORA_API}/pair/all`;
     
     const response = await fetch(url);
     if (!response.ok) return [];

@@ -1,5 +1,5 @@
 // Compute Marketplace Integration Tests
-import { describe, test, expect, beforeAll, afterAll, mock } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { serve, type Server } from 'bun';
 
 let mockServer: Server | null = null;

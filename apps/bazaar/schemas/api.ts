@@ -10,7 +10,6 @@ import {
   EvmChainIdSchema,
   SolanaNetworkIdSchema,
   ChainTypeSchema,
-  TransactionHashSchema,
 } from './common'
 import { TokenMetadataSchema } from './token'
 

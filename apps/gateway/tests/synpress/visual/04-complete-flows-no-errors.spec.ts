@@ -176,7 +176,7 @@ test.describe('COMPLETE USER JOURNEY - No Errors', () => {
     console.log('🎯 Testing Power User Flow (All Features)');
 
     const steps = [
-      { name: 'Homepage', action: async () => {} },
+      { name: 'Homepage', action: async () => { /* already on homepage */ } },
       { name: 'Registered Tokens', action: async () => { await page.getByRole('button', { name: /Registered Tokens/i }).click(); } },
       { name: 'Bridge from Ethereum', action: async () => { await page.getByRole('button', { name: /Bridge from Ethereum/i }).click(); } },
       { name: 'Deploy Paymaster', action: async () => { await page.getByRole('button', { name: /Deploy Paymaster/i }).click(); } },

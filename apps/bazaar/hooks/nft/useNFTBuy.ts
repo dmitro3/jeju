@@ -7,15 +7,6 @@ import { CONTRACTS } from '@/config'
 
 const MARKETPLACE_ADDRESS = CONTRACTS.nftMarketplace
 
-interface ListingData {
-  seller: string
-  nftContract: string
-  tokenId: bigint
-  price: bigint
-  active: boolean
-  endTime: bigint
-}
-
 export function useNFTBuy(listingId: bigint) {
   expectPositive(listingId, 'Listing ID must be positive');
   const validatedMarketplace = AddressSchema.parse(MARKETPLACE_ADDRESS);

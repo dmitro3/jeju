@@ -30,7 +30,7 @@ const PSYCHE_COORDINATOR_PROGRAM_ID = new PublicKey(
 
 // These are placeholders - use real deployed addresses in production
 // Using the coordinator program ID as a fallback for now
-const PSYCHE_TREASURER_PROGRAM_ID = new PublicKey(
+const _PSYCHE_TREASURER_PROGRAM_ID = new PublicKey(
   'PsyAUmhpmiUouWsnJdNGFSX8vZ6rWjXjgDPHsgqPGyw' // From psyche docker test
 );
 

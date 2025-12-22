@@ -6,12 +6,18 @@
 
 import { Pool, PoolClient } from 'pg';
 
+const POSTGRES_HOST = process.env.POSTGRES_HOST ?? 'localhost';
+const POSTGRES_PORT = process.env.POSTGRES_PORT ? parseInt(process.env.POSTGRES_PORT, 10) : 23798;
+const POSTGRES_USER = process.env.POSTGRES_USER ?? 'postgres';
+const POSTGRES_PASSWORD = process.env.POSTGRES_PASSWORD ?? 'postgres';
+const POSTGRES_DB = process.env.POSTGRES_DB ?? 'indexer';
+
 const pool = new Pool({
-  host: 'localhost',
-  port: 23798,
-  user: 'postgres',
-  password: 'postgres',
-  database: 'indexer',
+  host: POSTGRES_HOST,
+  port: POSTGRES_PORT,
+  user: POSTGRES_USER,
+  password: POSTGRES_PASSWORD,
+  database: POSTGRES_DB,
 });
 
 async function populateTestData(): Promise<void> {

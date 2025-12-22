@@ -191,11 +191,10 @@ describe('MessageEnvelopeSchema', () => {
   });
 
   test('rejects missing required fields', () => {
-    const fields = ['id', 'from', 'to', 'encryptedContent', 'timestamp'];
+    const fields = ['id', 'from', 'to', 'encryptedContent', 'timestamp'] as const;
     
     for (const field of fields) {
-      const partial: Record<string, unknown> = { ...validEnvelope };
-      delete partial[field];
+      const { [field]: _, ...partial } = validEnvelope;
       expect(MessageEnvelopeSchema.safeParse(partial).success).toBe(false);
     }
   });

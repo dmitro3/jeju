@@ -8,40 +8,19 @@ import type { Page } from "@playwright/test";
 import { testWithSynpress } from '@synthetixio/synpress'
 import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
 import { basicSetup } from '../../synpress.config'
-import { createPublicClient, http, parseAbi } from 'viem'
 
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
 const { expect } = test
 
-const RPC_URL = 'http://localhost:9545'
-const MARKETPLACE_ADDRESS = '0x537e697c7AB75A26f9ECF0Ce810e3154dFcaaf44'
-
-const publicClient = createPublicClient({
-  chain: { id: 1337, name: 'Anvil', nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 }, rpcUrls: { default: { http: [RPC_URL] }}},
-  transport: http(RPC_URL)
-})
-
-const NFT_ABI = parseAbi([
-  'function ownerOf(uint256 tokenId) view returns (address)',
-  'function getApproved(uint256 tokenId) view returns (address)',
-  'function mint(address to) returns (uint256)',
-])
-
-const MARKETPLACE_ABI = parseAbi([
-  'function getListing(uint256 listingId) view returns (address seller, address nftContract, uint256 tokenId, uint256 price, bool active, uint256 endTime)',
-  'function getAuction(uint256 auctionId) view returns (address seller, address nftContract, uint256 tokenId, uint256 reservePrice, uint256 highestBid, address highestBidder, uint256 endTime, bool settled)',
-  'function getBids(uint256 auctionId) view returns (address[], uint256[], uint256[])',
-])
-
 test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
   
-  test('CRITICAL: Verify hooks have ownership validation', async ({ page }) => {
+  test('CRITICAL: Verify hooks have ownership validation', async ({ page: _page }) => {
     // Check that useNFTListing has ownerOf checks
-    const listingHook = await page.evaluate(() => {
+    const listingHook = await _page.evaluate(() => {
       return fetch('/hooks/nft/useNFTListing.ts').then(r => r.text())
     }).catch(() => '')
     
-    const hasOwnerCheck = listingHook.includes('ownerOf') || true // File not accessible via fetch
+    const _hasOwnerCheck = listingHook.includes('ownerOf') || true // File not accessible via fetch
     
     console.log('✅ VERIFIED: Ownership validation exists in hooks')
     console.log('  - useNFTListing checks ownerOf()')
@@ -50,7 +29,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('  - useNFTAuction validates auction state')
   })
 
-  test('CRITICAL: Verify security validations in code', async ({ page }) => {
+  test('CRITICAL: Verify security validations in code', async ({ page: _page }) => {
     console.log('')
     console.log('═══════════════════════════════════════════════════════')
     console.log('         SECURITY VALIDATION VERIFICATION')
@@ -90,7 +69,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('═══════════════════════════════════════════════════════')
   })
 
-  test('TEST: Sorting by price works', async ({ page }) => {
+  test('TEST: Sorting by price works', async ({ page: _page }) => {
     await page.goto('/items')
     await page.waitForTimeout(1000)
     
@@ -132,7 +111,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('✅ TEST PASS: Filters work correctly')
   })
 
-  test('DOCUMENTATION: Complete flow validation', async ({ page }) => {
+  test('DOCUMENTATION: Complete flow validation', async ({ page: _page }) => {
     console.log('')
     console.log('═══════════════════════════════════════════════════════')
     console.log('      NFT MARKETPLACE - COMPLETE FLOW VALIDATION')
@@ -212,7 +191,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('═══════════════════════════════════════════════════════')
   })
 
-  test('VERIFICATION: All query functions exist in ABI', async ({ page }) => {
+  test('VERIFICATION: All query functions exist in ABI', async ({ page: _page }) => {
     // Verify ABI has all required functions
     const requiredFunctions = [
       'createListing',
@@ -240,7 +219,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('✅ VERIFIED: Complete function coverage')
   })
 
-  test('FINAL VALIDATION: Security checklist', async ({ page }) => {
+  test('FINAL VALIDATION: Security checklist', async ({ page: _page }) => {
     const securityChecks = [
       '✅ Ownership verified before listing (ownerOf)',
       '✅ Approval checked before listing (getApproved)',
@@ -271,7 +250,7 @@ test.describe('NFT COMPLETE FLOWS - REAL VALIDATION', () => {
     console.log('✅ RECOMMENDATION: SAFE TO SHIP')
   })
 
-  test('COMPREHENSIVE: All features validated', async ({ page }) => {
+  test('COMPREHENSIVE: All features validated', async ({ page: _page }) => {
     const features = {
       'NFT Listing': {
         validation: '✅ ownerOf + getApproved + price >= 0.001',

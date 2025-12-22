@@ -14,7 +14,7 @@
  * Run with: NETWORK=localnet bun test tests/full-e2e.test.ts
  */
 
-import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, afterAll, setDefaultTimeout } from 'bun:test';
 import { app } from '../src/server';
 import type { Address, Hex } from 'viem';
 
@@ -22,7 +22,7 @@ setDefaultTimeout(120000); // E2E tests can take time
 
 // Test configuration
 const TEST_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
-const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as Hex;
+const _TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as Hex;
 
 // Environment detection
 const isLocalnet = process.env.NETWORK === 'localnet';

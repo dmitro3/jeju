@@ -257,8 +257,8 @@ describe('Chainlink Automation', () => {
 describe('Schema Validation', () => {
   describe('Feed entries', () => {
     it('all feed addresses should be valid', () => {
-      Object.entries(feeds.chains).forEach(([chainId, chainFeeds]) => {
-        Object.entries(chainFeeds).forEach(([pair, feed]) => {
+      Object.entries(feeds.chains).forEach(([_chainId, chainFeeds]) => {
+        Object.entries(chainFeeds).forEach(([_pair, feed]) => {
           expect((feed as { address: string }).address).toMatch(/^0x[a-fA-F0-9]{40}$/);
           expect((feed as { decimals: number }).decimals).toBeGreaterThan(0);
           expect((feed as { heartbeatSeconds: number }).heartbeatSeconds).toBeGreaterThan(0);
@@ -269,7 +269,7 @@ describe('Schema Validation', () => {
 
   describe('VRF entries', () => {
     it('all VRF addresses should be valid', () => {
-      Object.entries(vrf.chains).forEach(([chainId, config]) => {
+      Object.entries(vrf.chains).forEach(([_chainId, config]) => {
         const vrfConfig = config as {
           coordinator: string;
           wrapper: string;
@@ -288,7 +288,7 @@ describe('Schema Validation', () => {
 
   describe('Automation entries', () => {
     it('all automation addresses should be valid', () => {
-      Object.entries(automation.chains).forEach(([chainId, config]) => {
+      Object.entries(automation.chains).forEach(([_chainId, config]) => {
         const autoConfig = config as {
           registry: string;
           registrar: string;

@@ -25,6 +25,12 @@ import type { EVMChainId, Token, TFMMRiskParameters, TFMMWeightUpdate } from '..
 import { OracleAggregator } from '../../oracles';
 import { CompositeStrategy, type CompositeConfig } from './composite-strategy';
 import type { StrategyContext, WeightCalculation } from './base-strategy';
+import { KeyedMutex } from '../../shared';
+
+// ============ Constants ============
+
+// Maximum update history entries to prevent memory leaks
+const MAX_UPDATE_HISTORY = 10000;
 
 // ============ Contract ABIs ============
 
@@ -86,10 +92,17 @@ export class TFMMRebalancer extends EventEmitter {
   private running = false;
   private updateLoop: ReturnType<typeof setInterval> | null = null;
   private updateHistory: TFMMWeightUpdate[] = [];
+  // Mutex to prevent concurrent operations on the same pool
+  private poolMutex = new KeyedMutex();
 
   constructor(config: TFMMRebalancerConfig) {
     super();
     this.config = config;
+    
+    // Validate private key format before use
+    if (!config.privateKey.match(/^0x[a-fA-F0-9]{64}$/)) {
+      throw new Error('Invalid private key format: must be 0x-prefixed 64 hex characters');
+    }
     this.account = privateKeyToAccount(config.privateKey as `0x${string}`);
 
     this.chain = {
@@ -230,6 +243,20 @@ export class TFMMRebalancer extends EventEmitter {
       };
     }
 
+    // Acquire mutex to prevent concurrent rebalancing of the same pool
+    const release = await this.poolMutex.acquire(poolAddress);
+    
+    try {
+      return await this._doRebalancePool(poolAddress, pool);
+    } finally {
+      release();
+    }
+  }
+
+  /**
+   * Internal rebalance implementation (mutex protected)
+   */
+  private async _doRebalancePool(poolAddress: Address, pool: ManagedPool): Promise<RebalanceResult> {
     console.log(`Rebalancing pool ${poolAddress}...`);
 
     // Fetch current state
@@ -265,7 +292,11 @@ export class TFMMRebalancer extends EventEmitter {
       60
     );
 
-    const pricesArray = pool.tokens.map(t => prices.get(t.symbol)!);
+    const pricesArray = pool.tokens.map(t => {
+      const price = prices.get(t.symbol);
+      if (!price) throw new Error(`Missing price for token ${t.symbol}`);
+      return price;
+    });
 
     // Update strategy price history
     this.strategy.updatePriceHistory(pricesArray);
@@ -349,6 +380,11 @@ export class TFMMRebalancer extends EventEmitter {
       txHash: hash,
     };
     this.updateHistory.push(update);
+
+    // Prevent unbounded memory growth - trim oldest entries
+    if (this.updateHistory.length > MAX_UPDATE_HISTORY) {
+      this.updateHistory = this.updateHistory.slice(-MAX_UPDATE_HISTORY);
+    }
 
     console.log(`Weight update confirmed in block ${receipt.blockNumber}`);
 

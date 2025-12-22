@@ -99,7 +99,7 @@ const SIMPLE_ORACLE_ABI = [
   }
 ] as const;
 
-const INPUT_SETTLER_ABI = [
+const _INPUT_SETTLER_ABI = [
   {
     name: "createIntent",
     type: "function",

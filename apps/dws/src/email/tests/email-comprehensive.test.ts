@@ -11,9 +11,8 @@
  * - Concurrent behavior: parallel sends, race conditions
  */
 
-import { describe, test, expect, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import type { Address, Hex } from 'viem';
-import { keccak256, toBytes } from 'viem';
 
 // ============ Module Imports ============
 
@@ -26,7 +25,7 @@ import { SMTPServer, createSMTPServer } from '../smtp';
 import { IMAPServer, createIMAPServer, generateDovecotConfig } from '../imap';
 import { Web2Bridge, createWeb2Bridge } from '../bridge';
 import { createEmailRouter } from '../routes';
-import { MailboxStorage, createMailboxStorage } from '../storage';
+import { MailboxStorage } from '../storage';
 import {
   ContentScreeningPipeline,
   createContentScreeningPipeline,
@@ -37,10 +36,6 @@ import type {
   EmailContent,
   JejuEmailAddress,
   SendEmailRequest,
-  EmailTier,
-  SMTPSession,
-  FilterRule,
-  EmailFlags,
 } from '../types';
 
 // ============ Test Helpers ============
@@ -81,7 +76,7 @@ function createMockEnvelope(overrides: Partial<EmailEnvelope> = {}): EmailEnvelo
   };
 }
 
-function createMockContent(overrides: Partial<EmailContent> = {}): EmailContent {
+function _createMockContent2(overrides: Partial<EmailContent> = {}): EmailContent {
   return {
     subject: 'Test Subject',
     bodyText: 'This is a test email body.',
@@ -1197,7 +1192,9 @@ describe('Error Handling', () => {
       const corruptBackend = {
         upload: async (): Promise<string> => 'cid-corrupt',
         download: async (): Promise<Buffer> => Buffer.from('not valid json'),
-        delete: async (): Promise<void> => {},
+        delete: async (_cid: string): Promise<void> => {
+          // Intentionally empty - mock backend doesn't need to track deletions
+        },
       };
       
       const storage = new MailboxStorage(corruptBackend);

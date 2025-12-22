@@ -1,13 +1,12 @@
 'use client';
 
 import { useState, useEffect, type ComponentType } from 'react';
-import { Search, Star, GitFork, Eye, Lock, Globe, GitBranch, Clock, type LucideProps } from 'lucide-react';
+import { Search, Star, GitFork, Lock, Globe, GitBranch, Clock, type LucideProps } from 'lucide-react';
 
 // Fix for Lucide React 19 type compatibility
 const SearchIcon = Search as ComponentType<LucideProps>;
 const StarIcon = Star as ComponentType<LucideProps>;
 const GitForkIcon = GitFork as ComponentType<LucideProps>;
-const EyeIcon = Eye as ComponentType<LucideProps>;
 const LockIcon = Lock as ComponentType<LucideProps>;
 const GlobeIcon = Globe as ComponentType<LucideProps>;
 const GitBranchIcon = GitBranch as ComponentType<LucideProps>;

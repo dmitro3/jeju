@@ -25,7 +25,6 @@ import {
   expectChainId,
   type CreateIntentRequest,
   type GetQuoteRequest,
-  type ListIntentsQuery,
 } from '../lib/validation.js';
 
 export class IntentService {

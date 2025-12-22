@@ -135,12 +135,17 @@ export class RiskManager {
     const inputAmount = BigInt(opportunity.inputAmount || '0');
     const expectedProfit = BigInt(opportunity.expectedProfit || '0');
 
+    // Validate input amount to prevent division by zero
+    if (inputAmount <= 0n) {
+      return { allowed: false, reason: 'Input amount must be greater than 0' };
+    }
+
     // Check minimum profit
     if (expectedProfit < this.config.minNetProfitWei) {
       return { allowed: false, reason: `Profit ${expectedProfit} below minimum ${this.config.minNetProfitWei}` };
     }
 
-    // Check profit percentage
+    // Check profit percentage (safe - inputAmount > 0 validated above)
     const profitBps = Number((expectedProfit * 10000n) / inputAmount);
     if (profitBps < this.config.minProfitBps) {
       return { allowed: false, reason: `Profit ${profitBps} bps below minimum ${this.config.minProfitBps}` };

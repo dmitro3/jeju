@@ -588,7 +588,7 @@ test.describe('Bridge - Transaction Tracking', () => {
     }
   });
 
-  test.skip('should add completed bridge to history', async ({ page, metamask }) => {
+  test.skip('should add completed bridge to history', async ({ page: _page, metamask: _metamask }) => {
     // TODO: After successful bridge, verify it appears in history
     // Would test:
     // - Transfer shown in list
@@ -654,7 +654,7 @@ test.describe('Bridge - UI State Management', () => {
     await page.waitForTimeout(5000);
 
     // Try to reject/close any pending transaction
-    await metamask.rejectTransaction().catch(() => {});
+    await metamask.rejectTransaction().catch(() => { /* may not have pending tx */ });
 
     // Form should either clear or show success state
     console.log('✅ Form state after bridge tested');
@@ -662,7 +662,7 @@ test.describe('Bridge - UI State Management', () => {
 });
 
 test.describe('Bridge - Transaction Success Indicators', () => {
-  test.skip('should display success message with transaction hash', async ({ page }) => {
+  test.skip('should display success message with transaction hash', async ({ page: _page }) => {
     // TODO: After successful bridge, verify:
     // - Success message displayed
     // - Transaction hash shown
@@ -672,13 +672,13 @@ test.describe('Bridge - Transaction Success Indicators', () => {
     console.log('⚠️  Success indicators - requires completed bridge');
   });
 
-  test.skip('should update balance after bridge confirms', async ({ page }) => {
+  test.skip('should update balance after bridge confirms', async ({ page: _page }) => {
     // TODO: After bridge, verify balance increases on the network
 
     console.log('⚠️  Balance update - requires bridge + balance refresh');
   });
 
-  test.skip('should show pending status during bridge relay', async ({ page }) => {
+  test.skip('should show pending status during bridge relay', async ({ page: _page }) => {
     // TODO: During bridge relay (Ethereum → Network), show pending indicator
 
     console.log('⚠️  Pending status - requires bridge in progress');

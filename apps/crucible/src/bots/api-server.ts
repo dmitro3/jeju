@@ -24,11 +24,50 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { serve } from '@hono/node-server';
-import { UnifiedBot, type UnifiedBotConfig, type TradeResult } from './unified-bot';
-import type { RebalanceAction, UnifiedPosition, PoolAnalysis } from './strategies/liquidity-manager';
+import { UnifiedBot, type UnifiedBotConfig } from './unified-bot';
 import type { ChainId } from './autocrat-types';
 import { parseOrThrow, expect, AddLiquidityRequestSchema, SwapRequestSchema, RebalanceActionIdParamSchema, YieldVerifyParamSchema, QuotesParamsSchema } from '../schemas';
 import { z } from 'zod';
+
+// ============ Security Configuration ============
+
+// Rate limiting configuration
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = parseInt(process.env.BOT_RATE_LIMIT_MAX_REQUESTS ?? '100', 10);
+
+// CORS configuration - restrict to allowed origins
+const ALLOWED_ORIGINS = (process.env.BOT_CORS_ALLOWED_ORIGINS ?? process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:3000,http://localhost:4000')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+// API key for authenticated endpoints
+const BOT_API_KEY = process.env.BOT_API_KEY ?? process.env.API_KEY;
+const REQUIRE_AUTH = process.env.BOT_REQUIRE_AUTH === 'true' || process.env.REQUIRE_AUTH === 'true';
+
+// Get network from env
+const NETWORK = process.env.NETWORK ?? 'localnet';
+
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns true only if both strings are identical.
+ */
+function constantTimeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Still do a comparison to avoid timing leak on length check
+    let xor = 0;
+    for (let i = 0; i < a.length; i++) {
+      xor |= a.charCodeAt(i) ^ (b.charCodeAt(i % b.length) || 0);
+    }
+    return xor === 0 && false; // Always false for length mismatch, but use xor to prevent optimization
+  }
+  let xor = 0;
+  for (let i = 0; i < a.length; i++) {
+    xor |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return xor === 0;
+}
 
 // ============ Types ============
 
@@ -74,7 +113,81 @@ interface MCPResource {
 function createRestAPI(bot: UnifiedBot): Hono {
   const app = new Hono();
 
-  app.use('*', cors());
+  // CORS - restrict to configured origins in production
+  // SECURITY: Wildcard '*' is ONLY honored in localnet to prevent misconfiguration
+  app.use('*', cors({
+    origin: (origin) => {
+      // In development (localnet), allow all origins
+      if (NETWORK === 'localnet') return origin;
+      // In production/testnet, NEVER allow wildcard - explicit origins only
+      if (!origin) return null;
+      if (ALLOWED_ORIGINS.includes(origin)) return origin;
+      return null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Wallet-Address'],
+    maxAge: 86400,
+  }));
+
+  // Rate limiting middleware with atomic increment pattern
+  app.use('*', async (c, next) => {
+    const path = c.req.path;
+    
+    // Skip rate limiting for health check
+    if (path === '/health') return next();
+    
+    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() 
+      ?? c.req.header('x-real-ip') 
+      ?? 'unknown';
+    const key = `rest:${clientIp}`;
+    
+    const now = Date.now();
+    let record = rateLimitStore.get(key);
+    
+    // Clean up old entries periodically
+    if (rateLimitStore.size > 10000) {
+      const keysToDelete: string[] = [];
+      for (const [k, v] of rateLimitStore) {
+        if (v.resetAt < now) keysToDelete.push(k);
+        if (keysToDelete.length >= 5000) break;
+      }
+      for (const k of keysToDelete) {
+        rateLimitStore.delete(k);
+      }
+    }
+    
+    if (!record || record.resetAt < now) {
+      record = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+      rateLimitStore.set(key, record);
+    } else {
+      record.count++;
+      if (record.count > RATE_LIMIT_MAX_REQUESTS) {
+        return c.json({ error: 'Rate limit exceeded' }, 429);
+      }
+    }
+    
+    return next();
+  });
+
+  // API Key authentication middleware (when enabled)
+  app.use('*', async (c, next) => {
+    const path = c.req.path;
+    
+    // Skip auth for health check
+    if (path === '/health') return next();
+    
+    // Skip auth if not required
+    if (!REQUIRE_AUTH || !BOT_API_KEY) return next();
+    
+    const providedKey = c.req.header('x-api-key') ?? c.req.header('authorization')?.replace('Bearer ', '');
+    
+    if (!providedKey || !constantTimeCompare(providedKey, BOT_API_KEY)) {
+      return c.json({ error: 'Unauthorized' }, 401);
+    }
+    
+    return next();
+  });
 
   // Health check
   app.get('/health', (c) => {
@@ -164,10 +277,9 @@ function createRestAPI(bot: UnifiedBot): Hono {
   });
 
   // Remove liquidity (simplified - would need position ID and percent)
-  app.post('/liquidity/remove', async (c) => {
-    const body = await c.req.json();
+  app.post('/liquidity/remove', async (_c) => {
     // This would call liquidityManager.removeLiquidity
-    return c.json({ success: false, error: 'Not implemented' });
+    return _c.json({ success: false, error: 'Not implemented' });
   });
 
   // Get Solana swap quotes
@@ -216,7 +328,42 @@ function createRestAPI(bot: UnifiedBot): Hono {
 function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
   const app = new Hono();
 
-  app.use('*', cors());
+  // CORS - restrict to configured origins in production
+  app.use('*', cors({
+    origin: (origin) => {
+      if (NETWORK === 'localnet') return origin;
+      if (!origin || ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) return origin;
+      return null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }));
+
+  // Rate limiting for A2A
+  app.use('*', async (c, next) => {
+    const path = c.req.path;
+    if (path === '/' || path.startsWith('/.well-known')) return next();
+    
+    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const key = `a2a:${clientIp}`;
+    
+    const now = Date.now();
+    const record = rateLimitStore.get(key);
+    
+    if (!record || record.resetAt < now) {
+      rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+    
+    if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      return c.json({ error: { code: -32603, message: 'Rate limit exceeded' } }, 429);
+    }
+    
+    record.count++;
+    return next();
+  });
 
   // Agent card
   const agentCard: AgentCard = {
@@ -268,17 +415,19 @@ function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
       case 'getPositions':
         return c.json({ result: bot.getLiquidityPositions() });
 
-      case 'getPools':
+      case 'getPools': {
         const poolParams = params ? parseOrThrow(z.object({
           minTvl: z.number().min(0).optional(),
           minApr: z.number().min(0).max(10000).optional(),
         }).strict(), params, 'Get pools params') : undefined;
         const pools = await bot.getPoolRecommendations(poolParams);
         return c.json({ result: pools });
+      }
 
-      case 'getRebalanceActions':
+      case 'getRebalanceActions': {
         const actions = await bot.getRebalanceActions();
         return c.json({ result: actions });
+      }
 
       case 'executeRebalance': {
         expect(params, 'Rebalance action params are required');
@@ -289,7 +438,7 @@ function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
         return c.json({ result });
       }
 
-      case 'getQuotes':
+      case 'getQuotes': {
         const quotesParams = parseOrThrow(QuotesParamsSchema, params, 'Get quotes params');
         const quotes = await bot.getSolanaQuotes(
           quotesParams.inputMint,
@@ -297,8 +446,9 @@ function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
           quotesParams.amount
         );
         return c.json({ result: quotes });
+      }
 
-      case 'executeSwap':
+      case 'executeSwap': {
         const swapParams = parseOrThrow(SwapRequestSchema, params, 'Execute swap params');
         const swapResult = await bot.executeSolanaSwap(
           swapParams.inputMint,
@@ -306,6 +456,7 @@ function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
           swapParams.amount
         );
         return c.json({ result: swapResult });
+      }
 
       default:
         return c.json({ error: { code: -32601, message: 'Method not found' } }, 404);
@@ -320,7 +471,42 @@ function createA2AAPI(bot: UnifiedBot, config: APIConfig): Hono {
 function createMCPAPI(bot: UnifiedBot): Hono {
   const app = new Hono();
 
-  app.use('*', cors());
+  // CORS - restrict to configured origins in production
+  app.use('*', cors({
+    origin: (origin) => {
+      if (NETWORK === 'localnet') return origin;
+      if (!origin || ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes('*')) return origin;
+      return null;
+    },
+    credentials: true,
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    maxAge: 86400,
+  }));
+
+  // Rate limiting for MCP
+  app.use('*', async (c, next) => {
+    const path = c.req.path;
+    if (path === '/') return next();
+    
+    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown';
+    const key = `mcp:${clientIp}`;
+    
+    const now = Date.now();
+    const record = rateLimitStore.get(key);
+    
+    if (!record || record.resetAt < now) {
+      rateLimitStore.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+      return next();
+    }
+    
+    if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
+    }
+    
+    record.count++;
+    return next();
+  });
 
   const tools: MCPTool[] = [
     {
@@ -494,17 +680,19 @@ function createMCPAPI(bot: UnifiedBot): Hono {
       case 'get_positions':
         return c.json({ result: bot.getLiquidityPositions() });
 
-      case 'get_pool_recommendations':
+      case 'get_pool_recommendations': {
         const poolRecParams = params ? parseOrThrow(z.object({
           minTvl: z.number().min(0).optional(),
           minApr: z.number().min(0).max(10000).optional(),
         }).strict(), params, 'Pool recommendations params') : undefined;
         const pools = await bot.getPoolRecommendations(poolRecParams);
         return c.json({ result: pools });
+      }
 
-      case 'get_rebalance_actions':
+      case 'get_rebalance_actions': {
         const actions = await bot.getRebalanceActions();
         return c.json({ result: actions });
+      }
 
       case 'execute_rebalance': {
         expect(params, 'Rebalance params are required');

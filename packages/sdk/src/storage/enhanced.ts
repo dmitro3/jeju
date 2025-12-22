@@ -127,7 +127,10 @@ export interface EnhancedStorageModule {
 
   // Download
   download(cid: string, options?: DownloadOptions): Promise<Uint8Array>;
-  downloadJson<T extends JsonValue = JsonValue>(cid: string, options?: DownloadOptions): Promise<T>;
+  downloadJson<T extends JsonValue = JsonValue>(
+    cid: string,
+    options?: DownloadOptions,
+  ): Promise<T>;
 
   // Content management
   getContent(cid: string): Promise<ContentInfo | null>;
@@ -207,7 +210,8 @@ export function createEnhancedStorageModule(
     options: EnhancedUploadOptions = {},
   ): Promise<EnhancedUploadResult> {
     const formData = new FormData();
-    const blob = data instanceof Uint8Array ? new Blob([new Uint8Array(data)]) : data;
+    const blob =
+      data instanceof Uint8Array ? new Blob([new Uint8Array(data)]) : data;
     formData.append("file", blob, options.name ?? "file");
 
     // Set options

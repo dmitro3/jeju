@@ -19,7 +19,27 @@ import { randomBytes, createHash } from 'crypto';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { keccak256, stringToBytes } from 'viem';
 import { execa } from 'execa';
+import { z } from 'zod';
 import { logger } from '../lib/logger';
+
+// Schema validation for TEE provider configs
+const TeeProviderConfigSchema = z.array(z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(['phala', 'gcp', 'azure', 'aws-nitro', 'custom']),
+  endpoint: z.string().url(),
+}));
+
+// Schema for attestation files
+const AttestationSchema = z.object({
+  quote: z.string().min(1),
+  eventLog: z.string().optional(),
+  event_log: z.string().optional(),
+  tcbInfo: z.record(z.string(), z.string().or(z.number()).or(z.boolean())).optional(),
+  measurementHash: z.string().optional(),
+});
+
+// Schema for addresses files
+const AddressesSchema = z.record(z.string(), z.string().regex(/^0x[a-fA-F0-9]{40}$/));
 import {
   getDevKeys,
   encryptKeySet,
@@ -104,7 +124,7 @@ const setupTestnetSubcommand = new Command('setup-testnet')
   .option('--bridge', 'Automatically bridge ETH to L2s if Sepolia is funded')
   .action(async (options) => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/keys/setup-testnet-deployer.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/deploy/setup-testnet-deployer.ts');
     
     if (!existsSync(scriptPath)) {
       logger.error('Setup testnet deployer script not found');
@@ -384,7 +404,14 @@ async function runDistributedCeremony(options: DistributedCeremonyOptions) {
       logger.error('Providers file not found: ' + options.providers);
       return;
     }
-    providers = JSON.parse(readFileSync(options.providers, 'utf-8'));
+    const rawData = JSON.parse(readFileSync(options.providers, 'utf-8'));
+    // SECURITY: Validate schema to prevent insecure deserialization
+    const result = TeeProviderConfigSchema.safeParse(rawData);
+    if (!result.success) {
+      logger.error('Invalid providers file format: ' + result.error.message);
+      return;
+    }
+    providers = result.data;
   } else {
     // Interactive setup
     logger.subheader('TEE Provider Configuration');
@@ -596,9 +623,17 @@ async function runDistributedCeremony(options: DistributedCeremonyOptions) {
 
   } catch (error) {
     const err = error as Error;
-    logger.error('Distributed ceremony failed: ' + err.message);
-    if (err.stack) {
-      logger.debug(err.stack);
+    // Sanitize error message to avoid leaking sensitive info
+    const safeMessage = err.message
+      .replace(/0x[a-fA-F0-9]{64}/g, '[REDACTED_KEY]')
+      .replace(/private[kK]ey['":\s]+[^\s,}]+/g, 'privateKey: [REDACTED]');
+    logger.error('Distributed ceremony failed: ' + safeMessage);
+    // Stack traces only shown in debug mode, with sensitive data removed
+    if (process.env.DEBUG && err.stack) {
+      const safeStack = err.stack
+        .replace(/0x[a-fA-F0-9]{64}/g, '[REDACTED_KEY]')
+        .replace(/private[kK]ey['":\s]+[^\s,}]+/g, 'privateKey: [REDACTED]');
+      logger.debug(safeStack);
     }
   }
 }
@@ -611,11 +646,18 @@ async function verifyTeeAttestation(attestationFile: string) {
     return;
   }
 
-  const attestation = JSON.parse(readFileSync(attestationFile, 'utf-8'));
+  const rawData = JSON.parse(readFileSync(attestationFile, 'utf-8'));
+  // SECURITY: Validate schema to prevent insecure deserialization
+  const result = AttestationSchema.safeParse(rawData);
+  if (!result.success) {
+    logger.error('Invalid attestation file format: ' + result.error.message);
+    return;
+  }
+  const attestation = result.data;
 
   logger.subheader('Attestation Details');
   logger.keyValue('Quote', attestation.quote?.slice(0, 60) + '...');
-  logger.keyValue('Measurement', attestation.measurementHash);
+  logger.keyValue('Measurement', attestation.measurementHash ?? 'N/A');
   
   if (attestation.tcbInfo) {
     logger.newline();
@@ -1042,11 +1084,12 @@ async function importKeys(): Promise<Record<string, KeyConfig> | null> {
     }
 
     if (inputType === 'generate') {
-      const account = privateKeyToAccount(generatePrivateKey());
+      const pk = generatePrivateKey();
+      const account = privateKeyToAccount(pk);
       keys[role.name] = {
         name: role.name.charAt(0).toUpperCase() + role.name.slice(1),
         address: account.address,
-        privateKey: account.privateKey,
+        privateKey: pk,
         role: role.desc,
       };
       logger.success('Generated: ' + account.address);
@@ -1058,11 +1101,12 @@ async function importKeys(): Promise<Record<string, KeyConfig> | null> {
       });
 
       try {
-        const account = privateKeyToAccount(privateKey as `0x${string}`);
+        const pk = privateKey as `0x${string}`;
+        const account = privateKeyToAccount(pk);
         keys[role.name] = {
           name: role.name.charAt(0).toUpperCase() + role.name.slice(1),
           address: account.address,
-          privateKey: account.privateKey,
+          privateKey: pk,
           role: role.desc,
         };
         logger.success('Imported: ' + account.address);
@@ -1123,12 +1167,13 @@ function generateKeysWithEntropy(entropy: string): Record<string, KeyConfig> {
       .update(randomBytes(32))
       .digest(); // Side-effect: adds to system entropy pool via timing
 
-    const account = privateKeyToAccount(generatePrivateKey());
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
     
     keys[role.name] = {
       name: role.name.charAt(0).toUpperCase() + role.name.slice(1),
       address: account.address,
-      privateKey: account.privateKey,
+      privateKey: pk,
       role: role.desc,
     };
   }
@@ -1257,7 +1302,14 @@ async function showKeys(network: NetworkType, showPrivate: boolean) {
     if (existsSync(addressesPath)) {
       logger.subheader(`${network.charAt(0).toUpperCase() + network.slice(1)} Addresses`);
       
-      const addresses = JSON.parse(readFileSync(addressesPath, 'utf-8'));
+      const rawData = JSON.parse(readFileSync(addressesPath, 'utf-8'));
+      // SECURITY: Validate schema to prevent insecure deserialization
+      const result = AddressesSchema.safeParse(rawData);
+      if (!result.success) {
+        logger.error('Invalid addresses file format: ' + result.error.message);
+        return;
+      }
+      const addresses = result.data;
       for (const [role, address] of Object.entries(addresses)) {
         logger.info(role);
         logger.keyValue('  Address', address as string);

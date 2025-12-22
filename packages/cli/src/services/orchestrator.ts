@@ -233,8 +233,7 @@ class ServicesOrchestrator {
       mkdirSync(dataDir, { recursive: true });
     }
 
-    const proc = spawn({
-      cmd: ['bun', 'run', 'server'],
+    const proc = spawn(['bun', 'run', 'server'], {
       cwd: dbPath,
       stdout: 'inherit',
       stderr: 'inherit',
@@ -277,7 +276,7 @@ class ServicesOrchestrator {
     // Get contract addresses from bootstrap
     const contracts = this.loadContractAddresses();
     const rpcUrl = this.rpcUrl;
-    const priceOracleAddress = contracts.priceOracle || '';
+    const priceOracleAddress = typeof contracts.priceOracle === 'string' ? contracts.priceOracle : '';
 
     // Create Oracle server that reads from on-chain PriceOracle contract
     const server = await this.createOnChainOracle(port, rpcUrl, priceOracleAddress);
@@ -420,7 +419,7 @@ class ServicesOrchestrator {
   /**
    * Load contract addresses from bootstrap output
    */
-  private loadContractAddresses(): Record<string, string> {
+  private loadContractAddresses(): Record<string, string | Record<string, string>> {
     const paths = [
       join(this.rootDir, 'packages/contracts/deployments/localnet-complete.json'),
       join(this.rootDir, 'packages/contracts/deployments/localnet-addresses.json'),
@@ -474,8 +473,7 @@ class ServicesOrchestrator {
     }
 
     // Start PostgreSQL via docker-compose
-    const dbProc = spawn({
-      cmd: ['docker', 'compose', 'up', '-d', 'db'],
+    const dbProc = spawn(['docker', 'compose', 'up', '-d', 'db'], {
       cwd: indexerPath,
       stdout: 'pipe',
       stderr: 'pipe',
@@ -484,8 +482,7 @@ class ServicesOrchestrator {
     await dbProc.exited;
 
     // Start indexer
-    const proc = spawn({
-      cmd: ['bun', 'run', 'dev'],
+    const proc = spawn(['bun', 'run', 'dev'], {
       cwd: indexerPath,
       stdout: 'inherit',
       stderr: 'inherit',
@@ -517,8 +514,7 @@ class ServicesOrchestrator {
     const indexerPath = join(this.rootDir, 'apps/indexer');
     
     if (existsSync(indexerPath)) {
-      const proc = spawn({
-        cmd: ['bun', 'run', 'dev'],
+      const proc = spawn(['bun', 'run', 'dev'], {
         cwd: indexerPath,
         stdout: 'inherit',
         stderr: 'inherit',
@@ -624,9 +620,10 @@ class ServicesOrchestrator {
     const contracts = this.loadContractAddresses();
     
     // JNS contract addresses from bootstrap
-    const jnsRegistrar = contracts.jnsRegistrar || contracts.jns?.registrar || '';
-    const jnsResolver = contracts.jnsResolver || contracts.jns?.resolver || '';
-    const jnsRegistry = contracts.jnsRegistry || contracts.jns?.registry || '';
+    const jns = typeof contracts.jns === 'object' ? contracts.jns : null;
+    const jnsRegistrar = (typeof contracts.jnsRegistrar === 'string' ? contracts.jnsRegistrar : null) || jns?.registrar || '';
+    const jnsResolver = (typeof contracts.jnsResolver === 'string' ? contracts.jnsResolver : null) || jns?.resolver || '';
+    const jnsRegistry = (typeof contracts.jnsRegistry === 'string' ? contracts.jnsRegistry : null) || jns?.registry || '';
     
     // ABI fragments for JNS contracts
     const registrarAbi = [
@@ -762,19 +759,21 @@ class ServicesOrchestrator {
           const client = createPublicClient({ transport: http(rpcUrl) });
           const duration = BigInt(years * 365 * 24 * 60 * 60); // years in seconds
           
-          const price = await client.readContract({
+          const priceResult = await client.readContract({
             address: jnsRegistrar as Address,
             abi: registrarAbi,
             functionName: 'rentPrice',
             args: [name.split('.')[0], duration],
           }).catch(() => 0n);
+          const price = priceResult as bigint;
           
-          const available = await client.readContract({
+          const availableResult = await client.readContract({
             address: jnsRegistrar as Address,
             abi: registrarAbi,
             functionName: 'available',
             args: [name.split('.')[0]],
           }).catch(() => true);
+          const available = availableResult as boolean;
           
           return Response.json({
             name,
@@ -842,8 +841,11 @@ class ServicesOrchestrator {
     // - Pkg (on-chain package registry)
     // - CI (workflow engine with cron scheduler)
     // - CDN, API Marketplace, Containers, etc.
-    const proc = spawn({
-      cmd: ['bun', 'run', 'src/server/index.ts'],
+    const getContractAddr = (key: string): string => {
+      const val = contracts[key];
+      return typeof val === 'string' ? val : '';
+    };
+    const proc = spawn(['bun', 'run', 'src/server/index.ts'], {
       cwd: dwsPath,
       stdout: 'inherit',
       stderr: 'inherit',
@@ -854,13 +856,13 @@ class ServicesOrchestrator {
         RPC_URL: this.rpcUrl,
         CHAIN_ID: '1337',
         // Contract addresses
-        REPO_REGISTRY_ADDRESS: contracts.repoRegistry || '',
-        PACKAGE_REGISTRY_ADDRESS: contracts.packageRegistry || '',
-        TRIGGER_REGISTRY_ADDRESS: contracts.triggerRegistry || '',
-        IDENTITY_REGISTRY_ADDRESS: contracts.identityRegistry || '',
-        COMPUTE_REGISTRY_ADDRESS: contracts.computeRegistry || '',
-        LEDGER_MANAGER_ADDRESS: contracts.ledgerManager || '',
-        INFERENCE_SERVING_ADDRESS: contracts.inferenceServing || '',
+        REPO_REGISTRY_ADDRESS: getContractAddr('repoRegistry'),
+        PACKAGE_REGISTRY_ADDRESS: getContractAddr('packageRegistry'),
+        TRIGGER_REGISTRY_ADDRESS: getContractAddr('triggerRegistry'),
+        IDENTITY_REGISTRY_ADDRESS: getContractAddr('identityRegistry'),
+        COMPUTE_REGISTRY_ADDRESS: getContractAddr('computeRegistry'),
+        LEDGER_MANAGER_ADDRESS: getContractAddr('ledgerManager'),
+        INFERENCE_SERVING_ADDRESS: getContractAddr('inferenceServing'),
         // TEE provider for compute
         TEE_PROVIDER: 'local',
         // Default private key for localnet operations
@@ -978,8 +980,7 @@ class ServicesOrchestrator {
 
     if (existsSync(dstackPath)) {
       // Start real dstack simulator (TEE development mode)
-      const proc = spawn({
-        cmd: ['bun', 'run', 'dev:simulator'],
+      const proc = spawn(['bun', 'run', 'dev:simulator'], {
         cwd: dstackPath,
         stdout: 'inherit',
         stderr: 'inherit',
@@ -1003,8 +1004,8 @@ class ServicesOrchestrator {
     } else if (existsSync(dwsPath)) {
       // Use DWS containers as fallback
       const contracts = this.loadContractAddresses();
-      const proc = spawn({
-        cmd: ['bun', 'run', 'src/containers/index.ts'],
+      const computeAddr = typeof contracts.computeRegistry === 'string' ? contracts.computeRegistry : '';
+      const proc = spawn(['bun', 'run', 'src/containers/index.ts'], {
         cwd: dwsPath,
         stdout: 'inherit',
         stderr: 'inherit',
@@ -1013,7 +1014,7 @@ class ServicesOrchestrator {
           RPC_URL: this.rpcUrl,
           CVM_PORT: String(port),
           TEE_PROVIDER: 'local',
-          COMPUTE_REGISTRY_ADDRESS: contracts.computeRegistry || '',
+          COMPUTE_REGISTRY_ADDRESS: computeAddr,
         },
       });
 
@@ -1172,8 +1173,8 @@ class ServicesOrchestrator {
     const dwsPath = join(this.rootDir, 'apps/dws');
     if (existsSync(dwsPath)) {
       const contracts = this.loadContractAddresses();
-      const proc = spawn({
-        cmd: ['bun', 'run', 'src/server/routes/git.ts'],
+      const repoAddr = typeof contracts.repoRegistry === 'string' ? contracts.repoRegistry : '';
+      const proc = spawn(['bun', 'run', 'src/server/routes/git.ts'], {
         cwd: dwsPath,
         stdout: 'inherit',
         stderr: 'inherit',
@@ -1181,7 +1182,7 @@ class ServicesOrchestrator {
           ...process.env,
           RPC_URL: this.rpcUrl,
           GIT_PORT: String(port),
-          REPO_REGISTRY_ADDRESS: contracts.repoRegistry || '',
+          REPO_REGISTRY_ADDRESS: repoAddr,
         },
       });
 
@@ -1249,19 +1250,19 @@ class ServicesOrchestrator {
     }
 
     // If DWS didn't start, start a dedicated pkg server
-    const dwsPath = join(this.rootDir, 'apps/dws');
-    if (existsSync(dwsPath)) {
+    const dwsPath2 = join(this.rootDir, 'apps/dws');
+    if (existsSync(dwsPath2)) {
       const contracts = this.loadContractAddresses();
-      const proc = spawn({
-        cmd: ['bun', 'run', 'src/server/routes/pkg.ts'],
-        cwd: dwsPath,
+      const pkgAddr = typeof contracts.packageRegistry === 'string' ? contracts.packageRegistry : '';
+      const proc = spawn(['bun', 'run', 'src/server/routes/pkg.ts'], {
+        cwd: dwsPath2,
         stdout: 'inherit',
         stderr: 'inherit',
         env: {
           ...process.env,
           RPC_URL: this.rpcUrl,
           PKG_PORT: String(port),
-          PACKAGE_REGISTRY_ADDRESS: contracts.packageRegistry || '',
+          PACKAGE_REGISTRY_ADDRESS: pkgAddr,
         },
       });
 

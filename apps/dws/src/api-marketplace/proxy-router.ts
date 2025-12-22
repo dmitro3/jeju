@@ -46,10 +46,11 @@ function injectAuth(
       url.searchParams.set(provider.authConfig.queryParam || 'api_key', apiKey);
       break;
 
-    case 'basic':
+    case 'basic': {
       const encoded = Buffer.from(apiKey).toString('base64');
       resultHeaders['Authorization'] = `Basic ${encoded}`;
       break;
+    }
   }
 
   // Add Anthropic-specific headers

@@ -317,8 +317,16 @@ export function createBridgeModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): BridgeModule {
-  const optimismPortalAddress = requireContract("bridge", "OptimismPortal", network);
-  const hyperlaneMailboxAddress = requireContract("bridge", "HyperlaneMailbox", network);
+  const optimismPortalAddress = requireContract(
+    "bridge",
+    "OptimismPortal",
+    network,
+  );
+  const hyperlaneMailboxAddress = requireContract(
+    "bridge",
+    "HyperlaneMailbox",
+    network,
+  );
   const nftBridgeAddress = requireContract("bridge", "NFTBridge", network);
 
   const MIN_BRIDGE_AMOUNT = parseEther("0.0001");

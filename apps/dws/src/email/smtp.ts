@@ -11,6 +11,7 @@
 import { createServer, type Server, type Socket } from 'net';
 import { createServer as createTLSServer, TLSSocket } from 'tls';
 import { readFileSync } from 'fs';
+import { createSign, createHash } from 'crypto';
 import { createPublicClient, http, type Address, type Hex, parseAbiItem } from 'viem';
 import type { SMTPSession, EmailTier } from './types';
 import { getEmailRelayService } from './relay';
@@ -89,13 +90,16 @@ export class SMTPServer {
       console.error('[SMTP] Server error:', error.message);
     });
     
+    const server = this.server;
+    if (!server) throw new Error('SMTP server not initialized');
+    
     await new Promise<void>((resolve, reject) => {
-      this.server!.listen(this.config.port, this.config.host, () => {
+      server.listen(this.config.port, this.config.host, () => {
         console.log(`[SMTP] SMTP server listening on ${this.config.host}:${this.config.port}`);
         resolve();
       });
       
-      this.server!.once('error', reject);
+      server.once('error', reject);
     });
   }
 
@@ -115,8 +119,9 @@ export class SMTPServer {
     
     // Close server
     if (this.server) {
+      const server = this.server;
       await new Promise<void>((resolve) => {
-        this.server!.close(() => resolve());
+        server.close(() => resolve());
       });
       this.server = null;
     }
@@ -436,7 +441,9 @@ export class SMTPServer {
 
   private parseXOAuth2(credentials: string): string {
     // XOAUTH2 format: base64("user=" + user + "^Aauth=Bearer " + token + "^A^A")
+    // The \x01 control character is intentional - it's the XOAUTH2 field separator (SOH)
     const decoded = Buffer.from(credentials, 'base64').toString();
+    // eslint-disable-next-line no-control-regex -- XOAUTH2 protocol uses SOH (0x01) as field separator
     const match = decoded.match(/auth=Bearer\s+([^\x01]+)/);
     return match?.[1] ?? '';
   }
@@ -743,8 +750,6 @@ export class SMTPServer {
       console.warn('[SMTP] DKIM not configured - sending unsigned');
       return message;
     }
-
-    const { createSign, createHash } = require('crypto');
 
     // Parse headers and body
     const [headerSection, ...bodyParts] = message.split(/\r?\n\r?\n/);

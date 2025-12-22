@@ -295,18 +295,22 @@ export class MevBundler {
     const results = await Promise.allSettled(
       Array.from(this.builders.entries()).map(async ([name, url]) => {
         const startTime = Date.now();
-        const stats = this.builderStats.get(name)!;
-        stats.submissions++;
-        stats.lastSubmission = startTime;
+        const stats = this.builderStats.get(name);
+        if (stats) {
+          stats.submissions++;
+          stats.lastSubmission = startTime;
+        }
 
         const result = await this.fetchBuilder(url, signature, body);
 
         // Update stats
         const latency = Date.now() - startTime;
-        stats.avgLatencyMs = (stats.avgLatencyMs * (stats.submissions - 1) + latency) / stats.submissions;
+        if (stats) {
+          stats.avgLatencyMs = (stats.avgLatencyMs * (stats.submissions - 1) + latency) / stats.submissions;
+        }
 
         if (result.success && result.bundleHash) {
-          stats.inclusions++;
+          if (stats) stats.inclusions++;
           return { ...result, builder: name };
         }
         throw new Error(result.error || 'Unknown error');

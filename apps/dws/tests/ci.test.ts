@@ -2,26 +2,26 @@
  * CI/CD System Tests
  */
 
-import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
-import { keccak256, toBytes, type Address, type Hex } from 'viem';
+import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { type Address, type Hex } from 'viem';
 import { WorkflowEngine } from '../src/ci/workflow-engine';
 import { CISecretsStore, resetCISecretsStore } from '../src/ci/secrets-store';
 import { CIEventBus, resetCIEventBus } from '../src/ci/event-bus';
 import { CIScheduler, resetCIScheduler } from '../src/ci/scheduler';
 import { RunnerManager, resetRunnerManager } from '../src/ci/runner-manager';
 import { NATIVE_ACTIONS, resolveAction, parseActionRef } from '../src/ci/action-resolver';
-import type { JejuWorkflowConfig, Workflow, WorkflowRun, Runner } from '../src/ci/types';
+import type { Workflow } from '../src/ci/types';
 
 const TEST_REPO_ID = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as Hex;
 const TEST_WORKFLOW_ID = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' as Hex;
 const TEST_ADDRESS = '0x1234567890123456789012345678901234567890' as Address;
 
 const mockBackend = {
-  upload: async (content: Buffer, options: { filename: string }) => ({
+  upload: async (content: Buffer, _options: { filename: string }) => ({
     cid: `Qm${Math.random().toString(36).slice(2)}`,
     size: content.length,
   }),
-  download: async (cid: string) => ({
+  download: async (_cid: string) => ({
     content: Buffer.from('test'),
     metadata: {},
   }),

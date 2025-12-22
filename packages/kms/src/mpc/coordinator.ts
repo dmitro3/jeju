@@ -83,6 +83,9 @@ function bytesToBigint(bytes: Uint8Array): bigint {
   return result;
 }
 
+/** Maximum sessions to store before forced cleanup */
+const MAX_SESSIONS = 1000;
+
 export class MPCCoordinator {
   private config: MPCCoordinatorConfig;
   private parties = new Map<string, MPCParty>();
@@ -219,6 +222,15 @@ export class MPCCoordinator {
     const key = this.keys.get(request.keyId);
     if (!key) throw new Error(`Key ${request.keyId} not found`);
 
+    // Force cleanup if sessions exceed maximum to prevent DoS
+    if (this.sessions.size >= MAX_SESSIONS) {
+      this.cleanupExpiredSessions();
+      // If still at max after cleanup, reject
+      if (this.sessions.size >= MAX_SESSIONS) {
+        throw new Error('Session storage limit reached');
+      }
+    }
+
     const activeSessions = Array.from(this.sessions.values())
       .filter(s => s.status === 'pending' || s.status === 'signing');
     if (activeSessions.length >= this.config.maxConcurrentSessions) {
@@ -310,6 +322,9 @@ export class MPCCoordinator {
     }
 
     const signature = await account.signMessage({ message: { raw: toBytes(session.messageHash) } });
+    
+    // Security: Zero the reconstructed key immediately after use
+    // Note: In JavaScript, bigint is immutable, but we reassign to help GC
     reconstructedKey = 0n;
 
     return {
@@ -419,7 +434,16 @@ export class MPCCoordinator {
       for (const version of versions) version.status = 'revoked';
     }
 
-    this.partySecrets.get(keyId)?.clear();
+    // Securely zero all party secrets before deletion
+    const secrets = this.partySecrets.get(keyId);
+    if (secrets) {
+      // Zero each secret value by overwriting with 0n before clearing
+      for (const partyId of secrets.keys()) {
+        secrets.set(partyId, 0n);
+      }
+      secrets.clear();
+    }
+    this.partySecrets.delete(keyId);
     this.keys.delete(keyId);
   }
 

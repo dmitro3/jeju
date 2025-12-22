@@ -543,12 +543,7 @@ export const getTasksAction: Action = {
 
     const list = formatNumberedList(
       tasks,
-      (t: {
-        title: string;
-        reward: bigint | string;
-        status: number;
-        assignee?: string;
-      }) =>
+      (t) =>
         `${t.title} - ${t.reward} wei - ${statusNames[t.status]} - ${t.assignee ?? "Unassigned"}`,
     );
 
@@ -638,12 +633,7 @@ export const listGuardiansAction: Action = {
 
     const list = formatNumberedList(
       guardians,
-      (g: {
-        name: string;
-        stake: bigint | string;
-        reviewCount: number;
-        approvalRate: number;
-      }) =>
+      (g) =>
         `${g.name} - ${g.stake} wei stake - ${g.reviewCount} reviews (${g.approvalRate}% approval)`,
     );
 

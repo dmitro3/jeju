@@ -172,8 +172,10 @@ async function createConfigAsync(network: NetworkType): Promise<OracleNodeConfig
   const addresses = loadContractAddresses(networkConfig);
   
   // Validate private keys
-  const operatorKey = validatePrivateKey(process.env.OPERATOR_PRIVATE_KEY!, 'OPERATOR_PRIVATE_KEY');
-  const workerKey = validatePrivateKey(process.env.WORKER_PRIVATE_KEY!, 'WORKER_PRIVATE_KEY');
+  if (!process.env.OPERATOR_PRIVATE_KEY) throw new Error('OPERATOR_PRIVATE_KEY environment variable required');
+  if (!process.env.WORKER_PRIVATE_KEY) throw new Error('WORKER_PRIVATE_KEY environment variable required');
+  const operatorKey = validatePrivateKey(process.env.OPERATOR_PRIVATE_KEY, 'OPERATOR_PRIVATE_KEY');
+  const workerKey = validatePrivateKey(process.env.WORKER_PRIVATE_KEY, 'WORKER_PRIVATE_KEY');
   
   console.log(`[Config] Network: ${network} (chainId: ${networkConfig.chainId})`);
   console.log(`[Config] RPC: ${networkConfig.rpcUrl}`);

@@ -4,9 +4,8 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { createPublicClient, createWalletClient, http, formatEther, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, type Address, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
-import { getBalance } from 'viem/actions';
 import { base, baseSepolia, localhost } from 'viem/chains';
 
 function inferChainFromRpcUrl(rpcUrl: string) {
@@ -19,15 +18,18 @@ const app = new Hono();
 app.use('/*', cors({ origin: '*' }));
 
 const privateKey = process.env.PRIVATE_KEY;
-const rpcUrl = process.env.RPC_URL || 'http://localhost:9545';
+const rpcUrl = process.env.RPC_URL || 'http://localhost:6546';
 const ipfsApiUrl = process.env.IPFS_API_URL || 'http://localhost:5001';
 
-let account: PrivateKeyAccount | null = null;
-let address: Address | null = null;
+// Wallet state - initialized lazily
+interface WalletState {
+  account: PrivateKeyAccount;
+  address: Address;
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+}
 
-// Create clients lazily with proper type inference
-let publicClient: ReturnType<typeof createPublicClient> | null = null;
-let walletClient: ReturnType<typeof createWalletClient> | null = null;
+let walletState: WalletState | null = null;
 
 const pinnedCids = new Map<string, { size: number; pinnedAt: number }>();
 const nodeStartTime = Date.now();
@@ -38,14 +40,16 @@ async function initializeWallet(): Promise<void> {
     return;
   }
 
-  account = privateKeyToAccount(privateKey as `0x${string}`);
+  const account = privateKeyToAccount(privateKey as `0x${string}`);
   const chain = inferChainFromRpcUrl(rpcUrl);
 
-  publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
-  walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
-  address = account.address;
-
-  console.log(`[DWS Node] Initialized with address: ${address}`);
+  walletState = {
+    account,
+    address: account.address,
+    publicClient: createPublicClient({ chain, transport: http(rpcUrl) }) as PublicClient,
+    walletClient: createWalletClient({ account, chain, transport: http(rpcUrl) }) as WalletClient,
+  };
+  console.log(`[DWS Node] Initialized with address: ${walletState.address}`);
 }
 
 async function checkIpfsHealth(): Promise<boolean> {
@@ -86,7 +90,7 @@ app.get('/status', async (c) => {
     });
   }
 
-  const balance = formatEther(await getBalance(walletState.publicClient, { address: walletState.address }));
+  const balance = formatEther(await walletState.publicClient.getBalance({ address: walletState.address }));
   return c.json({
     address: walletState.address,
     balance,
@@ -99,7 +103,7 @@ app.get('/status', async (c) => {
 });
 
 app.post('/storage/pin', async (c) => {
-  if (!account) return c.json({ error: 'Read-only mode. Set PRIVATE_KEY.' }, 403);
+  if (!walletState) return c.json({ error: 'Read-only mode. Set PRIVATE_KEY.' }, 403);
 
   const body = await c.req.json<{ cid: string; size?: number }>();
   if (!body.cid) return c.json({ error: 'CID required' }, 400);
@@ -112,7 +116,7 @@ app.post('/storage/pin', async (c) => {
   const pinnedAt = Date.now();
   pinnedCids.set(body.cid, { size: body.size || 0, pinnedAt });
 
-  return c.json({ success: true, cid: body.cid, pinnedAt, nodeAddress: address });
+  return c.json({ success: true, cid: body.cid, pinnedAt, nodeAddress: walletState.address });
 });
 
 app.get('/storage/pins', (c) => {
@@ -123,7 +127,7 @@ app.get('/storage/pins', (c) => {
 });
 
 app.delete('/storage/pin/:cid', async (c) => {
-  if (!account) return c.json({ error: 'Read-only mode' }, 403);
+  if (!walletState) return c.json({ error: 'Read-only mode' }, 403);
 
   const cid = c.req.param('cid');
   const unpinResponse = await fetch(`${ipfsApiUrl}/api/v0/pin/rm?arg=${cid}`, { method: 'POST' });
@@ -163,4 +167,4 @@ if (import.meta.main) {
   Bun.serve({ port: PORT, fetch: app.fetch });
 }
 
-export { app as nodeApp, publicClient, walletClient };
+export { app as nodeApp, walletState };

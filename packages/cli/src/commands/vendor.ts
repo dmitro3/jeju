@@ -27,7 +27,7 @@ vendorCommand
     logger.header('CREATE VENDOR MANIFEST');
 
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/vendor/create-vendor-manifest.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/infrastructure/create-vendor-manifest.ts');
 
     if (!existsSync(scriptPath)) {
       logger.error('Vendor manifest script not found');

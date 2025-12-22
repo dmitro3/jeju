@@ -113,11 +113,14 @@ export class PoolsService {
       return rpcService.getClient(this.chainId as SupportedChainId);
     }
     
-    if (!this.clientCache.has(this.chainId)) {
-      const rpcUrl = getNetworkRpcUrl(this.chainId) || 'http://localhost:9545';
-      this.clientCache.set(this.chainId, createPublicClient({ transport: http(rpcUrl) }));
+    const cached = this.clientCache.get(this.chainId);
+    if (cached) {
+      return cached;
     }
-    return this.clientCache.get(this.chainId)!;
+    const rpcUrl = getNetworkRpcUrl(this.chainId) || 'http://localhost:9545';
+    const client = createPublicClient({ transport: http(rpcUrl) });
+    this.clientCache.set(this.chainId, client);
+    return client;
   }
   
   /**

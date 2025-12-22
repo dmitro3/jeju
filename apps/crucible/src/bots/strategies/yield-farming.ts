@@ -15,7 +15,7 @@
 
 import { EventEmitter } from 'events';
 import { createPublicClient, http, type PublicClient, type Address, parseAbi, formatUnits } from 'viem';
-import { Connection, PublicKey } from '@solana/web3.js';
+import { Connection } from '@solana/web3.js';
 import type { ChainId, StrategyConfig } from '../autocrat-types';
 
 // ============ Types ============
@@ -157,13 +157,13 @@ const CURVE_POOL_ABI = parseAbi([
   'function balances(uint256 i) view returns (uint256)',
 ]);
 
-const CONVEX_POOL_ABI = parseAbi([
+const _CONVEX_POOL_ABI = parseAbi([
   'function earned(address account) view returns (uint256)',
   'function rewardRate() view returns (uint256)',
   'function totalSupply() view returns (uint256)',
 ]);
 
-const UNI_V3_POOL_ABI = parseAbi([
+const _UNI_V3_POOL_ABI = parseAbi([
   'function slot0() view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)',
   'function liquidity() view returns (uint128)',
   'function feeGrowthGlobal0X128() view returns (uint256)',
@@ -492,7 +492,7 @@ export class YieldFarmingStrategy extends EventEmitter {
             poolAddress,
             tokens: [{
               symbol: market.symbol,
-              address: market.address!,
+              address: market.address ?? poolAddress,
               decimals: market.symbol === 'WETH' ? 18 : 6,
             }],
             totalApr: supplyApr,

@@ -25,11 +25,11 @@ const ITEM_MINTED = keccak256(stringToHex('ItemMinted(address,uint256,uint256,by
 const ITEM_BURNED = keccak256(stringToHex('ItemBurned(address,uint256,uint256)'));
 const ITEM_TYPE_CREATED = keccak256(stringToHex('ItemTypeCreated(uint256,string,bool,uint8)'));
 const NFT_PROVENANCE = keccak256(stringToHex('NFTProvenance(address,uint256,bytes32,uint256)'));
-const GAME_SIGNER_UPDATED = keccak256(stringToHex('GameSignerUpdated(address,address)'));
+const _GAME_SIGNER_UPDATED = keccak256(stringToHex('GameSignerUpdated(address,address)'));
 
 // ERC-1155 standard events (for tracking transfers)
 const TRANSFER_SINGLE = keccak256(stringToHex('TransferSingle(address,address,address,uint256,uint256)'));
-const TRANSFER_BATCH = keccak256(stringToHex('TransferBatch(address,address,address,uint256[],uint256[])'));
+const _TRANSFER_BATCH = keccak256(stringToHex('TransferBatch(address,address,address,uint256[],uint256[])'));
 
 // ABIs for decoding
 const goldInterface = parseAbi([
@@ -73,7 +73,7 @@ interface GoldClaim {
 export async function processGameTokenEvents(ctx: ProcessorContext<Store>): Promise<void> {
     const accountFactory = createAccountFactory();
     const tokenTransfers: TokenTransfer[] = [];
-    const tokenBalances = new Map<string, TokenBalance>();
+    const _tokenBalances = new Map<string, TokenBalance>();
     const contracts = new Map<string, Contract>();
     
     // Track minted items and gold claims for stats
@@ -289,7 +289,6 @@ export async function processGameTokenEvents(ctx: ProcessorContext<Store>): Prom
 
                 const originalMinter = args.originalMinter.toLowerCase();
                 const itemId = BigInt(args.itemId.toString());
-                const instanceId = args.instanceId;
                 const mintedAt = BigInt(args.mintedAt.toString());
 
                 ctx.log.info(`NFT Provenance: item #${itemId} originally minted by ${originalMinter} at ${mintedAt}`);

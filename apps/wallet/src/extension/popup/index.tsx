@@ -45,9 +45,6 @@ const queryClient = new QueryClient({
   },
 });
 
-import { z } from 'zod';
-import { expectJson, expectNonEmpty } from '../../lib/validation';
-
 const PopupParamsSchema = z.object({
   path: z.string().optional(),
   data: z.record(z.string(), z.unknown()).optional(),

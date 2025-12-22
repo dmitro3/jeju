@@ -27,7 +27,7 @@ function createMockLiquidityPools(): Map<string, { reserve0: bigint; reserve1: b
   const pools = new Map();
   
   // USDC-WETH pool
-  const usdcWeth = 'usdc-weth';
+  const _usdcWeth = 'usdc-weth';
   pools.set('0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48-0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2', {
     token0: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as Address, // USDC
     token1: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as Address, // WETH
@@ -104,7 +104,7 @@ describe('CowSolverValidator', () => {
 describe('Solver Metrics Calculation', () => {
   let clients: Map<number, { public: PublicClient }>;
   let solver: CowProtocolSolver;
-  let validator: CowSolverValidator;
+  let _validator: CowSolverValidator;
   let liquidityPools: Map<string, { reserve0: bigint; reserve1: bigint; token0: Address; token1: Address }>;
 
   beforeAll(() => {
@@ -117,7 +117,7 @@ describe('Solver Metrics Calculation', () => {
     });
     
     solver = new CowProtocolSolver(clients, [1]);
-    validator = new CowSolverValidator(solver);
+    _validator = new CowSolverValidator(solver);
     liquidityPools = createMockLiquidityPools();
   });
 
@@ -278,8 +278,8 @@ describe('Live Auction Validation', () => {
 describe('Competition Comparison', () => {
   let clients: Map<number, { public: PublicClient }>;
   let solver: CowProtocolSolver;
-  let validator: CowSolverValidator;
-  let liquidityPools: Map<string, { reserve0: bigint; reserve1: bigint; token0: Address; token1: Address }>;
+  let _validator: CowSolverValidator;
+  let _liquidityPools: Map<string, { reserve0: bigint; reserve1: bigint; token0: Address; token1: Address }>;
 
   beforeAll(() => {
     clients = new Map();
@@ -291,8 +291,8 @@ describe('Competition Comparison', () => {
     });
     
     solver = new CowProtocolSolver(clients, [1]);
-    validator = new CowSolverValidator(solver);
-    liquidityPools = createMockLiquidityPools();
+    _validator = new CowSolverValidator(solver);
+    _liquidityPools = createMockLiquidityPools();
   });
 
   it('should identify when we would not win', () => {

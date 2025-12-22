@@ -9,8 +9,7 @@
  * - Edge cases
  */
 
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
-import type { ExecutionRequest, AgentDefinition } from '../types';
+import { describe, test, expect } from 'bun:test';
 
 describe('ExecutorSDK Bot Type Routing Logic', () => {
   // Test the routing logic without instantiating ExecutorSDK (which requires real deps)

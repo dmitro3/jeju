@@ -6,9 +6,22 @@ import { execa } from 'execa';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createPublicClient, http, formatEther } from 'viem';
+import { z } from 'zod';
 import { logger } from './logger';
 import { checkDocker, checkKurtosis, installKurtosis, checkSocat, killPort } from './system';
 import { CHAIN_CONFIG, DEFAULT_PORTS, type NetworkType } from '../types';
+
+// Schema for ports.json to prevent insecure deserialization
+const PortsConfigSchema = z.object({
+  l1Port: z.number().int().min(1).max(65535),
+  l2Port: z.number().int().min(1).max(65535),
+  cqlPort: z.number().int().min(0).max(65535).optional(),
+  l1Rpc: z.string().url().optional(),
+  l2Rpc: z.string().url().optional(),
+  cqlApi: z.string().url().nullable().optional(),
+  chainId: z.number().int().positive().optional(),
+  timestamp: z.string().optional(),
+});
 
 const KURTOSIS_DIR = '.kurtosis';
 const ENCLAVE_NAME = 'jeju-localnet';
@@ -159,7 +172,7 @@ export async function startLocalnet(rootDir: string): Promise<{ l1Port: number; 
   await setupPortForwarding(l1Port, DEFAULT_PORTS.l1Rpc, 'L1 RPC');
   await setupPortForwarding(l2Port, DEFAULT_PORTS.l2Rpc, 'L2 RPC');
   if (cqlPort) {
-    await setupPortForwarding(cqlPort, DEFAULT_PORTS.cqlApi, 'CQL API');
+    await setupPortForwarding(cqlPort, DEFAULT_PORTS.cql, 'CQL API');
   }
 
   // Wait for chain to be ready
@@ -172,12 +185,23 @@ export async function startLocalnet(rootDir: string): Promise<{ l1Port: number; 
 }
 
 async function setupPortForwarding(dynamicPort: number, staticPort: number, name: string): Promise<void> {
+  // Validate port numbers are safe integers in valid range
+  if (!Number.isInteger(staticPort) || staticPort < 1 || staticPort > 65535) {
+    throw new Error('Invalid static port number');
+  }
+  if (!Number.isInteger(dynamicPort) || dynamicPort < 1 || dynamicPort > 65535) {
+    throw new Error('Invalid dynamic port number');
+  }
+  
   // Kill any existing process on the static port
   await killPort(staticPort);
   
-  // Start socat in background
-  const socatCmd = `socat TCP-LISTEN:${staticPort},fork,reuseaddr TCP:127.0.0.1:${dynamicPort}`;
-  const subprocess = execa('sh', ['-c', `${socatCmd} &`], {
+  // Start socat in background using array args to prevent shell injection
+  // Using execa with array arguments is safer than sh -c with string interpolation
+  const subprocess = execa('socat', [
+    `TCP-LISTEN:${staticPort},fork,reuseaddr`,
+    `TCP:127.0.0.1:${dynamicPort}`
+  ], {
     detached: true,
     stdio: 'ignore',
   });
@@ -219,11 +243,22 @@ export function loadPortsConfig(rootDir: string): { l1Port: number; l2Port: numb
     return null;
   }
   
-  // Parse to verify valid JSON, but use default ports
-  JSON.parse(readFileSync(portsFile, 'utf-8'));
+  // SECURITY: Parse and validate with schema to prevent insecure deserialization
+  const rawData = JSON.parse(readFileSync(portsFile, 'utf-8'));
+  const result = PortsConfigSchema.safeParse(rawData);
+  
+  if (!result.success) {
+    logger.warn(`Invalid ports.json format, using defaults: ${result.error.message}`);
+    return {
+      l1Port: DEFAULT_PORTS.l1Rpc,
+      l2Port: DEFAULT_PORTS.l2Rpc,
+    };
+  }
+  
+  // Use validated data or fall back to defaults
   return {
-    l1Port: DEFAULT_PORTS.l1Rpc,
-    l2Port: DEFAULT_PORTS.l2Rpc,
+    l1Port: result.data.l1Port ?? DEFAULT_PORTS.l1Rpc,
+    l2Port: result.data.l2Port ?? DEFAULT_PORTS.l2Rpc,
   };
 }
 
@@ -237,7 +272,7 @@ export async function bootstrapContracts(rootDir: string, rpcUrl: string): Promi
 
   logger.step('Bootstrapping contracts...');
   
-  const bootstrapScript = join(rootDir, 'scripts/bootstrap/bootstrap-localnet-complete.ts');
+  const bootstrapScript = join(rootDir, 'packages/deployment/scripts/bootstrap-localnet-complete.ts');
   if (!existsSync(bootstrapScript)) {
     throw new Error(`Bootstrap script not found: ${bootstrapScript}`);
   }

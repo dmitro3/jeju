@@ -88,7 +88,28 @@ interface CacheEntry {
   timestamp: number;
 }
 
+// Bounded cache to prevent memory exhaustion
+const MAX_CACHE_SIZE = 10000;
 const cache = new Map<string, CacheEntry>();
+
+/**
+ * Add entry to cache with LRU-style eviction when full
+ */
+function setCacheEntry(key: string, entry: CacheEntry): void {
+  // If cache is full, evict oldest entries
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const entries = Array.from(cache.entries())
+      .sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    // Remove oldest 10% of entries
+    const toRemove = Math.ceil(entries.length * 0.1);
+    for (let i = 0; i < toRemove; i++) {
+      cache.delete(entries[i][0]);
+    }
+  }
+  
+  cache.set(key, entry);
+}
 
 // ============ BanChecker Class ============
 
@@ -169,8 +190,8 @@ export class BanChecker {
         status,
       };
 
-      // Update cache
-      cache.set(cacheKey, { result, timestamp: Date.now() });
+      // Update cache (bounded with LRU eviction)
+      setCacheEntry(cacheKey, { result, timestamp: Date.now() });
       
       return result;
     } catch (error) {

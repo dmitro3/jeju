@@ -9,7 +9,7 @@
  */
 
 import { spawn, ChildProcess } from 'child_process';
-import { existsSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 
 const LOCALNET_PORT = 9545;

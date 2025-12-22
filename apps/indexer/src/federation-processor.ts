@@ -15,7 +15,7 @@
  * - Deduplicated entries (by federated ID)
  */
 
-import { Store } from '@subsquid/typeorm-store';
+import type { Store as _Store } from '@subsquid/typeorm-store';
 import { 
   createPublicClient, 
   http, 
@@ -23,8 +23,7 @@ import {
   parseEther, 
   keccak256, 
   encodePacked, 
-  pad, 
-  toHex,
+  pad,
   toEventSelector,
   zeroAddress,
   getContract,
@@ -35,7 +34,7 @@ import {
 const NETWORK_REGISTERED = toEventSelector('NetworkRegistered(uint256,string,address,uint256)');
 const REGISTRY_REGISTERED = toEventSelector('RegistryRegistered(bytes32,uint256,uint8,bytes32,string)');
 const ENTRY_FEDERATED = toEventSelector('EntryFederated(bytes32,bytes32,bytes32,string)');
-const AGENT_REGISTERED = toEventSelector('Registered(uint256,address,uint8,uint256,string)');
+const _AGENT_REGISTERED = toEventSelector('Registered(uint256,address,uint8,uint256,string)');
 
 // Trust tiers
 enum TrustTier {
@@ -173,7 +172,7 @@ export function processNetworkRegistryEvent(
  */
 export function processRegistryHubEvent(
   log: { topics: string[]; data: string },
-  block: { timestamp: number }
+  _block: { timestamp: number }
 ): FederatedRegistry | null {
   if (log.topics[0] !== REGISTRY_REGISTERED) return null;
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { useGameFeed } from '@/hooks/markets/useGameFeed';
 import { EXPLORER_URL } from '@/config';
 

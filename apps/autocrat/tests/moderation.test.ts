@@ -4,7 +4,7 @@
  * Tests for visibility scoring, trust calculations, and auto-rejection logic
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 
 // ============ Type Definitions ============
 

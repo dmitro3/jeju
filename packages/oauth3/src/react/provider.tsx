@@ -74,7 +74,9 @@ export function OAuth3Provider({
 
       // Initialize decentralized discovery if enabled
       if (config.decentralized !== false) {
-        await client.initialize().catch(() => {});
+        await client.initialize().catch((err: Error) => {
+          console.debug('OAuth3 decentralized init failed:', err.message);
+        });
       }
 
       // Check for existing session

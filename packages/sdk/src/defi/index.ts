@@ -226,15 +226,27 @@ export function createDefiModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): DefiModule {
-  const swapRouterAddress = safeGetContract("defi", "swapRouter", network);
-  const positionManagerAddress = safeGetContract("defi", "positionManager", network);
-  const tokenFactoryAddress = safeGetContract("registry", "tokenFactory", network);
+  const maybeSwapRouterAddress = safeGetContract("defi", "swapRouter", network);
+  const maybePositionManagerAddress = safeGetContract(
+    "defi",
+    "positionManager",
+    network,
+  );
+  const tokenFactoryAddress = safeGetContract(
+    "registry",
+    "tokenFactory",
+    network,
+  );
   const services = getServicesConfig(network);
 
   // Return stub if core contracts not available
-  if (!swapRouterAddress || !positionManagerAddress) {
+  if (!maybeSwapRouterAddress || !maybePositionManagerAddress) {
     return createStubDefiModule();
   }
+
+  // Type narrowing: after the guard above, these are guaranteed to be defined
+  const swapRouterAddress: Address = maybeSwapRouterAddress;
+  const positionManagerAddress: Address = maybePositionManagerAddress;
 
   async function getToken(address: Address): Promise<Token> {
     const token = getContract({
@@ -282,6 +294,12 @@ export function createDefiModule(
   }
 
   async function getSwapQuote(params: SwapParams): Promise<SwapQuote> {
+    // Validate slippage bounds (0 to 5000 bps = 0% to 50%)
+    const slippage = params.slippageBps ?? 50;
+    if (slippage < 0 || slippage > 5000) {
+      throw new Error("Slippage must be between 0 and 5000 bps (0-50%)");
+    }
+
     // Fetch quote from the API
     const response = await fetch(`${services.gateway.api}/quote`, {
       method: "POST",
@@ -300,7 +318,6 @@ export function createDefiModule(
     const rawData: unknown = await response.json();
     const data = SwapQuoteResponseSchema.parse(rawData);
 
-    const slippage = params.slippageBps ?? 50;
     const amountOut = BigInt(data.amountOut);
     const amountOutMin = (amountOut * BigInt(10000 - slippage)) / 10000n;
 
@@ -386,11 +403,16 @@ export function createDefiModule(
   }
 
   async function addLiquidity(params: AddLiquidityParams): Promise<Hex> {
+    // Validate slippage bounds (0 to 5000 bps = 0% to 50%)
+    const slippage = params.slippageBps ?? 50;
+    if (slippage < 0 || slippage > 5000) {
+      throw new Error("Slippage must be between 0 and 5000 bps (0-50%)");
+    }
+
     // Approve tokens
     await approve(params.token0, positionManagerAddress, params.amount0);
     await approve(params.token1, positionManagerAddress, params.amount1);
 
-    const slippage = params.slippageBps ?? 50;
     const amount0Min = (params.amount0 * BigInt(10000 - slippage)) / 10000n;
     const amount1Min = (params.amount1 * BigInt(10000 - slippage)) / 10000n;
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 1800);
@@ -422,6 +444,11 @@ export function createDefiModule(
     positionId: bigint,
     percentage: number,
   ): Promise<Hex> {
+    // Validate percentage bounds (1-100%)
+    if (percentage < 1 || percentage > 100 || !Number.isInteger(percentage)) {
+      throw new Error("Percentage must be an integer between 1 and 100");
+    }
+
     const positions = await listPositions();
     const position = positions.find((p) => p.positionId === positionId);
     if (!position) throw new Error("Position not found");
@@ -489,6 +516,10 @@ export function createDefiModule(
   async function launchToken(
     params: LaunchTokenParams,
   ): Promise<{ tokenAddress: Address; txHash: Hex }> {
+    if (!tokenFactoryAddress) {
+      throw new Error("Token factory contract not deployed on this network");
+    }
+
     const data = encodeFunctionData({
       abi: ERC20_FACTORY_ABI,
       functionName: "createToken",
@@ -545,10 +576,10 @@ function createStubDefiModule(): DefiModule {
     getToken: async () => emptyToken,
     getBalance: async () => 0n,
     approve: notAvailable,
-    getSwapQuote: async () => ({ amountOut: 0n, path: [], priceImpact: 0 }),
+    getSwapQuote: notAvailable,
     swap: notAvailable,
     listPools: async () => [],
-    getPool: async () => null,
+    getPool: notAvailable,
     addLiquidity: notAvailable,
     removeLiquidity: notAvailable,
     listPositions: async () => [],

@@ -571,9 +571,17 @@ export function createWorkModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): WorkModule {
-  const bountyRegistryAddress = requireContract("work", "BountyRegistry", network);
+  const bountyRegistryAddress = requireContract(
+    "work",
+    "BountyRegistry",
+    network,
+  );
   const projectBoardAddress = requireContract("work", "ProjectBoard", network);
-  const guardianRegistryAddress = requireContract("work", "GuardianRegistry", network);
+  const guardianRegistryAddress = requireContract(
+    "work",
+    "GuardianRegistry",
+    network,
+  );
 
   // Helper to read bounty
   async function readBounty(bountyId: Hex): Promise<Bounty | null> {

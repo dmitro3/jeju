@@ -91,6 +91,10 @@ const DEFAULT_OPTIONS: Required<UsePriceStreamOptions> = {
   maxReconnectAttempts: 10,
 };
 
+// Security constants
+const MAX_WS_MESSAGE_SIZE = 1024 * 100; // 100KB max message size
+const MAX_SUBSCRIPTIONS = 1000; // Maximum tracked subscriptions to prevent memory issues
+
 // ============ Hook ============
 
 export function usePriceStream(options?: UsePriceStreamOptions): UsePriceStreamReturn {
@@ -131,14 +135,39 @@ export function usePriceStream(options?: UsePriceStreamOptions): UsePriceStreamR
     };
 
     ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      if (data.type === 'price_update') {
+      // Security: Validate message size to prevent DoS
+      const messageData = typeof event.data === 'string' ? event.data : '';
+      if (messageData.length > MAX_WS_MESSAGE_SIZE) {
+        console.warn('[PriceStream] Message too large, ignoring:', messageData.length);
+        return;
+      }
+
+      // Security: Safe JSON parsing with validation
+      let data: { type?: string; chainId?: number; token?: string };
+      try {
+        data = JSON.parse(messageData);
+      } catch {
+        console.warn('[PriceStream] Invalid JSON message');
+        return;
+      }
+
+      // Validate message structure before processing
+      if (
+        data.type === 'price_update' &&
+        typeof data.chainId === 'number' &&
+        typeof data.token === 'string' &&
+        data.token.length <= 66 // Max address length
+      ) {
         const update = data as PriceUpdate;
         const key = `${update.chainId}:${update.token.toLowerCase()}`;
         
         setPrices(prev => {
           const next = new Map(prev);
+          // Prevent unbounded growth
+          if (next.size >= 10000) {
+            const firstKey = next.keys().next().value;
+            if (firstKey) next.delete(firstKey);
+          }
           next.set(key, update);
           return next;
         });
@@ -170,14 +199,22 @@ export function usePriceStream(options?: UsePriceStreamOptions): UsePriceStreamR
   const subscribe = useCallback((msg: Omit<SubscriptionMessage, 'type'>) => {
     const fullMsg: SubscriptionMessage = { ...msg, type: 'subscribe' };
     
-    // Track subscriptions for reconnection
+    // Track subscriptions for reconnection with size limit
     if (msg.tokens) {
       for (const t of msg.tokens) {
+        if (subscriptionsRef.current.size >= MAX_SUBSCRIPTIONS) {
+          console.warn('[PriceStream] Maximum subscriptions reached');
+          break;
+        }
         subscriptionsRef.current.add(`${t.chainId}:${t.address.toLowerCase()}`);
       }
     }
     if (msg.chains) {
       for (const c of msg.chains) {
+        if (subscriptionsRef.current.size >= MAX_SUBSCRIPTIONS) {
+          console.warn('[PriceStream] Maximum subscriptions reached');
+          break;
+        }
         subscriptionsRef.current.add(`chain:${c}`);
       }
     }

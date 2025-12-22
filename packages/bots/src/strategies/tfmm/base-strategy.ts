@@ -92,12 +92,14 @@ export abstract class BaseTFMMStrategy {
    * Get price history for a specific token
    */
   getTokenPriceHistory(token: string): { timestamp: number; price: bigint }[] {
-    return this.priceHistory
-      .filter(h => h.prices.has(token))
-      .map(h => ({
-        timestamp: h.timestamp,
-        price: h.prices.get(token)!,
-      }));
+    const result: { timestamp: number; price: bigint }[] = [];
+    for (const h of this.priceHistory) {
+      const price = h.prices.get(token);
+      if (price !== undefined) {
+        result.push({ timestamp: h.timestamp, price });
+      }
+    }
+    return result;
   }
 
   /**

@@ -232,19 +232,23 @@ export class MultiTenantCouncilManager {
   ): Promise<CouncilDeployment> {
     const template = DEFAULT_COUNCILS[councilType];
     
+    if (!template.config || !template.ceo || !template.agents) {
+      throw new Error(`Missing template data for council type: ${councilType}`);
+    }
+    
     const deployment: CouncilDeployment = {
       councilType,
       config: {
-        ...template.config!,
+        ...template.config,
         ...config.config,
       },
       oauth3App: config.oauth3App ?? await this.createCouncilOAuthApp(councilType, config),
-      treasury: config.treasury ?? template.config!.treasury,
+      treasury: config.treasury ?? template.config.treasury,
       ceo: {
-        ...template.ceo!,
+        ...template.ceo,
         ...config.ceo,
       },
-      agents: config.agents ?? template.agents!,
+      agents: config.agents ?? template.agents,
     };
 
     this.registry.councils.set(councilType, deployment);

@@ -419,12 +419,13 @@ export class FarcasterProvider {
   }
   
   private async signMessage(
-    session: FarcasterSession,
+    _session: FarcasterSession,
     message: Record<string, unknown>,
   ): Promise<Uint8Array> {
     // In production, use proper Ed25519 signing with signer key
     // For now, return mock signature
-    const messageBytes = new TextEncoder().encode(JSON.stringify(message));
+    // Note: message is encoded but signature is mocked for now
+    void JSON.stringify(message);
     return new Uint8Array(64).fill(0);
   }
   
@@ -615,11 +616,11 @@ export class FarcasterProvider {
       throw new Error('FID not found in message');
     }
 
-    if (expectedFid && parsedMessage.fid !== expectedFid) {
-      return { valid: false, fid: parsedMessage.fid, custodyAddress: parsedMessage.custody! };
-    }
-
     const profile = await this.getProfileByFid(parsedMessage.fid);
+
+    if (expectedFid && parsedMessage.fid !== expectedFid) {
+      return { valid: false, fid: parsedMessage.fid, custodyAddress: parsedMessage.custody ?? profile.custodyAddress };
+    }
     const messageHash = keccak256(toBytes(message));
     
     const response = await fetch(`${this.apiUrl}/farcaster/user/verify`, {

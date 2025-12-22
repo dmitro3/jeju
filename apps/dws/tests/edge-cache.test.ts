@@ -12,7 +12,6 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import {
   EdgeCache,
-  getEdgeCache,
   resetEdgeCache,
 } from '../src/cdn/cache/edge-cache';
 

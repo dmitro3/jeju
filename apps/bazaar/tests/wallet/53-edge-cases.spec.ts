@@ -131,7 +131,7 @@ test.describe('Input Edge Cases', () => {
       if (await amountInput.isVisible()) {
         await amountInput.fill('0')
         
-        const buyButton = page.getByTestId('buy-button')
+        const _buyButton = page.getByTestId('buy-button')
         // Should be disabled or show error for zero amount
       }
     }
@@ -430,7 +430,7 @@ test.describe('Accessibility Basics', () => {
     
     for (let i = 0; i < count; i++) {
       const img = images.nth(i)
-      const alt = await img.getAttribute('alt')
+      const _alt = await img.getAttribute('alt')
       // Should have alt or be decorative
     }
   })
@@ -444,7 +444,7 @@ test.describe('Accessibility Basics', () => {
     await page.keyboard.press('Tab')
     
     // Should focus something
-    const focused = await page.locator(':focus').count()
+    const _focused = await page.locator(':focus').count()
     // May or may not have visible focus
   })
 })
@@ -453,7 +453,7 @@ test.describe('Accessibility Basics', () => {
 // EDGE CASE SUMMARY
 // =============================================================================
 test.describe('Edge Case Summary', () => {
-  test('should verify all edge cases tested', async ({ page }) => {
+  test('should verify all edge cases tested', async ({ page: _page }) => {
     console.log('')
     console.log('═══════════════════════════════════════════════════════')
     console.log('           EDGE CASE TEST COVERAGE')

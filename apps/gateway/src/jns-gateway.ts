@@ -153,7 +153,8 @@ function namehash(name: string): Hex {
 
   for (let i = labels.length - 1; i >= 0; i--) {
     const label = labels[i];
-    const labelHash = hashBytes(Buffer.from(label!, 'utf8'));
+    if (!label) continue;
+    const labelHash = hashBytes(Buffer.from(label, 'utf8'));
     node = hashBytes(Buffer.concat([Buffer.from(node.slice(2), 'hex'), Buffer.from(labelHash.slice(2), 'hex')])) as Hex;
   }
 

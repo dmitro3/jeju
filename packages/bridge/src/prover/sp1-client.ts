@@ -17,7 +17,13 @@ import { join } from "node:path";
 import { spawn } from "bun";
 import type { Groth16Proof, Hash32, SP1Proof } from "../types/index.js";
 import { toHash32 } from "../types/index.js";
-import { createLogger, ProofDataSchema, Groth16DataSchema, getHomeDir, SuccinctProveResponseSchema } from "../utils/index.js";
+import {
+	createLogger,
+	Groth16DataSchema,
+	getHomeDir,
+	ProofDataSchema,
+	SuccinctProveResponseSchema,
+} from "../utils/index.js";
 
 /** Type for proof data parsed from JSON */
 interface ProofDataParsed {
@@ -421,7 +427,44 @@ export class SP1Client {
 			log.warn("Output file not found, using mock proof", { outputPath });
 			return await this.generateMockProof(id, request, startTime);
 		}
-		const outputData = JSON.parse(readFileSync(outputPath, "utf-8"));
+
+		// Validate output file content before parsing
+		const outputContent = readFileSync(outputPath, "utf-8");
+		if (!outputContent || outputContent.trim().length === 0) {
+			log.error("Empty output file from prover");
+			return {
+				id,
+				type: request.type,
+				proof: this.emptyProof(),
+				groth16: this.emptyGroth16(),
+				generationTimeMs: Date.now() - startTime,
+				success: false,
+				error: "Prover produced empty output file",
+			};
+		}
+
+		let outputData: { proof: string | ProofDataParsed; groth16: Groth16DataParsed };
+		try {
+			const parsed = JSON.parse(outputContent);
+			// Validate required fields exist
+			if (!parsed.proof || !parsed.groth16) {
+				throw new Error("Missing required proof or groth16 fields");
+			}
+			outputData = parsed;
+		} catch (parseError) {
+			log.error("Failed to parse prover output", {
+				error: String(parseError),
+			});
+			return {
+				id,
+				type: request.type,
+				proof: this.emptyProof(),
+				groth16: this.emptyGroth16(),
+				generationTimeMs: Date.now() - startTime,
+				success: false,
+				error: `Invalid prover output: ${parseError instanceof Error ? parseError.message : "unknown"}`,
+			};
+		}
 
 		return {
 			id,
@@ -439,8 +482,8 @@ export class SP1Client {
 		startTime: number,
 	): Promise<ProofResult> {
 		const timeout = this.config.timeoutMs ?? 600000;
-		const priority = request.priority ?? 5;  // Default priority is intentional for API
-		
+		const priority = request.priority ?? 5; // Default priority is intentional for API
+
 		const response = await fetch("https://prover.succinct.xyz/api/v1/prove", {
 			method: "POST",
 			headers: {
@@ -510,7 +553,9 @@ export class SP1Client {
 		}
 
 		// Development-only mock proof
-		log.warn("Generating mock proof - DEVELOPMENT ONLY", { type: request.type });
+		log.warn("Generating mock proof - DEVELOPMENT ONLY", {
+			type: request.type,
+		});
 		await Bun.sleep(100);
 
 		const proofBytes = new Uint8Array(256);
@@ -587,7 +632,9 @@ export class SP1Client {
 		if (typeof proofData === "string") {
 			const bytes = Buffer.from(proofData, "hex");
 			if (bytes.length < 352) {
-				throw new Error(`Invalid proof data: expected at least 352 bytes, got ${bytes.length}`);
+				throw new Error(
+					`Invalid proof data: expected at least 352 bytes, got ${bytes.length}`,
+				);
 			}
 			return {
 				proof: bytes.slice(0, 256),
@@ -645,8 +692,9 @@ export function createSP1Client(config?: Partial<SP1Config>): SP1Client {
 
 	// These defaults are intentional for local development convenience
 	const useMock = config?.useMock ?? !existsSync(programsDir);
-	const useSuccinctNetwork = config?.useSuccinctNetwork ?? Boolean(process.env.SUCCINCT_API_KEY);
-	
+	const useSuccinctNetwork =
+		config?.useSuccinctNetwork ?? Boolean(process.env.SUCCINCT_API_KEY);
+
 	return new SP1Client({
 		programsDir,
 		useMock,

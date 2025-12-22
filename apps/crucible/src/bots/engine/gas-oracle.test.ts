@@ -186,7 +186,6 @@ describe('EIP-1559 Base Fee Prediction', () => {
   });
 
   test('should predict stable base fee at 50% utilization', () => {
-    const currentBaseFee = BigInt(50e9);
     const blockUtilization = 0.5; // Exactly 50%
     
     // No change expected

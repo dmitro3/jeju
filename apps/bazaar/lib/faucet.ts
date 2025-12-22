@@ -89,7 +89,12 @@ interface FaucetClaim {
   totalClaims: number
 }
 
+// Maximum entries to prevent unbounded growth
+const MAX_CLAIM_ENTRIES = 100000;
+
 const claimState = new Map<string, FaucetClaim>()
+// Track in-flight claims to prevent race conditions
+const inFlightClaims = new Set<string>()
 
 export const faucetState = {
   getLastClaim(address: string): number | null {
@@ -97,8 +102,45 @@ export const faucetState = {
     return claim?.lastClaim ?? null
   },
 
+  isClaimInProgress(address: string): boolean {
+    return inFlightClaims.has(address.toLowerCase())
+  },
+
+  startClaim(address: string): boolean {
+    const addr = address.toLowerCase()
+    if (inFlightClaims.has(addr)) {
+      return false; // Claim already in progress
+    }
+    inFlightClaims.add(addr)
+    return true
+  },
+
+  finishClaim(address: string, success: boolean): void {
+    const addr = address.toLowerCase()
+    inFlightClaims.delete(addr)
+    
+    if (success) {
+      // Evict oldest entry if at capacity
+      if (claimState.size >= MAX_CLAIM_ENTRIES) {
+        const firstKey = claimState.keys().next().value;
+        if (firstKey) claimState.delete(firstKey)
+      }
+      
+      const existing = claimState.get(addr)
+      claimState.set(addr, {
+        lastClaim: Date.now(),
+        totalClaims: (existing?.totalClaims ?? 0) + 1,
+      })
+    }
+  },
+
   recordClaim(address: string): void {
     const addr = address.toLowerCase()
+    // Evict oldest entry if at capacity
+    if (claimState.size >= MAX_CLAIM_ENTRIES) {
+      const firstKey = claimState.keys().next().value;
+      if (firstKey) claimState.delete(firstKey)
+    }
     const existing = claimState.get(addr)
     claimState.set(addr, {
       lastClaim: Date.now(),
@@ -109,6 +151,7 @@ export const faucetState = {
   // For testing
   clear(): void {
     claimState.clear()
+    inFlightClaims.clear()
   },
 }
 
@@ -257,7 +300,12 @@ export async function claimFromFaucet(address: Address): Promise<FaucetClaimResu
 
   // Check faucet is configured
   if (!isFaucetConfigured()) {
-    throw new Error('Faucet not configured: FAUCET_PRIVATE_KEY required')
+    throw new Error('Faucet not configured')
+  }
+
+  // Race condition protection: Check if claim already in progress
+  if (faucetState.isClaimInProgress(validated)) {
+    throw new Error('Claim already in progress for this address')
   }
 
   // Check registration
@@ -283,22 +331,33 @@ export async function claimFromFaucet(address: Address): Promise<FaucetClaimResu
     throw new Error('JEJU token not configured')
   }
 
-  // Execute transfer
-  const walletClient = getWalletClient()
-  const hash = await walletClient.writeContract({
-    address: FAUCET_CONFIG.jejuTokenAddress,
-    abi: erc20Abi,
-    functionName: 'transfer',
-    args: [validated, FAUCET_CONFIG.amountPerClaim],
-  })
+  // Race condition protection: Mark claim as in progress
+  if (!faucetState.startClaim(validated)) {
+    throw new Error('Claim already in progress for this address')
+  }
 
-  // Record claim
-  faucetState.recordClaim(validated)
+  // Execute transfer with proper error handling
+  try {
+    const walletClient = getWalletClient()
+    const hash = await walletClient.writeContract({
+      address: FAUCET_CONFIG.jejuTokenAddress,
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [validated, FAUCET_CONFIG.amountPerClaim],
+    })
 
-  return {
-    success: true,
-    txHash: hash,
-    amount: formatEther(FAUCET_CONFIG.amountPerClaim),
+    // Record successful claim
+    faucetState.finishClaim(validated, true)
+
+    return {
+      success: true,
+      txHash: hash,
+      amount: formatEther(FAUCET_CONFIG.amountPerClaim),
+    }
+  } catch (error) {
+    // Clear in-flight flag on failure
+    faucetState.finishClaim(validated, false)
+    throw error
   }
 }
 

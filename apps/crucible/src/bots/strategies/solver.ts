@@ -283,9 +283,10 @@ export class SolverStrategy {
 
         if (allowance < intent.outputAmount) {
           console.log(`   Approving token...`);
+          if (!destClient.wallet.account) throw new Error('Wallet account not configured');
           const approveHash = await destClient.wallet.writeContract({
             chain: destClient.wallet.chain,
-            account: destClient.wallet.account!,
+            account: destClient.wallet.account,
             address: intent.outputToken as `0x${string}`,
             abi: ERC20_ABI,
             functionName: 'approve',
@@ -298,9 +299,10 @@ export class SolverStrategy {
       // Fill the intent
       const isNativeToken = intent.outputToken === ZERO_ADDRESS;
 
+      if (!destClient.wallet.account) throw new Error('Wallet account not configured');
       const hash = await destClient.wallet.writeContract({
         chain: destClient.wallet.chain,
-        account: destClient.wallet.account!,
+        account: destClient.wallet.account,
         address: outputSettler as `0x${string}`,
         abi: OUTPUT_SETTLER_ABI,
         functionName: 'fill',

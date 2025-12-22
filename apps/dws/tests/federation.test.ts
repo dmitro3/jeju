@@ -5,21 +5,20 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
 import { FederationManager } from '../src/git/federation';
 import { SocialManager } from '../src/git/social';
-import { GitRepoManager } from '../src/git/repo-manager';
 import type { GitUser, Repository } from '../src/git/types';
 import type { Address, Hex } from 'viem';
 
 // Mock backend
 const mockBackend = {
   upload: async (content: Buffer) => ({ cid: `mock-cid-${Date.now()}`, size: content.length }),
-  download: async (cid: string) => ({ content: Buffer.from('{}'), size: 2 }),
+  download: async (_cid: string) => ({ content: Buffer.from('{}'), size: 2 }),
 };
 
 // Mock repo manager
 const mockRepoManager = {
-  getRepository: async (repoId: Hex) => null,
-  getRepositoryByName: async (owner: Address, name: string) => null,
-  getUserRepositories: async (address: Address) => [],
+  getRepository: async (_repoId: Hex) => null,
+  getRepositoryByName: async (_owner: Address, _name: string) => null,
+  getUserRepositories: async (_address: Address) => [],
   createRepository: async () => ({ repoId: '0x1234' as Hex, name: 'test' }),
   getBranches: async () => [],
   getBranch: async () => null,

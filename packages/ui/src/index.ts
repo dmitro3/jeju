@@ -26,11 +26,14 @@ export {
   useTokenConfig,
   type TokenInfo,
   type TokenConfig,
+  type UseTokenRegistryResult,
+  type UseTokenConfigResult,
 } from "./hooks/useTokenRegistryContract";
 
 export {
   useLiquidityVault,
   type LPPosition,
+  type UseLiquidityVaultResult,
 } from "./hooks/useLiquidityVaultContract";
 
 // Liquidity calculation utilities (pure functions, useful for testing/simulations)
@@ -46,6 +49,8 @@ export {
   usePaymasterFactory,
   usePaymasterDeployment,
   type PaymasterDeployment,
+  type UsePaymasterFactoryResult,
+  type UsePaymasterDeploymentResult,
 } from "./hooks/usePaymasterFactoryContract";
 
 // Contract ABIs and constants

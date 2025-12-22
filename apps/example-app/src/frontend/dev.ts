@@ -19,6 +19,30 @@ const mimeTypes: Record<string, string> = {
   '.ico': 'image/x-icon',
 };
 
+// Sanitize path to prevent directory traversal attacks
+function sanitizePath(pathname: string): string | null {
+  // Normalize and decode the path
+  let normalized = decodeURIComponent(pathname);
+  
+  // Remove any null bytes (poison null byte attack)
+  normalized = normalized.replace(/\0/g, '');
+  
+  // Resolve the path relative to frontendDir
+  const resolved = join(frontendDir, normalized);
+  
+  // Ensure the resolved path is still within frontendDir
+  // Use realpath-like check by comparing normalized prefixes
+  const resolvedNormalized = resolved.replace(/\\/g, '/');
+  const frontendDirNormalized = frontendDir.replace(/\\/g, '/');
+  
+  if (!resolvedNormalized.startsWith(frontendDirNormalized + '/') && 
+      resolvedNormalized !== frontendDirNormalized) {
+    return null; // Path traversal attempt detected
+  }
+  
+  return resolved;
+}
+
 Bun.serve({
   port: FRONTEND_PORT,
   async fetch(req) {
@@ -30,12 +54,17 @@ Bun.serve({
       pathname = '/index.html';
     }
 
+    // Sanitize the path to prevent directory traversal
+    const safePath = sanitizePath(pathname);
+    if (!safePath) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
     // Handle TypeScript -> JavaScript transpilation
     if (pathname.endsWith('.ts')) {
-      const filePath = join(frontendDir, pathname);
-      if (existsSync(filePath)) {
+      if (existsSync(safePath)) {
         const transpiled = await Bun.build({
-          entrypoints: [filePath],
+          entrypoints: [safePath],
           target: 'browser',
         });
         
@@ -49,9 +78,8 @@ Bun.serve({
     }
 
     // Serve static files
-    const filePath = join(frontendDir, pathname);
-    if (existsSync(filePath)) {
-      const content = readFileSync(filePath);
+    if (existsSync(safePath)) {
+      const content = readFileSync(safePath);
       const ext = pathname.split('.').pop() || '';
       const contentType = mimeTypes[`.${ext}`] || 'application/octet-stream';
       return new Response(content, {

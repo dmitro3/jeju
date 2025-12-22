@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { keccak256, toHex, type Hex } from 'viem';
+import { toHex, type Hex } from 'viem';
 import { AuthProvider } from '../types.js';
 import {
   OAuthTokenResponseSchema,
@@ -248,16 +248,55 @@ export class AppleProvider extends OAuthProvider {
   async getProfile(token: OAuthToken): Promise<OAuthProfile> {
     if (!token.idToken) throw new Error('No ID token from Apple');
     
-    const payloadStr = atob(token.idToken.split('.')[1]);
-    const rawPayload = JSON.parse(payloadStr);
+    // SECURITY: Validate JWT structure before parsing
+    const parts = token.idToken.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Invalid Apple ID token format: expected JWT with 3 parts');
+    }
+    
+    // SECURITY: Validate header is valid JSON and uses expected algorithm
+    const headerStr = this.base64UrlDecode(parts[0]);
+    let header: { alg?: string; typ?: string };
+    try {
+      header = JSON.parse(headerStr);
+    } catch {
+      throw new Error('Invalid Apple ID token: malformed header');
+    }
+    
+    if (header.typ && header.typ !== 'JWT') {
+      throw new Error('Invalid Apple ID token: unexpected token type');
+    }
+    
+    // SECURITY: Validate payload structure with Zod before using
+    const payloadStr = this.base64UrlDecode(parts[1]);
+    let rawPayload: unknown;
+    try {
+      rawPayload = JSON.parse(payloadStr);
+    } catch {
+      throw new Error('Invalid Apple ID token: malformed payload');
+    }
     
     const AppleIdTokenSchema = z.object({
-      sub: z.string(),
-      email: z.string().optional(),
+      sub: z.string().min(1),
+      email: z.string().email().optional(),
       email_verified: z.union([z.boolean(), z.string()]).optional(),
+      iss: z.string().optional(), // Should be https://appleid.apple.com
+      aud: z.string().optional(), // Should be your client_id
+      exp: z.number().optional(), // Expiration time
+      iat: z.number().optional(), // Issued at time
     });
     
     const payload = validateResponse(AppleIdTokenSchema, rawPayload, 'Apple ID token');
+    
+    // SECURITY: Validate issuer if present
+    if (payload.iss && payload.iss !== 'https://appleid.apple.com') {
+      throw new Error('Invalid Apple ID token: unexpected issuer');
+    }
+    
+    // SECURITY: Check expiration if present
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      throw new Error('Invalid Apple ID token: token has expired');
+    }
 
     return {
       id: payload.sub,
@@ -265,6 +304,21 @@ export class AppleProvider extends OAuthProvider {
       verified: payload.email_verified === true || payload.email_verified === 'true',
       raw: { sub: payload.sub, email: payload.email, email_verified: payload.email_verified === true || payload.email_verified === 'true' },
     };
+  }
+  
+  /**
+   * Decode base64url string to UTF-8
+   * SECURITY: Handles padding correctly for JWT decoding
+   */
+  private base64UrlDecode(str: string): string {
+    // Replace base64url characters with base64 standard characters
+    let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    const padding = base64.length % 4;
+    if (padding) {
+      base64 += '='.repeat(4 - padding);
+    }
+    return atob(base64);
   }
 }
 
@@ -280,12 +334,41 @@ export class TwitterProvider extends OAuthProvider {
     });
   }
 
-  getAuthorizationUrl(state: OAuthState): string {
+  /**
+   * Generate PKCE code_challenge using SHA-256 as per RFC 7636
+   * SECURITY: Must use SHA-256, not keccak256, for OAuth 2.0 PKCE compliance
+   */
+  private async generateCodeChallenge(codeVerifier: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(codeVerifier);
+    const digest = await crypto.subtle.digest('SHA-256', data);
+    // Base64url encode without padding
+    return btoa(String.fromCharCode(...new Uint8Array(digest)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+  }
+
+  /**
+   * @deprecated Use getAuthorizationUrlAsync instead for proper PKCE SHA-256
+   * This sync version throws to prevent usage - Twitter OAuth requires async PKCE
+   */
+  getAuthorizationUrl(_state: OAuthState): string {
+    throw new Error(
+      'TwitterProvider.getAuthorizationUrl is not supported. ' +
+      'Use getAuthorizationUrlAsync() for proper SHA-256 PKCE code challenge generation.'
+    );
+  }
+
+  /**
+   * Generate authorization URL with proper SHA-256 PKCE code challenge
+   * SECURITY: Uses SHA-256 as required by RFC 7636 for PKCE
+   */
+  async getAuthorizationUrlAsync(state: OAuthState): Promise<string> {
     const codeVerifier = toHex(crypto.getRandomValues(new Uint8Array(32))).slice(2);
     state.codeVerifier = codeVerifier;
     
-    const encoder = new TextEncoder();
-    const data = encoder.encode(codeVerifier);
+    const codeChallenge = await this.generateCodeChallenge(codeVerifier);
     
     const params = new URLSearchParams({
       client_id: this.config.clientId,
@@ -293,7 +376,7 @@ export class TwitterProvider extends OAuthProvider {
       response_type: 'code',
       scope: this.config.scopes.join(' '),
       state: state.state,
-      code_challenge: keccak256(data).slice(2, 66),
+      code_challenge: codeChallenge,
       code_challenge_method: 'S256',
     });
     return `${TwitterProvider.AUTH_URL}?${params}`;

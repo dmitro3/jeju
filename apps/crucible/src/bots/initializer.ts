@@ -9,7 +9,7 @@ import type { Address } from 'viem';
 import type { CrucibleConfig } from '../types';
 import { AgentSDK } from '../sdk/agent';
 import { TradingBot } from './trading-bot';
-import { DEFAULT_BOTS, getDefaultBotsForNetwork, createTradingBotOptions, type DefaultBotConfig } from './default-bots';
+import { getDefaultBotsForNetwork, createTradingBotOptions, type DefaultBotConfig } from './default-bots';
 import { createLogger, type Logger } from '../sdk/logger';
 import type { PublicClient, WalletClient } from 'viem';
 

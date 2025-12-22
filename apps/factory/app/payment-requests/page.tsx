@@ -16,7 +16,6 @@ import {
   useCEODecision,
   useSubmitPaymentRequest,
   useCouncilVote,
-  useCancelRequest,
 } from '../../hooks/usePaymentRequest';
 import { useContributorByWallet } from '../../hooks/useContributor';
 import { PaymentStatusBadge, RetroactiveBadge } from '../../components/shared/StatusBadge';

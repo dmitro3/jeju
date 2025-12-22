@@ -157,12 +157,12 @@ export async function initializeMarketplace(): Promise<void> {
   await initializeDWSState();
   
   // Load system keys from environment
-  const { loadSystemKeys } = require('./key-vault');
-  loadSystemKeys();
+  const keyVault = await import('./key-vault.js');
+  keyVault.loadSystemKeys();
 
   // Create system listings for configured providers
-  const { initializeSystemListings } = require('./registry');
-  await initializeSystemListings();
+  const registry = await import('./registry.js');
+  await registry.initializeSystemListings();
 
   console.log('[API Marketplace] Initialized');
 }

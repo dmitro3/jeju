@@ -164,7 +164,7 @@ test.describe('End-to-End Complete Journey', () => {
     
     // Should handle validation
     const createButton = page.getByRole('button', { name: /Create Token/i })
-    const enabled = await createButton.isEnabled()
+    const _enabled = await createButton.isEnabled()
     
     // Either disabled or will show error after click
     const body = await page.textContent('body')
@@ -176,7 +176,7 @@ test.describe('End-to-End Complete Journey', () => {
     
     // Should show "Market Not Found" or error
     const errorBody = await page.textContent('body')
-    const hasErrorMessage = errorBody?.includes('Not Found') || 
+    const _hasErrorMessage = errorBody?.includes('Not Found') || 
                            errorBody?.includes('doesn\'t exist')
     
     expect(errorBody).toBeTruthy()

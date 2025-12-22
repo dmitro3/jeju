@@ -357,8 +357,59 @@ const PROMPTS = [
   },
 ];
 
+// ============ ALLOWED ENDPOINTS ============
+const ALLOWED_MCP_ENDPOINTS = new Set([
+  'initialize',
+  'resources/list',
+  'resources/read',
+  'tools/list',
+  'tools/call',
+  'prompts/list',
+  'prompts/get',
+]);
+
+/**
+ * Sanitize an object to prevent prototype pollution attacks.
+ * Removes dangerous keys like __proto__, constructor, and prototype.
+ * 
+ * @param obj - The object to sanitize
+ * @returns A new sanitized object safe from prototype pollution
+ */
+function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+  
+  const sanitize = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+    
+    if (Array.isArray(value)) {
+      return value.map(sanitize);
+    }
+    
+    const sanitized: Record<string, unknown> = Object.create(null);
+    
+    for (const key of Object.keys(value)) {
+      // Skip dangerous keys to prevent prototype pollution
+      if (DANGEROUS_KEYS.includes(key)) {
+        continue;
+      }
+      sanitized[key] = sanitize((value as Record<string, unknown>)[key]);
+    }
+    
+    return sanitized;
+  };
+  
+  return sanitize(obj) as T;
+}
+
 // ============ HANDLERS ============
 export async function handleMCPRequest(request: NextRequest, endpoint: string): Promise<NextResponse> {
+  // Validate endpoint against allowlist to prevent path traversal
+  if (!ALLOWED_MCP_ENDPOINTS.has(endpoint)) {
+    return NextResponse.json({ error: 'Invalid endpoint' }, { status: 404 });
+  }
+  
   try {
     switch (endpoint) {
       case 'initialize':
@@ -381,7 +432,9 @@ export async function handleMCPRequest(request: NextRequest, endpoint: string): 
 
       case 'tools/call': {
         const body = await validateBody(mcpToolCallSchema, await request.json());
-        return handleToolCall(body.name, body.arguments);
+        // Sanitize arguments to prevent prototype pollution attacks
+        const safeArgs = sanitizeObject(body.arguments);
+        return handleToolCall(body.name, safeArgs);
       }
 
       case 'prompts/list':

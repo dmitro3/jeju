@@ -39,7 +39,7 @@ describe('Yield Farming Strategy', () => {
     });
 
     it('should support multiple chains', () => {
-      const strategy = new YieldFarmingStrategy(defaultConfig);
+      new YieldFarmingStrategy(defaultConfig);
       expect(defaultConfig.chains).toContain(1);
       expect(defaultConfig.chains).toContain(42161);
       expect(defaultConfig.chains).toContain(10);
@@ -119,15 +119,12 @@ describe('Yield Farming Strategy', () => {
 
       // But after risk penalty, real yield should win
       const realYieldFinal = realYieldScore * (1 - realYieldOpp.riskScore / 100);
-      const emissionFinal = emissionScore * (1 - emissionOpp.riskScore / 100);
       
-      // 10 * 0.85 = 8.5 vs 53 * 0.2 = 10.6
-      // Hmm, emission still wins slightly, but...
+      // 10 * 0.85 = 8.5
       expect(realYieldFinal).toBeGreaterThan(8);
       
       // TVL bonus would further boost real yield
       const realYieldWithTvl = realYieldFinal * (1 + Math.log10(realYieldOpp.tvlUsd) / 10);
-      const emissionWithTvl = emissionFinal * (1 + Math.log10(emissionOpp.tvlUsd) / 10);
       
       // Now real yield should be competitive or better
       expect(realYieldWithTvl).toBeGreaterThan(10);

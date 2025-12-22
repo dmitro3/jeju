@@ -54,11 +54,25 @@ export const todoSchema = z.object({
   attachmentCid: z.string().nullable(),
 });
 
-// Query parameter schemas
+// Pagination constants
+export const PAGINATION_DEFAULTS = {
+  DEFAULT_LIMIT: 100,
+  MAX_LIMIT: 500,
+  DEFAULT_OFFSET: 0,
+} as const;
+
+// Query parameter schemas with pagination
 export const listTodosQuerySchema = z.object({
   completed: z.string().transform((val) => val === 'true' ? true : val === 'false' ? false : undefined).optional(),
   priority: todoPrioritySchema.optional(),
   search: z.string().max(200, 'Search query too long').optional(),
+  // Pagination parameters with DoS prevention
+  limit: z.string()
+    .transform(val => Math.min(parseInt(val, 10) || PAGINATION_DEFAULTS.DEFAULT_LIMIT, PAGINATION_DEFAULTS.MAX_LIMIT))
+    .optional(),
+  offset: z.string()
+    .transform(val => Math.max(parseInt(val, 10) || 0, 0))
+    .optional(),
 });
 
 // Bulk operation schemas
@@ -82,11 +96,17 @@ export const oauth3AuthHeadersSchema = z.object({
 });
 
 // A2A Protocol schemas
+// URL can be relative (starting with /) or absolute
+const urlOrPathSchema = z.string().refine(
+  (val) => val.startsWith('/') || val.startsWith('http://') || val.startsWith('https://'),
+  { message: 'Must be a valid URL or relative path starting with /' }
+);
+
 export const a2AAgentCardSchema = z.object({
   protocolVersion: z.string(),
   name: z.string(),
   description: z.string(),
-  url: z.string().url(),
+  url: urlOrPathSchema,
   preferredTransport: z.string(),
   provider: z.object({
     organization: z.string(),
@@ -139,7 +159,14 @@ export const a2AMessageSchema = z.object({
         }),
         z.object({
           kind: z.literal('data'),
-          data: z.record(z.string(), z.unknown()),
+          // Use safe argument value schema to prevent prototype pollution
+          data: z.record(
+            z.string().refine(
+              (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
+              { message: 'Invalid property name' }
+            ),
+            safeArgumentValueSchema
+          ),
         }),
       ])),
     }).optional(),
@@ -197,9 +224,37 @@ export const mcpToolSchema = z.object({
   }).optional(),
 });
 
+// Safe argument value schema that prevents prototype pollution
+// Only allows primitives, arrays, and plain objects (no __proto__, constructor, etc.)
+const safeArgumentValueSchema: z.ZodType<
+  string | number | boolean | null | SafeArgumentValue[] | Record<string, SafeArgumentValue>
+> = z.lazy(() => z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(safeArgumentValueSchema),
+  z.record(
+    z.string().refine(
+      // Prevent prototype pollution by rejecting dangerous keys
+      (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
+      { message: 'Invalid property name' }
+    ),
+    safeArgumentValueSchema
+  ),
+]));
+
+type SafeArgumentValue = string | number | boolean | null | SafeArgumentValue[] | Record<string, SafeArgumentValue>;
+
 export const mcpToolCallSchema = z.object({
-  name: z.string(),
-  arguments: z.record(z.string(), z.unknown()),
+  name: z.string().min(1, 'Tool name is required').max(100, 'Tool name too long'),
+  arguments: z.record(
+    z.string().refine(
+      (key) => !['__proto__', 'constructor', 'prototype'].includes(key),
+      { message: 'Invalid property name' }
+    ),
+    safeArgumentValueSchema
+  ),
 });
 
 export const mcpResourceReadSchema = z.object({

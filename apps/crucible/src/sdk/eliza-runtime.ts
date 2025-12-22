@@ -345,8 +345,9 @@ export class CrucibleRuntimeManager {
   private log = createLogger('RuntimeManager');
 
   async createRuntime(config: RuntimeConfig): Promise<CrucibleAgentRuntime> {
-    if (this.runtimes.has(config.agentId)) {
-      return this.runtimes.get(config.agentId)!;
+    const existing = this.runtimes.get(config.agentId);
+    if (existing) {
+      return existing;
     }
 
     const runtime = new CrucibleAgentRuntime(config);

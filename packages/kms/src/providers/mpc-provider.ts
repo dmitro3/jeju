@@ -39,11 +39,23 @@ interface MPCKey {
   versions: KeyVersion[];
 }
 
+/** Safe recovery ID extraction from signature with bounds validation */
+function extractRecoveryId(signature: string): number {
+  if (signature.length < 132) return 0;
+  const vHex = signature.slice(130, 132);
+  const v = parseInt(vHex, 16);
+  // Recovery ID must be 0 or 1 (v is 27/28 for legacy, or 0/1 for EIP-155)
+  if (v >= 27 && v <= 28) return v - 27;
+  if (v === 0 || v === 1) return v;
+  return 0; // Default to 0 for invalid values
+}
+
 export class MPCProvider implements KMSProvider {
   type = KMSProviderType.MPC;
   private config: MPCConfig;
   private coordinator: MPCCoordinator;
   private connected = false;
+  private connectPromise: Promise<void> | null = null;
   private keys = new Map<string, MPCKey>();
   private encryptionKey: Uint8Array;
 
@@ -86,6 +98,7 @@ export class MPCProvider implements KMSProvider {
       }
     }
     this.connected = true;
+    this.connectPromise = null;
   }
 
   async disconnect(): Promise<void> {
@@ -191,7 +204,7 @@ export class MPCProvider implements KMSProvider {
 
     if (!result.complete || !result.signature) throw new Error('Failed to collect threshold signatures');
 
-    return { message: toHex(messageBytes), signature: result.signature.signature, recoveryId: parseInt(result.signature.signature.slice(130, 132), 16) - 27, keyId: request.keyId, signedAt: Date.now() };
+    return { message: toHex(messageBytes), signature: result.signature.signature, recoveryId: extractRecoveryId(result.signature.signature), keyId: request.keyId, signedAt: Date.now() };
   }
 
   async thresholdSign(request: ThresholdSignRequest): Promise<ThresholdSignature> {

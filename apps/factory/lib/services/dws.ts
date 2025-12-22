@@ -260,7 +260,25 @@ class DecentralizedDWSClient {
   }
 
   /**
+   * Generate a cryptographically secure nonce
+   * Uses crypto.getRandomValues for security
+   */
+  private generateSecureNonce(): string {
+    // Use crypto API for secure random bytes
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      const array = new Uint8Array(16);
+      crypto.getRandomValues(array);
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+    // Fallback for Node.js environment
+    throw new Error('Secure random generation not available');
+  }
+
+  /**
    * Generate wallet-authenticated headers for DWS requests
+   * 
+   * Security: Uses cryptographically secure nonce to prevent replay attacks.
+   * The nonce is 32 hex characters (128 bits of entropy).
    */
   private async getAuthHeaders(): Promise<Record<string, string>> {
     const account = this.account;
@@ -269,9 +287,9 @@ class DecentralizedDWSClient {
     }
 
     const timestamp = Date.now().toString();
-    const nonce = Math.random().toString(36).slice(2);
+    const nonce = this.generateSecureNonce();
     
-    // Sign the auth message
+    // Sign the auth message - includes timestamp and nonce to prevent replay attacks
     const message = `DWS Auth\nTimestamp: ${timestamp}\nNonce: ${nonce}`;
     
     // Use account's signMessage method directly

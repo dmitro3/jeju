@@ -9,11 +9,7 @@ import {
   type Memory,
   type State,
 } from "@elizaos/core";
-import {
-  type ProposalType,
-  type VoteType,
-  VoteTypeValue,
-} from "@jejunetwork/types";
+import { type ProposalType, type VoteType } from "@jejunetwork/types";
 import { JEJU_SERVICE_NAME, type JejuService } from "../service";
 import { getMessageText, validateServiceExists } from "../validation";
 
@@ -169,7 +165,7 @@ Specify a proposal ID to vote. Example: "Vote approve on 0x..."`,
 
     const txHash = await client.governance.vote({
       proposalId,
-      vote: VoteTypeValue[vote],
+      vote,
     });
 
     callback?.({

@@ -17,18 +17,36 @@ const databaseId = CQL_DATABASE_ID_ENV ?? 'monitoring';
 
 let cqlClient: CQLClient | null = null;
 let initialized = false;
+let initializingPromise: Promise<CQLClient> | null = null;
 
 async function getCQLClient(): Promise<CQLClient> {
-  if (!cqlClient) {
+  // Return existing client if already initialized
+  if (cqlClient) {
+    return cqlClient;
+  }
+  
+  // Prevent race condition: if initialization is in progress, wait for it
+  if (initializingPromise) {
+    return initializingPromise;
+  }
+  
+  // Start initialization and store the promise
+  initializingPromise = (async () => {
+    // Double-check after acquiring the "lock"
+    if (cqlClient) {
+      return cqlClient;
+    }
+    
     // CQL URL is automatically resolved from network config
-    cqlClient = getCQL({
+    const client = getCQL({
       databaseId,
       timeout: 30000,
       debug: process.env.NODE_ENV !== 'production',
     });
     
-    const healthy = await cqlClient.isHealthy();
+    const healthy = await client.isHealthy();
     if (!healthy) {
+      initializingPromise = null; // Reset on failure to allow retry
       const network = getCurrentNetwork();
       throw new Error(
         `Monitoring requires CovenantSQL for decentralized state (network: ${network}).\n` +
@@ -36,10 +54,14 @@ async function getCQLClient(): Promise<CQLClient> {
       );
     }
     
+    // Assign to module-level variable only after successful health check
+    cqlClient = client;
     await ensureTablesExist();
-  }
+    
+    return cqlClient;
+  })();
   
-  return cqlClient;
+  return initializingPromise;
 }
 
 async function ensureTablesExist(): Promise<void> {
@@ -232,23 +254,52 @@ export const alertState = {
     bySeverity: Record<string, number>;
     avgResolutionSeconds: number;
   }> {
-    const alerts = await this.listRecent({ since, limit: 10000 });
+    // Use database aggregation instead of fetching all rows to prevent DoS
+    // Limit the time range to maximum 30 days to prevent expensive queries
+    const maxLookbackMs = 30 * 24 * 60 * 60 * 1000;
+    const minSince = Math.max(since, Date.now() - maxLookbackMs);
     
-    const firing = alerts.filter(a => a.status === 'firing').length;
-    const resolved = alerts.filter(a => a.status === 'resolved').length;
+    const client = await getCQLClient();
+    
+    // Get counts by status (aggregated in DB)
+    const statusCounts = await client.query<{ status: string; count: number }>(
+      'SELECT status, COUNT(*) as count FROM alert_history WHERE started_at >= ? GROUP BY status',
+      [minSince],
+      databaseId
+    );
+    
+    let firing = 0;
+    let resolved = 0;
+    let total = 0;
+    for (const row of statusCounts.rows) {
+      total += row.count;
+      if (row.status === 'firing') firing = row.count;
+      if (row.status === 'resolved') resolved = row.count;
+    }
+    
+    // Get counts by severity (aggregated in DB)
+    const severityCounts = await client.query<{ severity: string; count: number }>(
+      'SELECT severity, COUNT(*) as count FROM alert_history WHERE started_at >= ? GROUP BY severity',
+      [minSince],
+      databaseId
+    );
     
     const bySeverity: Record<string, number> = {};
-    alerts.forEach(a => {
-      bySeverity[a.severity] = (bySeverity[a.severity] ?? 0) + 1;
-    });
+    for (const row of severityCounts.rows) {
+      bySeverity[row.severity] = row.count;
+    }
     
-    const resolvedWithDuration = alerts.filter(a => a.duration_seconds !== null);
-    const avgResolutionSeconds = resolvedWithDuration.length > 0
-      ? resolvedWithDuration.reduce((sum, a) => sum + (a.duration_seconds ?? 0), 0) / resolvedWithDuration.length
-      : 0;
+    // Get average resolution time (aggregated in DB)
+    const avgResult = await client.query<{ avg_duration: number | null }>(
+      'SELECT AVG(duration_seconds) as avg_duration FROM alert_history WHERE started_at >= ? AND duration_seconds IS NOT NULL',
+      [minSince],
+      databaseId
+    );
+    
+    const avgResolutionSeconds = avgResult.rows[0]?.avg_duration ?? 0;
     
     return {
-      total: alerts.length,
+      total,
       firing,
       resolved,
       bySeverity,

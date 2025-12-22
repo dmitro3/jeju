@@ -115,12 +115,14 @@ const SOLVER_REGISTRY_ABI = [
 const clients = new Map<number, PublicClient>();
 
 function getClient(chainId: number): PublicClient {
-  if (!clients.has(chainId)) {
+  let client = clients.get(chainId);
+  if (!client) {
     const chain = getChain(chainId);
     const rpcUrl = getRpcUrl(chainId);
-    clients.set(chainId, createPublicClient({ chain, transport: http(rpcUrl) }) as PublicClient);
+    client = createPublicClient({ chain, transport: http(rpcUrl) }) as PublicClient;
+    clients.set(chainId, client);
   }
-  return clients.get(chainId)!;
+  return client;
 }
 
 function getInputSettler(_chainId: number): Address {
@@ -248,7 +250,7 @@ export async function fetchRegistryStats(): Promise<{
 export function watchOrders(chainId: number, callback: (log: { orderId: `0x${string}`; user: Address; inputAmount: bigint }) => void): () => void {
   const settler = getInputSettler(chainId);
   if (settler === ZERO_ADDRESS) {
-    return () => {};
+    return () => { /* no settler configured for this chain */ };
   }
 
   const client = getClient(chainId);
@@ -259,11 +261,10 @@ export function watchOrders(chainId: number, callback: (log: { orderId: `0x${str
     eventName: 'OrderCreated',
     onLogs: (logs) => {
       for (const log of logs) {
-        callback({
-          orderId: log.args.orderId!,
-          user: log.args.user!,
-          inputAmount: log.args.inputAmount!,
-        });
+        const { orderId, user, inputAmount } = log.args;
+        if (orderId && user && inputAmount !== undefined) {
+          callback({ orderId, user, inputAmount });
+        }
       }
     },
   });
@@ -274,7 +275,7 @@ export function watchOrders(chainId: number, callback: (log: { orderId: `0x${str
 export function watchFills(chainId: number, callback: (log: { orderId: `0x${string}`; solver: Address; amount: bigint }) => void): () => void {
   const settler = getOutputSettler(chainId);
   if (settler === ZERO_ADDRESS) {
-    return () => {};
+    return () => { /* no settler configured for this chain */ };
   }
 
   const client = getClient(chainId);
@@ -285,11 +286,10 @@ export function watchFills(chainId: number, callback: (log: { orderId: `0x${stri
     eventName: 'OrderFilled',
     onLogs: (logs) => {
       for (const log of logs) {
-        callback({
-          orderId: log.args.orderId!,
-          solver: log.args.solver!,
-          amount: log.args.amount!,
-        });
+        const { orderId, solver, amount } = log.args;
+        if (orderId && solver && amount !== undefined) {
+          callback({ orderId, solver, amount });
+        }
       }
     },
   });

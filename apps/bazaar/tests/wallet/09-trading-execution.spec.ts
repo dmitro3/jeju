@@ -151,7 +151,7 @@ test.describe('Trading Execution - Real Transactions', () => {
     
     if (!cardExists) return;
     
-    const marketQuestion = await marketCard.textContent();
+    const _marketQuestion = await marketCard.textContent();
     await marketCard.click();
     
     const yesButton = page.getByTestId('outcome-yes-button');

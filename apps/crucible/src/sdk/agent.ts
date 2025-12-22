@@ -15,7 +15,7 @@ import type {
 import { CrucibleStorage } from './storage';
 import { CrucibleCompute } from './compute';
 import { createLogger, type Logger } from './logger';
-import { expect, AgentCharacterSchema, AgentSearchResponseSchema } from '../schemas';
+import { expect, AgentSearchResponseSchema } from '../schemas';
 
 // ABI matching actual IdentityRegistry.sol contract
 const IDENTITY_REGISTRY_ABI = parseAbi([

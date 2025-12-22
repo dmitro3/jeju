@@ -417,8 +417,8 @@ async function main(): Promise<void> {
   await ensureReportsDir();
   
   let contracts: Record<string, string> = {};
-  let testResults: TestResult[] = [];
-  let verifications: VerificationResult[] = [];
+  const testResults: TestResult[] = [];
+  const verifications: VerificationResult[] = [];
   
   // Step 1: Start local blockchain
   await startLocalBlockchain();

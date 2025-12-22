@@ -4,6 +4,15 @@ import { INDEXER_URL as CONFIG_INDEXER_URL } from '../config';
 
 const INDEXER_URL = CONFIG_INDEXER_URL;
 
+// Security: Maximum limits to prevent DoS via large responses
+const MAX_LIMIT = 500;
+const DEFAULT_LIMIT = 50;
+
+function sanitizeLimit(limit: number | undefined, defaultVal: number = DEFAULT_LIMIT): number {
+  if (limit === undefined || limit <= 0) return defaultVal;
+  return Math.min(limit, MAX_LIMIT);
+}
+
 interface GraphQLResponse<T> {
   data?: T
   errors?: Array<{ message: string }>
@@ -86,9 +95,8 @@ export async function getNetworkTokens(filter?: {
     }>
   }
 
-  const limit = filter?.limit || 50;
+  const limit = sanitizeLimit(filter?.limit);
   const offset = filter?.offset || 0;
-  if (limit <= 0) throw new Error('Limit must be positive');
   if (offset < 0) throw new Error('Offset must be non-negative');
   
   const result = await graphqlQuery<QueryResult>(query, {
@@ -100,9 +108,9 @@ export async function getNetworkTokens(filter?: {
   return result.contracts
 }
 
-export async function getTokenTransfers(tokenAddress: string, limit = 50) {
+export async function getTokenTransfers(tokenAddress: string, requestedLimit = 50) {
   const validatedAddress = AddressSchema.parse(tokenAddress);
-  if (limit <= 0) throw new Error('Limit must be positive');
+  const limit = sanitizeLimit(requestedLimit);
   
   const query = `
     query GetTokenTransfers($tokenAddress: String!, $limit: Int!) {
@@ -152,9 +160,9 @@ export async function getTokenTransfers(tokenAddress: string, limit = 50) {
   return result.tokenTransfers
 }
 
-export async function getTokenHolders(tokenAddress: string, limit = 100) {
+export async function getTokenHolders(tokenAddress: string, requestedLimit = 100) {
   const validatedAddress = AddressSchema.parse(tokenAddress);
-  if (limit <= 0) throw new Error('Limit must be positive');
+  const limit = sanitizeLimit(requestedLimit, 100);
   const query = `
     query GetTokenHolders($tokenAddress: String!, $limit: Int!) {
       tokenBalances(
@@ -195,8 +203,8 @@ export async function getTokenHolders(tokenAddress: string, limit = 100) {
   return result.tokenBalances
 }
 
-export async function getLatestBlocks(limit = 10) {
-  if (limit <= 0) throw new Error('Limit must be positive');
+export async function getLatestBlocks(requestedLimit = 10) {
+  const limit = sanitizeLimit(requestedLimit, 10);
   const query = `
     query GetBlocks($limit: Int!) {
       blocks(limit: $limit, orderBy: number_DESC) {
@@ -279,7 +287,7 @@ export async function getContractDetails(address: string) {
   })
 
   if (result.contracts.length === 0) {
-    throw new Error(`Contract not found: ${validatedAddress}`);
+    throw new Error('Contract not found');
   }
   return result.contracts[0]
 }

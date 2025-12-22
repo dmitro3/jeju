@@ -6,13 +6,12 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { ed25519, x25519 } from '@noble/curves/ed25519';
+import { x25519 } from '@noble/curves/ed25519';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { gcm } from '@noble/ciphers/aes';
 import { randomBytes } from '@noble/ciphers/webcrypto';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
-import type { Hex } from 'viem';
 
 // ============ Encryption Helpers (mirroring dc/client.ts logic) ============
 
@@ -253,7 +252,6 @@ describe('Encryption/Decryption', () => {
 // ============ Security Properties ============
 
 describe('Security Properties', () => {
-  const aliceKeys = deriveEncryptionKeys(ALICE_ED25519_PRIVATE);
   const bobKeys = deriveEncryptionKeys(BOB_ED25519_PRIVATE);
 
   describe('ciphertext indistinguishability', () => {

@@ -8,7 +8,7 @@
 import { createPublicClient, http, formatEther, parseAbi, type Address, type PublicClient } from 'viem';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { inferChainFromRpcUrl } from '../../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../../packages/deployment/scripts/shared/chain-utils';
 
 const ROOT = join(import.meta.dir, '../../../..');
 const DEPLOYMENTS_DIR = join(ROOT, 'packages/contracts/deployments');

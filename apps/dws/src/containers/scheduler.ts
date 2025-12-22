@@ -383,7 +383,10 @@ async function scheduleBestFit(nodes: ComputeNode[], context: SchedulingContext)
   }));
 
   scored.sort((a, b) => b.score - a.score);
-  const best = scored[0]!;
+  const best = scored[0];
+  if (!best) {
+    throw new Error('No nodes available for scheduling');
+  }
 
   return {
     nodeId: best.node.nodeId,
@@ -409,7 +412,10 @@ function scheduleBestFitSync(nodes: ComputeNode[], context: SchedulingContext): 
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const best = scored[0]!;
+  const best = scored[0];
+  if (!best) {
+    throw new Error('No nodes available for scheduling');
+  }
 
   return {
     nodeId: best.node.nodeId,
@@ -441,7 +447,10 @@ async function scheduleWorstFit(nodes: ComputeNode[], context: SchedulingContext
   }));
 
   scored.sort((a, b) => b.score - a.score);
-  const best = scored[0]!;
+  const best = scored[0];
+  if (!best) {
+    throw new Error('No nodes available for scheduling');
+  }
 
   return {
     nodeId: best.node.nodeId,
@@ -462,7 +471,10 @@ function scheduleWorstFitSync(nodes: ComputeNode[], context: SchedulingContext):
   });
 
   scored.sort((a, b) => b.score - a.score);
-  const best = scored[0]!;
+  const best = scored[0];
+  if (!best) {
+    throw new Error('No nodes available for scheduling');
+  }
 
   return {
     nodeId: best.node.nodeId,
@@ -489,7 +501,11 @@ async function scheduleFirstFit(nodes: ComputeNode[], context: SchedulingContext
     return { nodeId: withCache.nodeId, score: 100, reason: 'First fit with cache hit' };
   }
 
-  return { nodeId: nodes[0]!.nodeId, score: 50, reason: 'First eligible node' };
+  const firstNode = nodes[0];
+  if (!firstNode) {
+    throw new Error('No nodes available for scheduling');
+  }
+  return { nodeId: firstNode.nodeId, score: 50, reason: 'First eligible node' };
 }
 
 function scheduleFirstFitSync(nodes: ComputeNode[], context: SchedulingContext): ScheduleResult {
@@ -497,7 +513,11 @@ function scheduleFirstFitSync(nodes: ComputeNode[], context: SchedulingContext):
   if (withCache) {
     return { nodeId: withCache.nodeId, score: 100, reason: 'First fit with cache hit' };
   }
-  return { nodeId: nodes[0]!.nodeId, score: 50, reason: 'First eligible node' };
+  const firstNode = nodes[0];
+  if (!firstNode) {
+    throw new Error('No nodes available for scheduling');
+  }
+  return { nodeId: firstNode.nodeId, score: 50, reason: 'First eligible node' };
 }
 
 // Round-robin: Distribute evenly
@@ -519,13 +539,19 @@ async function scheduleRoundRobin(nodes: ComputeNode[], context: SchedulingConte
   }
 
   roundRobinIndex = (roundRobinIndex + 1) % eligibleNodes.length;
-  const node = eligibleNodes[roundRobinIndex]!;
+  const node = eligibleNodes[roundRobinIndex];
+  if (!node) {
+    throw new Error('No nodes available for scheduling');
+  }
   return { nodeId: node.nodeId, score: 50, reason: `Round robin selection` };
 }
 
 function scheduleRoundRobinSync(nodes: ComputeNode[], _context: SchedulingContext): ScheduleResult {
   roundRobinIndex = (roundRobinIndex + 1) % nodes.length;
-  const node = nodes[roundRobinIndex]!;
+  const node = nodes[roundRobinIndex];
+  if (!node) {
+    throw new Error('No nodes available for scheduling');
+  }
   return { nodeId: node.nodeId, score: 50, reason: `Round robin selection` };
 }
 

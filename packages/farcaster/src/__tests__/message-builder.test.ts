@@ -32,7 +32,6 @@ import {
   createCastId,
   type MessageData,
   type Message,
-  type CastAddBody,
 } from '../hub/message-builder';
 
 // ============ Constants ============

@@ -632,7 +632,7 @@ async function start() {
   await initializeCEORuntime();
 
   const teeMode = getTEEMode();
-  const teeLabel = teeMode === 'remote' ? 'Remote TEE' : 'Local Simulated';
+  const teeLabel = teeMode === 'dstack' ? 'Remote TEE' : 'Local Simulated';
 
   console.log(`
 ╔═══════════════════════════════════════════════════════════════╗

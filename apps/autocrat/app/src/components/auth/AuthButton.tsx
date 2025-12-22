@@ -13,7 +13,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useConnect, useDisconnect, useSignMessage } from 'wagmi';
 import { injected, walletConnect } from 'wagmi/connectors';
-import { X, Wallet, Key, Fingerprint, Chrome, Github, Loader2 } from 'lucide-react';
+import { X, Wallet, Fingerprint, Chrome, Github, Loader2 } from 'lucide-react';
 
 interface AuthSession {
   address: string;

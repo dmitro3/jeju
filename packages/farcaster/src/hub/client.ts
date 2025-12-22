@@ -7,7 +7,7 @@ import type {
   FarcasterLink,
   FarcasterVerification,
   UserData,
-  UserDataType,
+  UserDataTypeName,
   HubInfoResponse,
   CastFilter,
   PaginatedResponse,
@@ -88,8 +88,15 @@ export class FarcasterClient {
   }
 
   private deriveHttpUrl(hubUrl: string): string {
-    const [host] = hubUrl.split(':');
-    return `http://${host}:2281`;
+    // Strip existing protocol if present
+    const cleanUrl = hubUrl.replace(/^https?:\/\//, '');
+    const [host] = cleanUrl.split(':');
+    
+    // Use HTTPS for production, HTTP only for localhost
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1';
+    const protocol = isLocalhost ? 'http' : 'https';
+    
+    return `${protocol}://${host}:2281`;
   }
 
   private async fetch<T>(path: string, params: Record<string, string> = {}): Promise<T> {
@@ -202,7 +209,7 @@ export class FarcasterClient {
       const mappedType = USER_DATA_TYPE_MAP[msg.data.userDataBody.type];
       return {
         fid: msg.data.fid,
-        type: mappedType as UserDataType,
+        type: mappedType as UserDataTypeName,
         value: msg.data.userDataBody.value,
         timestamp: msg.data.timestamp,
       };

@@ -10,6 +10,7 @@ import { generateMnemonic as generateBip39Mnemonic, validateMnemonic } from '@sc
 import { wordlist } from '@scure/bip39/wordlists/english';
 import { z } from 'zod';
 import { expectJson } from '../../lib/validation';
+import { secureStorage } from '../../platform/secure-storage';
 
 type AccountType = 'hd' | 'imported' | 'watch' | 'hardware' | 'smart';
 
@@ -63,6 +64,9 @@ class KeyringService {
   private encryptedPrivateKeys: Map<Address, string> = new Map();
   private isLocked = true;
   private sessionKey: CryptoKey | null = null;
+  private walletSalt: Uint8Array | null = null; // Per-wallet random salt for key derivation
+  private unlockInProgress: Promise<boolean> | null = null; // Prevent concurrent unlock calls
+  private static readonly SALT_KEY = 'jeju_keyring_salt';
 
   // Initialize keyring - must be called with password
   async unlock(password: string): Promise<boolean> {
@@ -70,13 +74,42 @@ class KeyringService {
       throw new Error('Password is required');
     }
     
-    // Derive encryption key from password
+    // Prevent concurrent unlock operations - return existing promise if in progress
+    if (this.unlockInProgress) {
+      return this.unlockInProgress;
+    }
+    
+    this.unlockInProgress = this.doUnlock(password);
+    try {
+      return await this.unlockInProgress;
+    } finally {
+      this.unlockInProgress = null;
+    }
+  }
+  
+  private async doUnlock(password: string): Promise<boolean> {
+    // Load or generate per-wallet salt
+    await this.ensureSalt();
+    
+    // Derive encryption key from password using wallet-specific salt
     this.sessionKey = await this.deriveKey(password);
     this.isLocked = false;
     
     // Load accounts from storage
     await this.loadAccounts();
     return true;
+  }
+  
+  // Ensure we have a per-wallet salt (generate if missing)
+  private async ensureSalt(): Promise<void> {
+    const storedSalt = await secureStorage.get(KeyringService.SALT_KEY);
+    if (storedSalt) {
+      this.walletSalt = new Uint8Array(atob(storedSalt).split('').map(c => c.charCodeAt(0)));
+    } else {
+      // Generate new random salt for this wallet (32 bytes)
+      this.walletSalt = crypto.getRandomValues(new Uint8Array(32));
+      await secureStorage.set(KeyringService.SALT_KEY, btoa(String.fromCharCode(...this.walletSalt)));
+    }
   }
 
   lock() {
@@ -94,6 +127,9 @@ class KeyringService {
   async createHDWallet(password: string): Promise<{ mnemonic: string; address: Address }> {
     const mnemonic = generateBip39Mnemonic(wordlist, 128); // 12 words
     const account = mnemonicToAccount(mnemonic, { path: `${HD_PATHS.ethereum}/0` });
+    
+    // Ensure we have a wallet salt for encryption
+    await this.ensureSalt();
     
     // Encrypt and store mnemonic
     const walletId = crypto.randomUUID();
@@ -130,6 +166,9 @@ class KeyringService {
       throw new Error('Account already exists');
     }
     
+    // Ensure we have a wallet salt for encryption
+    await this.ensureSalt();
+    
     const walletId = crypto.randomUUID();
     const encrypted = await this.encrypt(mnemonic, password);
     this.encryptedMnemonics.set(walletId, encrypted);
@@ -157,6 +196,9 @@ class KeyringService {
     if (this.accounts.has(account.address)) {
       throw new Error('Account already exists');
     }
+    
+    // Ensure we have a wallet salt for encryption
+    await this.ensureSalt();
     
     const encrypted = await this.encrypt(privateKey, password);
     this.encryptedPrivateKeys.set(account.address, encrypted);
@@ -368,6 +410,10 @@ class KeyringService {
   }
 
   private async deriveKey(password: string): Promise<CryptoKey> {
+    if (!this.walletSalt) {
+      throw new Error('Wallet salt not initialized - call ensureSalt first');
+    }
+    
     const encoder = new TextEncoder();
     const keyMaterial = await crypto.subtle.importKey(
       'raw',
@@ -377,8 +423,11 @@ class KeyringService {
       ['deriveKey']
     );
     
+    // Create a new ArrayBuffer copy for TypeScript compatibility
+    const saltBuffer = new Uint8Array(this.walletSalt).buffer as ArrayBuffer;
+    
     return crypto.subtle.deriveKey(
-      { name: 'PBKDF2', salt: encoder.encode('jeju-wallet'), iterations: 100000, hash: 'SHA-256' },
+      { name: 'PBKDF2', salt: new Uint8Array(saltBuffer), iterations: 100000, hash: 'SHA-256' },
       keyMaterial,
       { name: 'AES-GCM', length: 256 },
       false,
@@ -420,19 +469,11 @@ class KeyringService {
     return new TextDecoder().decode(decrypted);
   }
 
-  private async loadAccounts() {
-    // Load from Tauri secure storage in production
-    const stored = localStorage.getItem('jeju-accounts');
+  private async loadAccounts(): Promise<void> {
+    const stored = await secureStorage.get('jeju-accounts');
     if (stored) {
-      // WalletAccountSchema is close enough to Account used here, but let's verify.
-      // The Account interface here is slightly different from WalletAccount in types.ts.
-      // Let's define a local schema for this specific Account interface or map it.
-      // Ideally we unify these types, but for now let's just validate against arrays of objects
-      // and trust the shape, or define a local Zod schema.
-      // Let's define a local one for safety.
-      
       const AccountSchema = z.object({
-        address: z.string(), // We'll cast to Address later
+        address: z.string(),
         type: z.enum(['hd', 'imported', 'watch', 'hardware', 'smart']),
         name: z.string(),
         hdPath: z.string().optional(),
@@ -446,10 +487,9 @@ class KeyringService {
     }
   }
 
-  private async saveAccounts() {
-    // Save to Tauri secure storage in production
+  private async saveAccounts(): Promise<void> {
     const accounts = Array.from(this.accounts.values());
-    localStorage.setItem('jeju-accounts', JSON.stringify(accounts));
+    await secureStorage.set('jeju-accounts', JSON.stringify(accounts));
   }
 }
 

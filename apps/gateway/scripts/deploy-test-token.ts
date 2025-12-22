@@ -3,12 +3,12 @@
  * Creates a simple ERC20 token that can be used to test complete Gateway lifecycle
  */
 
-import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeDeployData, getContractAddress, waitForTransactionReceipt, getBalance, getChainId, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeDeployData, getContractAddress, waitForTransactionReceipt, getBalance, getChainId } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parseAbi } from 'viem';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '@jejunetwork/deployment/scripts/shared/chain-utils';
 
 // Minimal ERC20 with mint capability for testing
 const ERC20_ABI = [

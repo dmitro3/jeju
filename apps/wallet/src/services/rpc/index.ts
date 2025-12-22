@@ -40,9 +40,13 @@ interface CacheEntry<T extends CacheableValue> {
   timestamp: number;
 }
 
+// Maximum cache entries to prevent DoS via unbounded growth
+const MAX_CACHE_ENTRIES = 500;
+
 class RPCService {
   private clients: Map<SupportedChainId, PublicClient> = new Map();
   private requestCache: Map<string, CacheEntry<CacheableValue>> = new Map();
+  private cacheKeyOrder: string[] = []; // Track insertion order for LRU eviction
   private cacheTTL = 5000; // 5 seconds
 
   getClient(chainId: SupportedChainId): PublicClient {
@@ -63,7 +67,11 @@ class RPCService {
       });
       this.clients.set(chainId, client);
     }
-    return this.clients.get(chainId)!;
+    const client = this.clients.get(chainId);
+    if (!client) {
+      throw new Error(`Failed to create client for chain ${chainId}`);
+    }
+    return client;
   }
 
   async getBalance(chainId: SupportedChainId, address: Address): Promise<bigint> {
@@ -152,20 +160,37 @@ class RPCService {
     if (entry && Date.now() - entry.timestamp < this.cacheTTL) {
       return entry.data as T;
     }
+    // Remove expired entry
+    if (entry) {
+      this.requestCache.delete(key);
+      const orderIdx = this.cacheKeyOrder.indexOf(key);
+      if (orderIdx >= 0) {
+        this.cacheKeyOrder.splice(orderIdx, 1);
+      }
+    }
     return null;
   }
 
-  private setCache<T extends CacheableValue>(key: string, data: T, ttl?: number): void {
-    this.requestCache.set(key, { data, timestamp: Date.now() });
-    // Clean old entries periodically
-    if (this.requestCache.size > 1000) {
-      const now = Date.now();
-      for (const [k, v] of this.requestCache) {
-        if (now - v.timestamp > (ttl || this.cacheTTL)) {
-          this.requestCache.delete(k);
-        }
+  private setCache<T extends CacheableValue>(key: string, data: T, _ttl?: number): void {
+    // If key already exists, remove from order tracking first
+    if (this.requestCache.has(key)) {
+      const orderIdx = this.cacheKeyOrder.indexOf(key);
+      if (orderIdx >= 0) {
+        this.cacheKeyOrder.splice(orderIdx, 1);
       }
     }
+    
+    // Evict oldest entries if at capacity
+    while (this.requestCache.size >= MAX_CACHE_ENTRIES && this.cacheKeyOrder.length > 0) {
+      const oldestKey = this.cacheKeyOrder.shift();
+      if (oldestKey) {
+        this.requestCache.delete(oldestKey);
+      }
+    }
+    
+    // Add new entry
+    this.requestCache.set(key, { data, timestamp: Date.now() });
+    this.cacheKeyOrder.push(key);
   }
 }
 

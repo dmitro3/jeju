@@ -327,9 +327,10 @@ export class UniswapXAdapter extends EventEmitter {
       stateMutability: 'payable',
     }] as const;
 
+    if (!client.wallet.account) throw new Error('Wallet has no account');
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account: client.wallet.account,
       address: reactor,
       abi: EXECUTE_SINGLE_ABI,
       functionName: 'executeSingle',

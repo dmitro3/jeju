@@ -7,7 +7,7 @@ import { useState } from 'react'
 export default function NFTDetailPage() {
   const params = useParams()
   const { address, isConnected } = useAccount()
-  const [showListModal, setShowListModal] = useState(false)
+  const [, setShowListModal] = useState(false)
   const [showTransferModal, setShowTransferModal] = useState(false)
 
   const rawId = params?.id

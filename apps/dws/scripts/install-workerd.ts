@@ -20,27 +20,27 @@ const PLATFORMS: Record<string, PlatformConfig> = {
   'linux-x64': {
     asset: `workerd-linux-64.gz`,
     binary: 'workerd',
-    extractCmd: (archive, dest) => ['gunzip', '-c', archive],
+    extractCmd: (archive, _dest) => ['gunzip', '-c', archive],
   },
   'linux-arm64': {
     asset: `workerd-linux-arm64.gz`,
     binary: 'workerd',
-    extractCmd: (archive, dest) => ['gunzip', '-c', archive],
+    extractCmd: (archive, _dest) => ['gunzip', '-c', archive],
   },
   'darwin-x64': {
     asset: `workerd-darwin-64.gz`,
     binary: 'workerd',
-    extractCmd: (archive, dest) => ['gunzip', '-c', archive],
+    extractCmd: (archive, _dest) => ['gunzip', '-c', archive],
   },
   'darwin-arm64': {
     asset: `workerd-darwin-arm64.gz`,
     binary: 'workerd',
-    extractCmd: (archive, dest) => ['gunzip', '-c', archive],
+    extractCmd: (archive, _dest) => ['gunzip', '-c', archive],
   },
   'win32-x64': {
     asset: `workerd-windows-64.exe.gz`,
     binary: 'workerd.exe',
-    extractCmd: (archive, dest) => ['gunzip', '-c', archive],
+    extractCmd: (archive, _dest) => ['gunzip', '-c', archive],
   },
 };
 
@@ -149,7 +149,6 @@ async function installWorkerd(): Promise<string> {
   
   // Cleanup archive
   await Bun.write(archivePath, ''); // Truncate
-  const file = Bun.file(archivePath);
   // Note: Bun doesn't have a direct unlink, but we can just leave the empty file
   
   // Verify installation

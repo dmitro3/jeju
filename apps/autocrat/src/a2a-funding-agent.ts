@@ -12,7 +12,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { fundingApi } from './funding-api';
-import type { Address } from 'viem';
+import type { ContributorProfile as ServiceContributorProfile, SocialLink, RepositoryClaim, DependencyClaim } from './contributor-service';
+import type { DependencyWeight } from './dependency-scanner';
 
 // ============ Types ============
 
@@ -31,20 +32,123 @@ interface A2ASkill {
   id: string;
   name: string;
   description: string;
-  inputSchema: Record<string, unknown>;
-  outputSchema: Record<string, unknown>;
+  inputSchema: JSONSchemaObject;
+  outputSchema: JSONSchemaObject | JSONSchemaArray;
+}
+
+interface JSONSchemaObject {
+  type: 'object';
+  properties: Record<string, JSONSchemaProperty>;
+  required?: string[];
+}
+
+interface JSONSchemaArray {
+  type: 'array';
+  items: JSONSchemaObject;
+}
+
+interface JSONSchemaProperty {
+  type: string;
+  description?: string;
+  enum?: string[];
 }
 
 interface A2ATaskRequest {
   taskId: string;
   skillId: string;
-  input: Record<string, unknown>;
+  input: Record<string, string | number | boolean>;
 }
+
+// Skill response types
+interface FundingPoolResponse {
+  daoId: string;
+  totalAccumulated: string;
+  contributorPool: string;
+  dependencyPool: string;
+  reservePool: string;
+}
+
+interface EpochResponse {
+  epochId: number;
+  startTime: number;
+  endTime: number;
+  totalDistributed: string;
+  finalized: boolean;
+}
+
+interface ScanDependenciesResponse {
+  totalDependencies: number;
+  directDependencies: number;
+  transitiveDependencies: number;
+  registeredDependencies: number;
+  dependencies: DependencyWeight[];
+}
+
+interface ContributorRecommendation {
+  contributorId: string;
+  suggestedWeight: number;
+  reason: string;
+  contributions: {
+    bounties: number;
+    paymentRequests: number;
+    repos: number;
+    deps: number;
+  };
+}
+
+interface DependencyRecommendation {
+  packageName: string;
+  registryType: string;
+  suggestedWeight: number;
+  depth: number;
+  usageCount: number;
+  isRegistered: boolean;
+}
+
+interface PaymentRequest {
+  requestId: string;
+  category: string;
+  title: string;
+  requestedAmount: string;
+  status: string;
+  isRetroactive: boolean;
+}
+
+interface TransactionResponse {
+  transactionHash: string | undefined;
+}
+
+interface ContributorProfileResponse {
+  profile: ServiceContributorProfile | null;
+  socialLinks: SocialLink[];
+  repoClaims: RepositoryClaim[];
+  depClaims: DependencyClaim[];
+}
+
+interface PendingRewardsResponse {
+  pendingRewards: string;
+}
+
+interface ErrorResponse {
+  error: string;
+}
+
+type SkillOutput =
+  | FundingPoolResponse
+  | EpochResponse
+  | ScanDependenciesResponse
+  | ContributorRecommendation[]
+  | DependencyRecommendation[]
+  | PaymentRequest[]
+  | TransactionResponse
+  | ContributorProfileResponse
+  | PendingRewardsResponse
+  | ErrorResponse;
 
 interface A2ATaskResponse {
   taskId: string;
   status: 'completed' | 'failed' | 'pending';
-  output?: Record<string, unknown>;
+  output?: SkillOutput;
   error?: string;
 }
 
@@ -285,8 +389,8 @@ const AGENT_CARD: A2AAgentCard = {
 
 async function handleSkill(
   skillId: string,
-  input: Record<string, unknown>
-): Promise<Record<string, unknown>> {
+  input: Record<string, string | number | boolean>
+): Promise<SkillOutput> {
   switch (skillId) {
     case 'get_funding_pool': {
       const result = await fundingApi.getDAOPool(input.daoId as string);
@@ -373,7 +477,7 @@ async function handleSkill(
         input.reputation as number
       );
       if (!result.success) {
-        return { error: result.error };
+        return { error: result.error || 'Vote failed' };
       }
       return { transactionHash: result.data };
     }
@@ -400,7 +504,7 @@ async function handleSkill(
         input.reason as string
       );
       if (!result.success) {
-        return { error: result.error };
+        return { error: result.error || 'Review failed' };
       }
       return { transactionHash: result.data };
     }
@@ -419,7 +523,7 @@ async function handleSkill(
         input.contributorId as string
       );
       if (!result.success) {
-        return { error: result.error };
+        return { error: result.error || 'Failed to get pending rewards' };
       }
       return { pendingRewards: result.data?.toString() || '0' };
     }
@@ -473,7 +577,7 @@ export function createA2AFundingServer(): Hono {
 // Start server if run directly
 if (import.meta.main) {
   const app = createA2AFundingServer();
-  const port = parseInt(process.env.A2A_PORT || '3100');
+  const port = parseInt(process.env.A2A_PORT || '3100', 10);
 
   console.log(`A2A Funding Agent starting on port ${port}`);
 

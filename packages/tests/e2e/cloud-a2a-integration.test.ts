@@ -10,7 +10,7 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { createPublicClient, http, getContract, zeroHash } from 'viem';
-import { Logger } from '../../scripts/shared/logger';
+import { Logger } from '../../../packages/deployment/scripts/shared/logger';
 
 const logger = new Logger('cloud-a2a-e2e');
 

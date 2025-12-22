@@ -468,7 +468,11 @@ export function createPerpsModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): PerpsModule {
-  const perpsMarketAddress = requireContract("perps", "PerpetualMarket", network);
+  const perpsMarketAddress = requireContract(
+    "perps",
+    "PerpetualMarket",
+    network,
+  );
 
   const MAX_LEVERAGE = 50;
   const MIN_MARGIN = parseEther("0.001");
@@ -520,8 +524,11 @@ export function createPerpsModule(
         functionName: "getAllMarkets",
       })) as Hex[];
 
+      // Limit to prevent DoS from large arrays
+      const MAX_MARKETS = 100;
       const markets: MarketConfig[] = [];
-      for (const id of marketIds) {
+      const limitedIds = marketIds.slice(0, MAX_MARKETS);
+      for (const id of limitedIds) {
         const market = await this.getMarket(id);
         if (market) markets.push(market);
       }
@@ -704,8 +711,11 @@ export function createPerpsModule(
         args: [address],
       })) as Hex[];
 
+      // Limit to prevent DoS from large arrays
+      const MAX_POSITIONS = 100;
       const positions: PerpsPosition[] = [];
-      for (const id of positionIds) {
+      const limitedIds = positionIds.slice(0, MAX_POSITIONS);
+      for (const id of limitedIds) {
         const pos = await this.getPosition(id);
         if (pos) positions.push(pos);
       }

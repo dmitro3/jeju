@@ -49,8 +49,6 @@ export class GasOracle {
   private currentStats: Map<ChainId, GasStats> = new Map();
   private updateInterval: ReturnType<typeof setInterval> | null = null;
 
-  constructor() {}
-
   /**
    * Initialize gas oracle for chains
    */
@@ -245,7 +243,7 @@ export class GasOracle {
       gasUsedRatio: readonly number[];
       reward?: readonly (readonly bigint[])[];
     },
-    chainId: ChainId
+    _chainId: ChainId
   ): GasStats {
     if (!block.baseFeePerGas) {
       throw new Error('Block missing baseFeePerGas - cannot parse gas stats without EIP-1559 base fee');
@@ -281,7 +279,7 @@ export class GasOracle {
     };
   }
 
-  private predictBaseFee(current: GasStats, history: GasStats[]): bigint {
+  private predictBaseFee(current: GasStats, _history: GasStats[]): bigint {
     // EIP-1559: base fee changes by up to 12.5% per block
     // based on whether previous block was > or < 50% full
 

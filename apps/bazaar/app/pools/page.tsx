@@ -11,7 +11,6 @@ import {
   formatLiquidity,
   sqrtPriceX96ToPrice,
   getFeeTiers,
-  getTickSpacing,
   calculateSqrtPriceX96,
   priceToTick,
   type PoolKey 
@@ -20,14 +19,11 @@ import { parseUnits, type Address } from 'viem'
 import { toast } from 'sonner'
 import {
   useTFMMPools,
-  type TFMMPool,
 } from '@/hooks/tfmm/useTFMMPools'
 import {
   useTFMMStrategies,
   useStrategyPerformance,
-  formatStrategyParam,
   type StrategyType,
-  STRATEGY_CONFIGS,
 } from '@/hooks/tfmm/useTFMMStrategies'
 
 const POPULAR_TOKENS = [
@@ -76,8 +72,8 @@ export default function PoolsPage() {
 
   // Smart pools (TFMM)
   const { pools: smartPools, isLoading: smartPoolsLoading } = useTFMMPools()
-  const { strategies, isLoading: strategiesLoading } = useTFMMStrategies(null)
-  const strategyPerformance = useStrategyPerformance(selectedStrategy)
+  const { strategies } = useTFMMStrategies(null)
+  useStrategyPerformance(selectedStrategy)
 
   const selectedPool = pools.find(p => p.id === selectedPoolId)
 
@@ -87,10 +83,9 @@ export default function PoolsPage() {
       return
     }
 
-    const tickSpacing = getTickSpacing(selectedFee)
     const amount0Val = parseUnits(initialPrice, 18)
     const amount1Val = parseUnits('1', 18)
-    const sqrtPriceX96 = calculateSqrtPriceX96(amount0Val, amount1Val)
+    calculateSqrtPriceX96(amount0Val, amount1Val)
 
     toast.success('Pool created')
     setModalState('none')
