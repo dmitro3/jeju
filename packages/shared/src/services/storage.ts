@@ -5,7 +5,7 @@
  */
 
 import type { Address } from 'viem';
-import { z } from 'zod';
+import { z, type ZodSchema } from 'zod';
 
 export type StorageTier = 'hot' | 'warm' | 'cold' | 'permanent';
 
@@ -21,7 +21,12 @@ export interface StorageService {
   upload(data: Uint8Array | Blob, name: string, options?: UploadOptions): Promise<UploadResult>;
   uploadJson<T>(data: T, name?: string, options?: UploadOptions): Promise<UploadResult>;
   retrieve(cid: string): Promise<Uint8Array>;
-  retrieveJson<T>(cid: string): Promise<T>;
+  /**
+   * Retrieve and parse JSON from storage.
+   * @param cid - Content identifier
+   * @param schema - Optional Zod schema for validation (recommended for security)
+   */
+  retrieveJson<T>(cid: string, schema?: ZodSchema<T>): Promise<T>;
   getUrl(cid: string): string;
   pin(cid: string, options?: PinOptions): Promise<void>;
   unpin(cid: string): Promise<void>;
@@ -108,10 +113,34 @@ class StorageServiceImpl implements StorageService {
     throw new Error('Unable to retrieve file');
   }
 
-  async retrieveJson<T>(cid: string): Promise<T> {
+  /**
+   * Retrieve and parse JSON from storage with optional schema validation.
+   * 
+   * SECURITY: Always provide a schema when retrieving external data
+   * to prevent insecure deserialization attacks.
+   */
+  async retrieveJson<T>(cid: string, schema?: ZodSchema<T>): Promise<T> {
     const data = await this.retrieve(cid);
     const text = new TextDecoder().decode(data);
-    return JSON.parse(text) as T;
+    
+    // Parse JSON - safe as JSON.parse doesn't execute code
+    const parsed: unknown = JSON.parse(text);
+    
+    // If schema provided, validate the parsed data
+    if (schema) {
+      const result = schema.safeParse(parsed);
+      if (!result.success) {
+        throw new Error(`Storage data validation failed for CID ${cid}: ${result.error.message}`);
+      }
+      return result.data;
+    }
+    
+    // Without schema, return as-is but warn in development
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn(`[Storage] Retrieving JSON from CID ${cid} without schema validation - consider providing a Zod schema for security`);
+    }
+    
+    return parsed as T;
   }
 
   getUrl(cid: string): string {

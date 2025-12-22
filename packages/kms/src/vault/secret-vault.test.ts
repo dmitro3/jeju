@@ -2,8 +2,12 @@
  * SecretVault Comprehensive Tests
  * 
  * Tests for secure secret storage, access control, rotation, and audit logging.
+ * 
+ * SECURITY NOTE: The test secret below is intentionally weak and should NEVER
+ * be used in production. It is only used for deterministic test execution.
  */
 
+// SECURITY: Test-only secret - do not use in production
 process.env.VAULT_ENCRYPTION_SECRET = 'test-vault-secret-key';
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';

@@ -16,7 +16,7 @@ import {
   x402PaymentHeaderSchema,
   x402VerifySchema,
 } from '../schemas';
-import { expectValid, ValidationError } from '../utils/validation';
+import { expectValid, ValidationError, sanitizeErrorMessage } from '../utils/validation';
 import type { X402Config, X402PaymentHeader, X402PaymentResult, X402Token } from '../types';
 
 // Default token configurations
@@ -36,9 +36,28 @@ const TOKENS: Record<string, X402Token> = {
 };
 
 // Environment configuration
-const PAYMENT_ADDRESS = (process.env.X402_PAYMENT_ADDRESS || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
-const X402_ENABLED = process.env.X402_ENABLED !== 'false';
 const NETWORK = process.env.NETWORK || 'localnet';
+const IS_LOCALNET = NETWORK === 'localnet' || NETWORK === 'Jeju';
+
+// Default dev address (Anvil account #0) - ONLY for localnet
+const DEV_PAYMENT_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
+
+// In production, X402_PAYMENT_ADDRESS is required
+const getPaymentAddress = (): Address => {
+  const configuredAddress = process.env.X402_PAYMENT_ADDRESS;
+  if (configuredAddress) {
+    return configuredAddress as Address;
+  }
+  if (IS_LOCALNET) {
+    return DEV_PAYMENT_ADDRESS;
+  }
+  // In production without configured address, disable x402 payments
+  console.warn('[x402] X402_PAYMENT_ADDRESS not configured - payments will fail');
+  return '0x0000000000000000000000000000000000000000' as Address;
+};
+
+const PAYMENT_ADDRESS = getPaymentAddress();
+const X402_ENABLED = process.env.X402_ENABLED !== 'false' && PAYMENT_ADDRESS !== '0x0000000000000000000000000000000000000000';
 
 // Price per request in USDC micro-units (1 = $0.000001)
 const PRICES = {
@@ -50,7 +69,7 @@ const PRICES = {
 
 export interface X402Middleware {
   config: X402Config;
-  requirePayment: (price?: keyof typeof PRICES) => (c: Context, next: Next) => Promise<Response | void>;
+  requirePayment: (price?: keyof typeof PRICES) => (c: Context, next: Next) => Promise<Response | undefined>;
   verifyPayment: (header: string) => Promise<X402PaymentResult>;
   getPaymentInfo: () => { address: Address; tokens: X402Token[]; prices: typeof PRICES };
 }
@@ -60,7 +79,7 @@ class X402MiddlewareImpl implements X402Middleware {
   private client;
 
   constructor() {
-    const chain = NETWORK === 'mainnet' ? base : baseSepolia;
+    const chain = !IS_LOCALNET && NETWORK === 'mainnet' ? base : baseSepolia;
     
     this.config = {
       enabled: X402_ENABLED,
@@ -77,7 +96,7 @@ class X402MiddlewareImpl implements X402Middleware {
   }
 
   requirePayment(price: keyof typeof PRICES = 'basic') {
-    return async (c: Context, next: Next): Promise<Response | void> => {
+    return async (c: Context, next: Next): Promise<Response | undefined> => {
       // Skip payment check if disabled
       if (!this.config.enabled) {
         return next();
@@ -151,7 +170,7 @@ class X402MiddlewareImpl implements X402Middleware {
     }
 
     // Verify on-chain payment (for production)
-    if (NETWORK !== 'localnet') {
+    if (!IS_LOCALNET) {
       const onChainValid = await this.verifyOnChainPayment(validatedPayment);
       if (!onChainValid.valid) {
         return onChainValid;
@@ -302,12 +321,18 @@ export function createX402Routes(): Hono {
     });
   });
 
-  // Error handler
+  // Error handler with sanitized messages
   app.onError((err, c) => {
+    // Log full error for debugging (server-side only)
+    console.error('[x402 Error]', err);
+    
     if (err instanceof ValidationError) {
       return c.json({ valid: false, error: err.message }, 400);
     }
-    return c.json({ valid: false, error: err.message || 'Internal error' }, 500);
+    
+    // Return sanitized message to client
+    const safeMessage = sanitizeErrorMessage(err, IS_LOCALNET);
+    return c.json({ valid: false, error: safeMessage }, 500);
   });
 
   // Verify payment endpoint with validated input

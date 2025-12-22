@@ -228,21 +228,33 @@ export class RunnerManager {
       },
     };
 
+    // SECURITY: Pass secrets through environment variables using --env-file
+    // to avoid exposing them in process lists or command history
+    const envFile = `/tmp/jeju-runner-${dispatch.dispatchId}.env`;
+    const envContent: string[] = [
+      `JEJU_WORKFLOW=${Buffer.from(JSON.stringify(workflowPayload)).toString('base64')}`,
+    ];
+    if (request.secrets) {
+      for (const [k, v] of Object.entries(request.secrets)) {
+        // Escape values for env file format (newlines and special chars)
+        const escapedValue = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n');
+        envContent.push(`${k}='${escapedValue}'`);
+      }
+    }
+    await Bun.write(envFile, envContent.join('\n'));
+
     const runCommand = [
       'docker',
       'run',
       '--rm',
       '-v',
       '/var/run/docker.sock:/var/run/docker.sock',
-      '-e',
-      'JEJU_WORKFLOW=' + Buffer.from(JSON.stringify(workflowPayload)).toString('base64'),
-      ...(request.secrets
-        ? Object.entries(request.secrets).flatMap(([k, v]) => ['-e', `${k}=${v}`])
-        : []),
+      '--env-file',
+      envFile,
       containerImage,
     ];
 
-    dispatch.logs.push(`[${new Date().toISOString()}] Starting runner: ${runCommand.join(' ')}`);
+    dispatch.logs.push(`[${new Date().toISOString()}] Starting runner with ${request.secrets ? Object.keys(request.secrets).length : 0} secrets`);
 
     const proc = Bun.spawn(runCommand, {
       stdout: 'pipe',
@@ -268,6 +280,14 @@ export class RunnerManager {
     ]);
 
     const exitCode = await proc.exited;
+
+    // Clean up env file containing secrets
+    try {
+      const { unlink } = await import('node:fs/promises');
+      await unlink(envFile);
+    } catch {
+      // Ignore errors during cleanup
+    }
 
     dispatch.status = exitCode === 0 ? 'completed' : 'failed';
     dispatch.completedAt = Date.now();

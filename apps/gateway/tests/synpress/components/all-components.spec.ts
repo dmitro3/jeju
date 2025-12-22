@@ -463,7 +463,7 @@ test.describe('FORM SUBMIT BUTTONS - Complete Coverage', () => {
     }
   });
 
-  test('should test submit button loading states', async ({ page, metamask }) => {
+  test('should test submit button loading states', async ({ page: _page, metamask: _metamask }) => {
     // This test would trigger a transaction and verify loading spinner
     console.log('ℹ️ Loading state test requires transaction execution');
   });

@@ -64,9 +64,14 @@ export function getChainConfig(chainId: EVMChainId): ChainRpcConfig {
   const rpcEnvKey = `${chainId === 1 ? 'ETH' : chainId === 8453 ? 'BASE' : chainId === 42161 ? 'ARB' : chainId === 10 ? 'OP' : chainId === 56 ? 'BSC' : 'RPC'}_RPC_URL`;
   const wsEnvKey = rpcEnvKey.replace('_RPC_', '_WS_');
   
+  const rpcUrl = process.env[rpcEnvKey];
+  if (!rpcUrl) {
+    throw new Error(`Missing RPC URL: Set ${rpcEnvKey} environment variable for chain ${chainId}`);
+  }
+  
   return {
     ...base,
-    rpcUrl: getEnvWithDefault(rpcEnvKey, 'http://localhost:9545'),
+    rpcUrl,
     wsUrl: process.env[wsEnvKey], // Optional WebSocket URL
   };
 }

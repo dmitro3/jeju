@@ -89,7 +89,7 @@ test.describe('Token Creation - Full Flow', () => {
     await page.waitForTimeout(3000) // Wait for indexer
     
     // Search for our token
-    const body = await page.textContent('body')
+    const _body = await page.textContent('body')
     
     // Token should appear (either by symbol or address)
     // Note: might take a few seconds for indexer to catch up

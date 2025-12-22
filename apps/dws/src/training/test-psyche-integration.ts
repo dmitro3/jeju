@@ -13,20 +13,14 @@ import {
   Connection,
   PublicKey,
   Keypair,
-  Transaction,
-  sendAndConfirmTransaction,
-  SystemProgram,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import {
   createPublicClient,
   createWalletClient,
   http,
-  parseAbi,
   type Address,
   type Hex,
-  keccak256,
-  encodeAbiParameters,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -87,7 +81,7 @@ async function testSolanaConnection(): Promise<void> {
     if (typeof slot !== 'number' || slot < 0) {
       throw new Error('Invalid slot number');
     }
-  } catch (e) {
+  } catch (_e) {
     clearTimeout(timeout);
     throw new Error('Solana not available (install solana-test-validator)');
   }
@@ -101,7 +95,7 @@ async function testSolanaProgramExists(): Promise<void> {
     // On localnet/devnet, program might not be deployed
     // This is OK - we're testing if we can query it
     console.log(`  Program ${PSYCHE_PROGRAM_ID.toString()}: ${accountInfo ? 'deployed' : 'not deployed'}`);
-  } catch (e) {
+  } catch (_e) {
     throw new Error('Solana not available');
   }
 }
@@ -145,7 +139,7 @@ async function testPsycheClientBalance(): Promise<void> {
     }
     
     console.log(`  New keypair balance: ${balance / LAMPORTS_PER_SOL} SOL`);
-  } catch (e) {
+  } catch (_e) {
     throw new Error('Solana not available');
   }
 }
@@ -170,7 +164,7 @@ async function testEvmConnection(): Promise<void> {
 async function testEvmWalletSetup(): Promise<void> {
   const account = privateKeyToAccount(EVM_PRIVATE_KEY);
   
-  const walletClient = createWalletClient({
+  const _walletClient = createWalletClient({
     account,
     chain: foundry,
     transport: http(EVM_RPC_URL),
@@ -295,7 +289,7 @@ async function testMerkleProofGeneration(): Promise<void> {
     { client: '0x4444444444444444444444444444444444444444' as Address, amount: 4000n },
   ];
   
-  const root = bridge.computeRewardsMerkleRoot(rewards);
+  const _root = bridge.computeRewardsMerkleRoot(rewards);
   const proof0 = bridge.generateMerkleProof(rewards, 0);
   const proof1 = bridge.generateMerkleProof(rewards, 1);
   
@@ -360,7 +354,7 @@ async function testBridgeRunStateTracking(): Promise<void> {
   try {
     const runState = await bridge.getRunState('nonexistent-run');
     console.log(`  Run state for nonexistent run: ${runState}`);
-  } catch (e) {
+  } catch (_e) {
     // Expected - run doesn't exist
     console.log('  Correctly handled nonexistent run');
   }

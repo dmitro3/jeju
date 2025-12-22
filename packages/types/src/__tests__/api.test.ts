@@ -24,7 +24,6 @@ import {
   type PaginationInfo,
   type ApiMeta,
   type ApiError,
-  type ErrorDetail,
 } from '../api';
 
 // ============================================================================

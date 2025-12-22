@@ -243,6 +243,17 @@ export function getResilientRPCClient(): ResilientRPCClient {
   return defaultClient
 }
 
+/**
+ * Destroy the default singleton RPC client and clean up resources.
+ * Call this during application shutdown to prevent memory leaks.
+ */
+export function destroyResilientRPCClient(): void {
+  if (defaultClient) {
+    defaultClient.destroy()
+    defaultClient = null
+  }
+}
+
 export function createResilientRPCClient(endpoints: RPCEndpoint[]): ResilientRPCClient {
   return new ResilientRPCClient(endpoints)
 }

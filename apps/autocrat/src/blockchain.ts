@@ -4,7 +4,6 @@
 
 import { createPublicClient, http, formatEther, isAddress as viemIsAddress, type Address, type PublicClient } from 'viem';
 import { base, baseSepolia, localhost } from 'viem/chains';
-import { readContract } from 'viem/actions';
 
 function inferChainFromRpcUrl(rpcUrl: string) {
   if (rpcUrl.includes('base-sepolia') || rpcUrl.includes('84532')) {
@@ -57,7 +56,7 @@ export class AutocratBlockchain {
     this.ceoAgent = {
       getAllModels: async () => {
         if (!this.ceoDeployed) return [];
-        return await readContract(this.client, {
+        return await this.client.readContract({
           address: this.ceoAgentAddress,
           abi: CEO_AGENT_ABI,
           functionName: 'getAllModels',
@@ -69,13 +68,13 @@ export class AutocratBlockchain {
   async getProposal(proposalId: string): Promise<{ proposal: ProposalFromContract; votes: AutocratVoteFromContract[] } | null> {
     const validated = validateOrThrow(ProposalIdSchema, proposalId, 'Proposal ID');
     if (!this.councilDeployed) return null;
-    const proposal = await readContract(this.client, {
+    const proposal = await this.client.readContract({
       address: this.councilAddress,
       abi: COUNCIL_ABI,
       functionName: 'getProposal',
       args: [validated],
     }) as ProposalFromContract;
-    const votes = await readContract(this.client, {
+    const votes = await this.client.readContract({
       address: this.councilAddress,
       abi: COUNCIL_ABI,
       functionName: 'getAutocratVotes',
@@ -122,12 +121,12 @@ export class AutocratBlockchain {
     if (!this.councilDeployed) return { total: 0, proposals: [] };
 
     const proposalIds = activeOnly
-      ? await readContract(this.client, {
+      ? await this.client.readContract({
           address: this.councilAddress,
           abi: COUNCIL_ABI,
           functionName: 'getActiveProposals',
         }) as string[]
-      : await readContract(this.client, {
+      : await this.client.readContract({
           address: this.councilAddress,
           abi: COUNCIL_ABI,
           functionName: 'getAllProposals',
@@ -135,7 +134,7 @@ export class AutocratBlockchain {
 
     const proposals = [];
     for (const id of proposalIds.slice(-limit)) {
-      const p = await readContract(this.client, {
+      const p = await this.client.readContract({
         address: this.councilAddress,
         abi: COUNCIL_ABI,
         functionName: 'getProposal',
@@ -164,12 +163,12 @@ export class AutocratBlockchain {
       };
     }
 
-    const stats = await readContract(this.client, {
+    const stats = await this.client.readContract({
       address: this.ceoAgentAddress,
       abi: CEO_AGENT_ABI,
       functionName: 'getCEOStats',
     }) as CEOStatsFromContract;
-    const model = await readContract(this.client, {
+    const model = await this.client.readContract({
       address: this.ceoAgentAddress,
       abi: CEO_AGENT_ABI,
       functionName: 'getCurrentModel',
@@ -197,7 +196,7 @@ export class AutocratBlockchain {
     const validated = validateOrThrow(ProposalIdSchema, proposalId, 'Proposal ID');
     if (!this.ceoDeployed) return { decided: false };
 
-    const decision = await readContract(this.client, {
+    const decision = await this.client.readContract({
       address: this.ceoAgentAddress,
       abi: CEO_AGENT_ABI,
       functionName: 'getDecision',
@@ -224,7 +223,7 @@ export class AutocratBlockchain {
   async getModelCandidates(): Promise<Array<{ modelId: string; modelName: string; provider: string; totalStaked: string; totalReputation: string; benchmarkScore: number; decisionsCount: number; isActive: boolean }>> {
     if (!this.ceoDeployed) return [];
 
-    const modelIds = await readContract(this.client, {
+    const modelIds = await this.client.readContract({
       address: this.ceoAgentAddress,
       abi: CEO_AGENT_ABI,
       functionName: 'getAllModels',
@@ -232,7 +231,7 @@ export class AutocratBlockchain {
     const models = [];
 
     for (const modelId of modelIds) {
-      const m = await readContract(this.client, {
+      const m = await this.client.readContract({
         address: this.ceoAgentAddress,
         abi: CEO_AGENT_ABI,
         functionName: 'getModel',

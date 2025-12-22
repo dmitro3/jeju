@@ -102,7 +102,8 @@ export class OracleNode {
   }
 
   private async ensureRegistered(): Promise<void> {
-    const workerAddress = this.walletClient.account!.address;
+    if (!this.walletClient.account) throw new Error('Wallet client has no account');
+    const workerAddress = this.walletClient.account.address;
 
     const existingOperatorId = await this.publicClient.readContract({
       address: this.config.networkConnector,
@@ -178,7 +179,8 @@ export class OracleNode {
   }
 
   private async isCommitteeMember(feedId: Hex): Promise<boolean> {
-    const workerAddress = this.walletClient.account!.address;
+    if (!this.walletClient.account) throw new Error('Wallet client has no account');
+    const workerAddress = this.walletClient.account.address;
 
     return this.publicClient.readContract({
       address: this.config.committeeManager,
@@ -269,9 +271,10 @@ export class OracleNode {
   }
 
   private async signReport(reportHash: Hex): Promise<Hex> {
+    if (!this.walletClient.account) throw new Error('Wallet client has no account');
     return this.walletClient.signMessage({
       message: { raw: toBytes(reportHash) },
-      account: this.walletClient.account!,
+      account: this.walletClient.account,
     });
   }
 

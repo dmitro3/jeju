@@ -191,18 +191,6 @@ function encodeVarint(value: number): Uint8Array {
 }
 
 /**
- * Encode string to bytes with length prefix
- */
-function encodeString(str: string): Uint8Array {
-  const textBytes = new TextEncoder().encode(str);
-  const lengthBytes = encodeVarint(textBytes.length);
-  const result = new Uint8Array(lengthBytes.length + textBytes.length);
-  result.set(lengthBytes);
-  result.set(textBytes, lengthBytes.length);
-  return result;
-}
-
-/**
  * Encode CastAddBody
  */
 function encodeCastAddBody(body: CastAddBody): Uint8Array {
@@ -407,9 +395,50 @@ export async function buildMessage(
 
 /**
  * Verify message signature
+ * 
+ * IMPORTANT: This verifies that:
+ * 1. The hash matches the message data (prevents hash substitution attacks)
+ * 2. The signature is valid for the hash and signer
  */
 export function verifyMessage(message: Message): boolean {
+  // First, recompute the hash from the message data to prevent hash substitution
+  const computedHash = hashMessageData(message.data);
+  
+  // Verify the provided hash matches the computed hash
+  // Use constant-time comparison to prevent timing attacks
+  if (!constantTimeEqual(message.hash, computedHash)) {
+    return false;
+  }
+  
+  // Verify hash scheme is BLAKE3
+  if (message.hashScheme !== HashScheme.BLAKE3) {
+    return false;
+  }
+  
+  // Verify signature scheme is ED25519
+  if (message.signatureScheme !== SignatureScheme.ED25519) {
+    return false;
+  }
+  
+  // Verify the signature
   return ed25519.verify(message.signature, message.hash, message.signer);
+}
+
+/**
+ * Constant-time comparison of two byte arrays
+ * Prevents timing attacks by always comparing all bytes
+ */
+function constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a[i] ^ b[i];
+  }
+  
+  return result === 0;
 }
 
 // ============ Serialization ============

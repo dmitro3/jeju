@@ -9,8 +9,24 @@
  * - Integration with ContributorRegistry for maintainer lookup
  */
 
-import { Octokit } from '@octokit/rest';
-import type { Address } from 'viem';
+// GitHub API types for content responses
+interface GitHubFileContent {
+  type: 'file';
+  name: string;
+  path: string;
+  sha: string;
+  content: string;
+  encoding: string;
+}
+
+interface GitHubDirectoryItem {
+  type: 'file' | 'dir' | 'symlink' | 'submodule';
+  name: string;
+  path: string;
+  sha: string;
+}
+
+type GitHubContentResponse = GitHubFileContent | GitHubDirectoryItem[];
 
 // ============ Types ============
 
@@ -266,14 +282,41 @@ function parseGoMod(content: string): Array<{ name: string; version: string }> {
 // ============ Main Scanner Class ============
 
 export class DependencyScanner {
-  private octokit: Octokit;
   private config: ScannerConfig;
   private cache: Map<string, PackageMetadata> = new Map();
   private contributorLookup: Map<string, string> = new Map(); // depHash -> contributorId
 
   constructor(config: Partial<ScannerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
-    this.octokit = new Octokit({ auth: this.config.githubToken });
+  }
+
+  /**
+   * Fetch content from GitHub API
+   */
+  private async fetchGitHubContent(
+    owner: string,
+    repo: string,
+    path: string
+  ): Promise<GitHubContentResponse> {
+    const headers: Record<string, string> = {
+      Accept: 'application/vnd.github.v3+json',
+      'User-Agent': 'jeju-dependency-scanner',
+    };
+    
+    if (this.config.githubToken) {
+      headers['Authorization'] = `Bearer ${this.config.githubToken}`;
+    }
+
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/contents/${path}`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json() as Promise<GitHubContentResponse>;
   }
 
   /**
@@ -320,7 +363,7 @@ export class DependencyScanner {
     let totalWeight = 0;
     const dependencies: DependencyWeight[] = [];
 
-    for (const [key, dep] of allDeps) {
+    for (const [key, dep] of Array.from(allDeps.entries())) {
       // Apply depth decay
       dep.adjustedWeight = this.applyDepthDecay(dep.rawWeight, dep.depth);
 
@@ -391,11 +434,7 @@ export class DependencyScanner {
     ];
 
     try {
-      const { data } = await this.octokit.repos.getContent({
-        owner,
-        repo,
-        path: '',
-      });
+      const data = await this.fetchGitHubContent(owner, repo, '');
 
       if (Array.isArray(data)) {
         for (const item of data) {
@@ -412,22 +451,18 @@ export class DependencyScanner {
     const subdirs = ['packages', 'apps', 'services'];
     for (const subdir of subdirs) {
       try {
-        const { data } = await this.octokit.repos.getContent({
-          owner,
-          repo,
-          path: subdir,
-        });
+        const data = await this.fetchGitHubContent(owner, repo, subdir);
 
         if (Array.isArray(data)) {
           for (const item of data) {
             if (item.type === 'dir') {
               for (const targetFile of targetFiles) {
                 try {
-                  const { data: fileData } = await this.octokit.repos.getContent({
+                  const fileData = await this.fetchGitHubContent(
                     owner,
                     repo,
-                    path: `${item.path}/${targetFile}`,
-                  });
+                    `${item.path}/${targetFile}`
+                  );
                   if (!Array.isArray(fileData) && fileData.type === 'file') {
                     files.push({ path: fileData.path, sha: fileData.sha });
                   }
@@ -450,11 +485,7 @@ export class DependencyScanner {
    * Fetch file content from GitHub
    */
   private async fetchFileContent(owner: string, repo: string, path: string): Promise<string> {
-    const { data } = await this.octokit.repos.getContent({
-      owner,
-      repo,
-      path,
-    });
+    const data = await this.fetchGitHubContent(owner, repo, path);
 
     if (Array.isArray(data) || data.type !== 'file') {
       throw new Error(`Expected file at ${path}`);
@@ -557,8 +588,9 @@ export class DependencyScanner {
     registryType: RegistryType
   ): Promise<PackageMetadata> {
     const cacheKey = `${registryType}:${packageName}`;
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)!;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     let metadata: PackageMetadata;
@@ -682,7 +714,7 @@ export class DependencyScanner {
     }
     
     // Also check for single-line requires
-    const singleRequires = modContent.matchAll(/^require\s+([^\s]+)\s+/gm);
+    const singleRequires = Array.from(modContent.matchAll(/^require\s+([^\s]+)\s+/gm));
     for (const match of singleRequires) {
       deps.push(match[1]);
     }

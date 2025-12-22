@@ -48,7 +48,7 @@ describe('Solana Arbitrage Configuration', () => {
     });
 
     it('all mints should be valid base58 addresses', () => {
-      for (const [symbol, token] of Object.entries(SOLANA_TOKENS)) {
+      for (const [, token] of Object.entries(SOLANA_TOKENS)) {
         expect(token.mint.length).toBeGreaterThan(30);
         expect(token.mint.length).toBeLessThanOrEqual(44);
         // Base58 chars only
@@ -71,8 +71,8 @@ describe('Solana Arbitrage Configuration', () => {
     });
 
     it('all EVM addresses should be valid hex', () => {
-      for (const [symbol, chains] of Object.entries(EVM_TOKENS)) {
-        for (const [chainId, address] of Object.entries(chains)) {
+      for (const [, chains] of Object.entries(EVM_TOKENS)) {
+        for (const [, address] of Object.entries(chains)) {
           expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/);
         }
       }

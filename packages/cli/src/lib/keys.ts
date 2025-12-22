@@ -5,16 +5,42 @@
  * - AES-256-GCM encryption with scrypt key derivation
  * - Secure random key generation
  * - Memory clearing after use
+ * - Path traversal protection
+ * - Input validation
+ * - JSON schema validation for key files
  */
 
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, chmodSync } from 'fs';
-import { join } from 'path';
 import { createCipheriv, createDecipheriv, randomBytes, scrypt } from 'crypto';
 import { promisify } from 'util';
+import { z } from 'zod';
 import { getKeysDir } from './system';
 import { logger } from './logger';
+import { validateNetwork, validateKeyName, safePath } from './security';
 import { WELL_KNOWN_KEYS, type KeyConfig, type KeySet, type NetworkType } from '../types';
+
+// Schema validation for key files to prevent insecure deserialization
+const KeyConfigSchema = z.object({
+  name: z.string().min(1).max(100),
+  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$|^HARDWARE_WALLET$/),
+  role: z.string().max(200).optional(),
+});
+
+const KeySetSchema = z.object({
+  network: z.enum(['localnet', 'testnet', 'mainnet']),
+  created: z.string(),
+  keys: z.array(KeyConfigSchema),
+  encrypted: z.boolean().optional(),
+});
+
+const DeployerKeySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/),
+  role: z.string().max(200).optional(),
+});
 
 const scryptAsync = promisify(scrypt);
 
@@ -39,15 +65,22 @@ export function getDefaultDeployerKey(network: NetworkType): KeyConfig {
     return WELL_KNOWN_KEYS.dev[0];
   }
   
+  // Validate network to prevent path traversal
+  const validNetwork = validateNetwork(network);
   const keysDir = getKeysDir();
-  const keyFile = join(keysDir, network, 'deployer.json');
+  const keyFile = safePath(keysDir, validNetwork, 'deployer.json');
   
   if (existsSync(keyFile)) {
-    const data = JSON.parse(readFileSync(keyFile, 'utf-8'));
-    return data;
+    const rawData = JSON.parse(readFileSync(keyFile, 'utf-8'));
+    // SECURITY: Validate schema to prevent insecure deserialization
+    const result = DeployerKeySchema.safeParse(rawData);
+    if (!result.success) {
+      throw new Error(`Invalid deployer key file format: ${result.error.message}`);
+    }
+    return result.data as KeyConfig;
   }
   
-  throw new Error(`No deployer key configured for ${network}. Run: jeju keys genesis -n ${network}`);
+  throw new Error(`No deployer key configured for ${validNetwork}. Run: jeju keys genesis -n ${validNetwork}`);
 }
 
 export function resolvePrivateKey(network: NetworkType): string {
@@ -56,20 +89,28 @@ export function resolvePrivateKey(network: NetworkType): string {
     return process.env.PRIVATE_KEY;
   }
   
+  // Validate network to prevent path traversal
+  const validNetwork = validateNetwork(network);
+  
   // 2. Network-specific key file
   const keysDir = getKeysDir();
-  const keyFile = join(keysDir, network, 'deployer.json');
+  const keyFile = safePath(keysDir, validNetwork, 'deployer.json');
   if (existsSync(keyFile)) {
-    const data = JSON.parse(readFileSync(keyFile, 'utf-8'));
-    return data.privateKey;
+    const rawData = JSON.parse(readFileSync(keyFile, 'utf-8'));
+    // SECURITY: Validate schema to prevent insecure deserialization
+    const result = DeployerKeySchema.safeParse(rawData);
+    if (!result.success) {
+      throw new Error(`Invalid deployer key file format: ${result.error.message}`);
+    }
+    return result.data.privateKey;
   }
   
   // 3. Default dev key for localnet
-  if (network === 'localnet') {
+  if (validNetwork === 'localnet') {
     return WELL_KNOWN_KEYS.dev[0].privateKey;
   }
   
-  throw new Error(`No private key configured for ${network}`);
+  throw new Error(`No private key configured for ${validNetwork}`);
 }
 
 export function generateKey(name: string, role: string): KeyConfig {
@@ -150,22 +191,24 @@ export async function decryptKeySet(encrypted: Buffer, password: string): Promis
 }
 
 export function saveKeys(network: NetworkType, keys: KeyConfig[], encrypt = false): string {
+  // Validate network to prevent path traversal
+  const validNetwork = validateNetwork(network);
   const keysDir = getKeysDir();
-  const networkDir = join(keysDir, network);
+  const networkDir = safePath(keysDir, validNetwork);
   
   if (!existsSync(networkDir)) {
     mkdirSync(networkDir, { recursive: true, mode: 0o700 });
   }
   
   const keySet: KeySet = {
-    network,
+    network: validNetwork,
     created: new Date().toISOString(),
     keys,
     encrypted: encrypt,
   };
   
   const filename = encrypt ? 'operators.json.enc' : 'operators.json';
-  const filepath = join(networkDir, filename);
+  const filepath = safePath(networkDir, filename);
   
   writeFileSync(filepath, JSON.stringify(keySet, null, 2), { mode: 0o600 });
   chmodSync(filepath, 0o600);
@@ -173,7 +216,7 @@ export function saveKeys(network: NetworkType, keys: KeyConfig[], encrypt = fals
   // Also save deployer separately for easy access
   const deployer = keys.find(k => k.role?.includes('admin') || k.role?.includes('Admin'));
   if (deployer) {
-    const deployerFile = join(networkDir, 'deployer.json');
+    const deployerFile = safePath(networkDir, 'deployer.json');
     writeFileSync(deployerFile, JSON.stringify(deployer, null, 2), { mode: 0o600 });
     chmodSync(deployerFile, 0o600);
   }
@@ -182,37 +225,54 @@ export function saveKeys(network: NetworkType, keys: KeyConfig[], encrypt = fals
 }
 
 export function loadKeys(network: NetworkType): KeySet | null {
+  // Validate network to prevent path traversal
+  const validNetwork = validateNetwork(network);
   const keysDir = getKeysDir();
-  const keyFile = join(keysDir, network, 'operators.json');
+  const keyFile = safePath(keysDir, validNetwork, 'operators.json');
   
   if (!existsSync(keyFile)) {
     return null;
   }
   
-  return JSON.parse(readFileSync(keyFile, 'utf-8')) as KeySet;
+  const rawData = JSON.parse(readFileSync(keyFile, 'utf-8'));
+  // SECURITY: Validate schema to prevent insecure deserialization
+  const result = KeySetSchema.safeParse(rawData);
+  if (!result.success) {
+    throw new Error(`Invalid operators key file format: ${result.error.message}`);
+  }
+  return result.data as KeySet;
 }
 
 export function hasKeys(network: NetworkType): boolean {
+  // Validate network to prevent path traversal
+  const validNetwork = validateNetwork(network);
   const keysDir = getKeysDir();
-  return existsSync(join(keysDir, network, 'operators.enc')) ||
-         existsSync(join(keysDir, network, 'operators.json')) ||
-         existsSync(join(keysDir, network, 'addresses.json'));
+  return existsSync(safePath(keysDir, validNetwork, 'operators.enc')) ||
+         existsSync(safePath(keysDir, validNetwork, 'operators.json')) ||
+         existsSync(safePath(keysDir, validNetwork, 'addresses.json'));
 }
 
 export function loadPrivateKey(name: string): string | null {
+  // Validate key name to prevent path traversal
+  const validName = validateKeyName(name);
   const keysDir = getKeysDir();
   
-  // Check for key file in any network directory
+  // Check for key file in any network directory (validated networks only)
   for (const network of ['localnet', 'testnet', 'mainnet'] as const) {
-    const keyFile = join(keysDir, network, `${name}.json`);
+    const keyFile = safePath(keysDir, network, `${validName}.json`);
     if (existsSync(keyFile)) {
-      const data = JSON.parse(readFileSync(keyFile, 'utf-8'));
-      return data.privateKey;
+      const rawData = JSON.parse(readFileSync(keyFile, 'utf-8'));
+      // SECURITY: Validate schema to prevent insecure deserialization
+      const result = DeployerKeySchema.safeParse(rawData);
+      if (!result.success) {
+        throw new Error(`Invalid key file format for ${validName}: ${result.error.message}`);
+      }
+      return result.data.privateKey;
     }
   }
   
   // Default to first dev key for deployer in localnet context
-  if (name === 'deployer') {
+  if (validName === 'deployer') {
     return WELL_KNOWN_KEYS.dev[0].privateKey;
   }
   

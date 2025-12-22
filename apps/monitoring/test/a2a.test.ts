@@ -5,13 +5,11 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { spawn, type ChildProcess } from 'child_process';
-import { join, dirname } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import {
   AgentCardSchema,
   A2AResponseSchema,
-  type AgentCard,
-  type A2AResponse,
 } from '../src/types';
 
 const __filename = fileURLToPath(import.meta.url);

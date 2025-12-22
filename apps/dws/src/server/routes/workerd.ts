@@ -4,7 +4,6 @@
  */
 
 import { Hono } from 'hono';
-import type { Context } from 'hono';
 import { z } from 'zod';
 import type { Address } from 'viem';
 import { base, baseSepolia, localhost } from 'viem/chains';
@@ -17,7 +16,6 @@ import {
   type WorkerdConfig,
   type RouterConfig,
   type RegistryConfig,
-  DEFAULT_WORKERD_CONFIG,
   DEFAULT_ROUTER_CONFIG,
 } from '../../workers/workerd';
 import type { BackendManager } from '../../storage/backends';
@@ -570,18 +568,6 @@ export function createWorkerdRouter(options: WorkerdRouterOptions): Hono {
   }
 
   return router;
-}
-
-// ============================================================================
-// Helpers
-// ============================================================================
-
-function getOwnerAddress(c: Context): Address {
-  const header = c.req.header('x-jeju-address');
-  if (!header) {
-    throw new Error('x-jeju-address header required');
-  }
-  return header as Address;
 }
 
 // ============================================================================

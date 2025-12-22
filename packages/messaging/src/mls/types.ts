@@ -18,7 +18,7 @@ export const MLSMessageSchema = z.object({
   contentType: z.enum(['text', 'image', 'file', 'reaction', 'reply', 'transaction', 'agent_action']),
   timestamp: z.number(),
   replyTo: z.string().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type MLSMessage = z.infer<typeof MLSMessageSchema>;

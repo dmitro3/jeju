@@ -142,7 +142,7 @@ describe('BackendManager', () => {
 
 describe('IPFS Backend (Mocked)', () => {
   let manager: BackendManager;
-  let mockFetch: ReturnType<typeof spyOn>;
+  let _mockFetch: ReturnType<typeof spyOn>;
 
   beforeAll(() => {
     // Force IPFS backend to be available
@@ -154,7 +154,7 @@ describe('IPFS Backend (Mocked)', () => {
   });
 
   beforeEach(() => {
-    mockFetch = spyOn(globalThis, 'fetch');
+    _mockFetch = spyOn(globalThis, 'fetch');
   });
 
   it('should list IPFS backend when configured', () => {

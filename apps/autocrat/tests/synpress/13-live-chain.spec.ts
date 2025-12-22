@@ -12,7 +12,7 @@ const COMPUTE_URL = process.env.COMPUTE_URL ?? 'http://localhost:8020';
 const RPC_URL = process.env.RPC_URL ?? 'http://localhost:9545';
 
 // Skip tests if live chain is not available
-test.beforeAll(async ({ request }) => {
+test.beforeAll(async () => {
   // Check if RPC is available
   try {
     const rpcResponse = await fetch(RPC_URL, {

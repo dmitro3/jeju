@@ -8,21 +8,9 @@
  *   NETWORK=testnet bun run scripts/deploy.ts   # Deploy to testnet
  */
 
-import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
+import { createPublicClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { localhost, sepolia, mainnet } from 'viem/chains';
-
-// Contract ABIs (simplified for deployment)
-const AGENT_VAULT_ABI = [
-  'constructor(address _feeRecipient)',
-  'function defaultSpendLimit() view returns (uint256)',
-  'function feeRecipient() view returns (address)',
-] as const;
-
-const ROOM_REGISTRY_ABI = [
-  'constructor()',
-  'function nextRoomId() view returns (uint256)',
-] as const;
 
 interface DeploymentResult {
   network: string;
@@ -56,12 +44,6 @@ async function main() {
   console.log(`   Deployer: ${account.address}`);
 
   const publicClient = createPublicClient({
-    chain: chainConfig.chain,
-    transport: http(chainConfig.rpcUrl),
-  });
-
-  const walletClient = createWalletClient({
-    account,
     chain: chainConfig.chain,
     transport: http(chainConfig.rpcUrl),
   });
@@ -104,7 +86,10 @@ async function main() {
   const agentVaultMatch = stdout.match(/AgentVault deployed at: (0x[a-fA-F0-9]{40})/);
   const roomRegistryMatch = stdout.match(/RoomRegistry deployed at: (0x[a-fA-F0-9]{40})/);
 
-  if (!agentVaultMatch || !roomRegistryMatch) {
+  const agentVaultAddr = agentVaultMatch?.[1];
+  const roomRegistryAddr = roomRegistryMatch?.[1];
+
+  if (!agentVaultAddr || !roomRegistryAddr) {
     console.error('Error: Failed to parse deployment addresses');
     process.exit(1);
   }
@@ -114,8 +99,8 @@ async function main() {
     chainId: chainConfig.chain.id,
     deployer: account.address,
     contracts: {
-      agentVault: agentVaultMatch[1]!,
-      roomRegistry: roomRegistryMatch[1]!,
+      agentVault: agentVaultAddr,
+      roomRegistry: roomRegistryAddr,
     },
     timestamp: new Date().toISOString(),
   };

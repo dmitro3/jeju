@@ -388,15 +388,34 @@ export class ExecutorSDK {
   private parseActions(response: string): AgentAction[] {
     expect(response, 'Response is required');
     const actions: AgentAction[] = [];
-    const regex = /\[ACTION:\s*(\w+)(?:\s*\|\s*(.+?))?\]/g;
+    
+    // Limit response length to prevent DoS
+    const maxResponseLength = 100000;
+    const safeResponse = response.length > maxResponseLength ? response.slice(0, maxResponseLength) : response;
+    
+    // Use safer regex pattern - limit parameter content to alphanumeric, spaces, and common punctuation
+    // Avoid .+ which can cause catastrophic backtracking
+    const regex = /\[ACTION:\s*([A-Z_][A-Z0-9_]*)(?:\s*\|\s*([^[\]]{0,500}))?\]/gi;
     let match;
-    while ((match = regex.exec(response)) !== null) {
+    let matchCount = 0;
+    const maxMatches = 100; // Limit number of actions to prevent DoS
+    
+    while ((match = regex.exec(safeResponse)) !== null && matchCount < maxMatches) {
+      matchCount++;
       expect(match[1], 'Action type is required');
       const params: ActionParams = {};
       if (match[2]) {
-        for (const pair of match[2].split(',')) {
-          const [key, value] = pair.split('=').map(s => s?.trim());
-          if (key && value) params[key] = value;
+        // Limit parameter parsing
+        const paramPairs = match[2].split(',').slice(0, 20); // Max 20 parameters
+        for (const pair of paramPairs) {
+          const eqIndex = pair.indexOf('=');
+          if (eqIndex > 0) {
+            const key = pair.slice(0, eqIndex).trim();
+            const value = pair.slice(eqIndex + 1).trim();
+            if (key && value && key.length < 100 && value.length < 1000) {
+              params[key] = value;
+            }
+          }
         }
       }
       actions.push({ type: match[1], params: Object.keys(params).length > 0 ? params : undefined, success: false });

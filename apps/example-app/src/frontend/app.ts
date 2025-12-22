@@ -524,8 +524,10 @@ function attachEventListeners(): void {
   // Toggle checkboxes
   document.querySelectorAll('[data-toggle]').forEach(checkbox => {
     checkbox.addEventListener('change', async (e) => {
-      const id = (e.target as HTMLElement).getAttribute('data-toggle')!;
-      const checked = (e.target as HTMLInputElement).checked;
+      const target = e.target as HTMLElement;
+      const id = target.getAttribute('data-toggle');
+      if (!id) return;
+      const checked = (target as HTMLInputElement).checked;
       await toggleTodo(id, checked);
     });
   });
@@ -533,7 +535,8 @@ function attachEventListeners(): void {
   // Delete buttons
   document.querySelectorAll('[data-delete]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-delete')!;
+      const id = btn.getAttribute('data-delete');
+      if (!id) return;
       await deleteTodo(id);
     });
   });
@@ -541,7 +544,8 @@ function attachEventListeners(): void {
   // Encrypt buttons
   document.querySelectorAll('[data-encrypt]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-encrypt')!;
+      const id = btn.getAttribute('data-encrypt');
+      if (!id) return;
       await encryptTodo(id);
     });
   });

@@ -51,10 +51,18 @@ const html = (platform: 'telegram' | 'farcaster' | 'web') => `<!DOCTYPE html>
       d.messages.forEach(m => addMsg(m.content, m.role === 'user'));
     }
     
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+    
     function addMsg(text, isUser) {
       const div = document.createElement('div');
       div.className = 'msg ' + (isUser ? 'user' : 'bot');
-      div.innerHTML = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+      // Escape HTML first, then apply safe formatting for code blocks
+      const escaped = escapeHtml(text);
+      div.innerHTML = escaped.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
       chat.appendChild(div);
       chat.scrollTop = chat.scrollHeight;
     }

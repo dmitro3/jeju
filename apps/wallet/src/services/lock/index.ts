@@ -34,6 +34,7 @@ const DEFAULT_CONFIG: LockConfig = {
 
 const STORAGE_KEYS = {
   passwordHash: 'jeju_password_hash',
+  passwordSalt: 'jeju_password_salt',
   lockConfig: 'jeju_lock_config',
   lockState: 'jeju_lock_state',
 };
@@ -91,7 +92,11 @@ class LockService {
       throw new Error('Password must be at least 8 characters');
     }
     
-    const hash = await this.hashPassword(password);
+    // Generate a new random salt for this password
+    const salt = this.generateSalt();
+    const hash = await this.hashPassword(password, salt);
+    
+    await secureStorage.set(STORAGE_KEYS.passwordSalt, salt);
     await secureStorage.set(STORAGE_KEYS.passwordHash, hash);
     
     this.state.isLocked = false;
@@ -108,7 +113,11 @@ class LockService {
       throw new Error('PIN must be 4-6 digits');
     }
     
-    const hash = await this.hashPassword(pin);
+    // Generate a new random salt for this PIN
+    const salt = this.generateSalt();
+    const hash = await this.hashPassword(pin, salt);
+    
+    await secureStorage.set(STORAGE_KEYS.passwordSalt, salt);
     await secureStorage.set(STORAGE_KEYS.passwordHash, hash);
     
     this.state.isLocked = false;
@@ -230,6 +239,7 @@ class LockService {
     }
     
     await secureStorage.remove(STORAGE_KEYS.passwordHash);
+    await secureStorage.remove(STORAGE_KEYS.passwordSalt);
     this.state.isLocked = false;
     await this.saveState();
     this.notifyLockChange();
@@ -237,9 +247,15 @@ class LockService {
   
   // Private methods
   
-  private async hashPassword(password: string): Promise<string> {
+  // Generate a random salt (16 bytes, base64 encoded)
+  private generateSalt(): string {
+    const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+    return btoa(String.fromCharCode(...saltBytes));
+  }
+  
+  private async hashPassword(password: string, salt: string): Promise<string> {
     const encoder = new TextEncoder();
-    const data = encoder.encode(password + 'jeju_salt_v1');
+    const data = encoder.encode(password + salt);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -247,10 +263,35 @@ class LockService {
   
   private async verifyPassword(password: string): Promise<boolean> {
     const storedHash = await secureStorage.get(STORAGE_KEYS.passwordHash);
-    if (!storedHash) return true; // No password set
+    const storedSalt = await secureStorage.get(STORAGE_KEYS.passwordSalt);
+    if (!storedHash || !storedSalt) return true; // No password set
     
-    const inputHash = await this.hashPassword(password);
-    return inputHash === storedHash;
+    const inputHash = await this.hashPassword(password, storedSalt);
+    
+    // Use constant-time comparison to prevent timing attacks
+    return this.constantTimeCompare(inputHash, storedHash);
+  }
+  
+  /**
+   * Constant-time string comparison to prevent timing attacks
+   * Returns true if strings are equal, false otherwise
+   */
+  private constantTimeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) {
+      // Still do the comparison to maintain constant time
+      // but we know it will fail
+      let xor = 1;
+      for (let i = 0; i < a.length; i++) {
+        xor |= a.charCodeAt(i) ^ (b.charCodeAt(i % b.length) || 0);
+      }
+      return xor === 0 && false; // Always false for length mismatch
+    }
+    
+    let xor = 0;
+    for (let i = 0; i < a.length; i++) {
+      xor |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return xor === 0;
   }
   
   private async saveState(): Promise<void> {

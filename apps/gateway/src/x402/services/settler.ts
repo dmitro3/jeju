@@ -230,12 +230,13 @@ async function executeSettlement(
     }
 
     try {
+      if (!walletClient.account) throw new Error('Wallet client has no account');
       const { request } = await publicClient.simulateContract({
         address: cfg.facilitatorAddress,
         abi: X402_FACILITATOR_ABI,
         functionName,
         args: args as never,
-        account: walletClient.account!,
+        account: walletClient.account,
       });
 
       const gasEstimate = await publicClient.estimateContractGas({
@@ -243,7 +244,7 @@ async function executeSettlement(
         abi: X402_FACILITATOR_ABI,
         functionName,
         args: args as never,
-        account: walletClient.account!,
+        account: walletClient.account,
       });
       
       const gasLimit = BigInt(Math.ceil(Number(gasEstimate) * RETRY_CONFIG.gasMultiplier));

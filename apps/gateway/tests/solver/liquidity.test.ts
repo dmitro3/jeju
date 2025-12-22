@@ -351,5 +351,5 @@ describe('Stop/Cleanup', () => {
 });
 
 // Import viem for test helpers
-import { parseEther, parseUnits } from 'viem';
+import { parseEther } from 'viem';
 

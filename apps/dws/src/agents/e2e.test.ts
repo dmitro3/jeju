@@ -36,7 +36,9 @@ describe('Agent E2E (requires DWS)', () => {
       await fetch(`${DWS_URL}/agents/${createdAgentId}`, {
         method: 'DELETE',
         headers: { 'x-jeju-address': '0x1234567890abcdef1234567890abcdef12345678' },
-      }).catch(() => {});
+      }).catch(() => {
+        // Ignore cleanup errors
+      });
     }
   });
 

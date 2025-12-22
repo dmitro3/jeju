@@ -8,9 +8,9 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, http, parseAbi, readContract, getBytecode, isAddress, formatEther, formatUnits, type Address } from 'viem';
+import { createPublicClient, http, parseAbi, isAddress, formatEther, formatUnits, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -53,9 +53,10 @@ let localnetAvailable = false;
 
 beforeAll(async () => {
   ADDRESSES = loadDeployedAddresses();
-  const chain = inferChainFromRpcUrl('http://localhost:9545');
-  deployer = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`);
-  publicClient = createPublicClient({ chain, transport: http('http://localhost:9545') });
+  const rpcUrl = process.env.L2_RPC_URL ?? JEJU_RPC_URL;
+  const chain = inferChainFromRpcUrl(rpcUrl);
+  deployer = privateKeyToAccount(TEST_ACCOUNTS.deployer.privateKey);
+  publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
   
   if (Object.keys(ADDRESSES).length === 0) {
     console.warn('⚠️ No deployment addresses found. Tests may be skipped.');
@@ -123,13 +124,13 @@ describe('Cloud Contracts Deployment', () => {
     const registryAddr = ADDRESSES.identityRegistry || ADDRESSES.IdentityRegistry;
     
     // Check if contract is deployed
-    const code = await getBytecode(publicClient, { address: registryAddr as Address });
+    const code = await publicClient.getBytecode({ address: registryAddr as Address });
     if (code === undefined || code === '0x') {
       console.log('⏭️ Skipping: IdentityRegistry not deployed');
       return;
     }
     
-    const totalAgents = await readContract(publicClient, {
+    const totalAgents = await publicClient.readContract({
       address: registryAddr as Address,
       abi: parseAbi(['function totalAgents() external view returns (uint256)']),
       functionName: 'totalAgents',
@@ -152,13 +153,13 @@ describe('Cloud Contracts Deployment', () => {
     const registryAddr = ADDRESSES.serviceRegistry || ADDRESSES.ServiceRegistry;
     
     // Check if contract is deployed
-    const code = await getBytecode(publicClient, { address: registryAddr as Address });
+    const code = await publicClient.getBytecode({ address: registryAddr as Address });
     if (code === undefined || code === '0x') {
       console.log('⏭️ Skipping: ServiceRegistry not deployed');
       return;
     }
     
-    const services = await readContract(publicClient, {
+    const services = await publicClient.readContract({
       address: registryAddr as Address,
       abi: parseAbi(['function getAllServiceNames() external view returns (string[] memory)']),
       functionName: 'getAllServiceNames',
@@ -187,7 +188,7 @@ describe('Cloud Contracts Deployment', () => {
       return;
     }
     
-    const owner = await readContract(publicClient, {
+    const owner = await publicClient.readContract({
       address: providerAddr as Address,
       abi: parseAbi(['function owner() external view returns (address)']),
       functionName: 'owner',
@@ -213,7 +214,7 @@ describe('Cloud Service Costs', () => {
     const registryAddr = ADDRESSES.serviceRegistry || ADDRESSES.ServiceRegistry;
     
     // Check if contract is deployed
-    const code = await getBytecode(publicClient, { address: registryAddr as Address });
+    const code = await publicClient.getBytecode({ address: registryAddr as Address });
     if (code === undefined || code === '0x') {
       console.log('⏭️ Skipping: ServiceRegistry not deployed');
       return;
@@ -235,7 +236,7 @@ describe('Cloud Service Costs', () => {
       return;
     }
     
-    const cost = await readContract(publicClient, {
+    const cost = await publicClient.readContract({
       address: registryAddr as Address,
       abi: registryAbi,
       functionName: 'getServiceCost',
@@ -268,13 +269,13 @@ describe('Cloud Credit System', () => {
     }
     
     // Check if contract is deployed
-    const code = await getBytecode(publicClient, { address: creditAddr as Address });
+    const code = await publicClient.getBytecode({ address: creditAddr as Address });
     if (code === undefined || code === '0x') {
       console.log('⏭️ Skipping: CreditManager not deployed');
       return;
     }
     
-    const balance = await readContract(publicClient, {
+    const balance = await publicClient.readContract({
       address: creditAddr as Address,
       abi: parseAbi(['function getBalance(address,address) external view returns (uint256)']),
       functionName: 'getBalance',

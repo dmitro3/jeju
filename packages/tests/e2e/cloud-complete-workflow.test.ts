@@ -14,10 +14,12 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, writeContract, waitForTransactionReceipt, decodeEventLog, parseUnits, formatUnits, parseEther, formatEther, keccak256, stringToHex, stringToBytes, generatePrivateKey, privateKeyToAccount, type Address, type PublicClient, type WalletClient, type Account } from 'viem';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
-import { Logger } from '../../scripts/shared/logger';
-import { CloudIntegration, ViolationType, type CloudConfig } from '../../scripts/shared/cloud-integration';
+import { createPublicClient, createWalletClient, http, parseAbi, decodeEventLog, parseUnits, formatUnits, parseEther, formatEther, keccak256, stringToHex, stringToBytes, type Address, type PublicClient, type WalletClient, type Account } from 'viem';
+import { readContract, writeContract, waitForTransactionReceipt } from 'viem/actions';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
+import { Logger } from '../../packages/deployment/scripts/shared/logger';
+import { CloudIntegration, ViolationType, type CloudConfig } from '../../packages/deployment/scripts/shared/cloud-integration';
 
 const logger = new Logger('cloud-complete-workflow');
 

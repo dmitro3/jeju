@@ -140,6 +140,9 @@ export class OracleAggregator {
     return prices;
   }
 
+  // Maximum acceptable confidence interval as a ratio of price (5% = 0.05)
+  private readonly MAX_CONFIDENCE_RATIO = 0.05;
+
   private async getPythPrice(
     token: string,
     chainId: EVMChainId,
@@ -162,12 +165,41 @@ export class OracleAggregator {
       args: [priceId, BigInt(maxStalenessSeconds)],
     }) as { price: bigint; conf: bigint; expo: number; publishTime: bigint };
 
+    // Validate price is positive
+    if (result.price <= 0n) {
+      console.warn(`Pyth returned non-positive price for ${token}: ${result.price}`);
+      return null;
+    }
+
+    // Calculate confidence ratio and validate it's acceptable
+    // Confidence interval should be a small fraction of the price
+    const confidenceRatio = Number(result.conf) / Number(result.price);
+    if (confidenceRatio > this.MAX_CONFIDENCE_RATIO) {
+      console.warn(`Pyth price confidence too low for ${token}: ${(confidenceRatio * 100).toFixed(2)}% interval (max ${this.MAX_CONFIDENCE_RATIO * 100}%)`);
+      return null;
+    }
+
     // Convert Pyth price to standard format (8 decimals)
     const exponent = result.expo;
     const rawPrice = result.price;
     const targetDecimals = 8;
-    const pricePrecision = 10 ** (targetDecimals + exponent);
-    const normalizedPrice = (rawPrice * BigInt(pricePrecision));
+    
+    // Handle negative exponents properly
+    let normalizedPrice: bigint;
+    if (exponent >= 0) {
+      // Price needs to be scaled up
+      normalizedPrice = rawPrice * BigInt(10 ** (targetDecimals + exponent));
+    } else {
+      // Price needs to be scaled - handle negative exponent
+      const scaleDown = -exponent;
+      if (scaleDown > targetDecimals) {
+        // Need to divide
+        normalizedPrice = rawPrice / BigInt(10 ** (scaleDown - targetDecimals));
+      } else {
+        // Need to multiply
+        normalizedPrice = rawPrice * BigInt(10 ** (targetDecimals - scaleDown));
+      }
+    }
 
     return {
       token,
@@ -175,7 +207,7 @@ export class OracleAggregator {
       decimals: targetDecimals,
       timestamp: Number(result.publishTime) * 1000,
       source: 'pyth',
-      confidence: Number(result.conf) / Number(rawPrice),
+      confidence: confidenceRatio,
     };
   }
 
@@ -260,8 +292,22 @@ export class OracleAggregator {
 
   private tickToPrice(tick: number): bigint {
     // price = 1.0001 ^ tick
-    const price = Math.pow(1.0001, tick);
-    return BigInt(Math.floor(price * 1e18));
+    // Clamp tick to prevent overflow (-887272 to 887272 is valid range for Uniswap V3)
+    const MAX_TICK = 887272;
+    const clampedTick = Math.max(-MAX_TICK, Math.min(MAX_TICK, tick));
+    
+    const price = Math.pow(1.0001, clampedTick);
+    
+    // Guard against Infinity or NaN
+    if (!Number.isFinite(price) || price <= 0) {
+      throw new Error(`Invalid TWAP price calculation: tick ${tick} resulted in ${price}`);
+    }
+    
+    // Cap to prevent BigInt overflow (max safe price ~10^37)
+    const maxPrice = 1e37;
+    const safePrice = Math.min(price, maxPrice);
+    
+    return BigInt(Math.floor(safePrice * 1e18));
   }
 
   private tokenToPair(token: string): string {

@@ -48,7 +48,9 @@ export async function fetchAndValidate<T extends z.ZodTypeAny>(
   const response = await fetch(url, options);
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data: unknown = await response.json();
@@ -70,7 +72,9 @@ export async function fetchAndValidateOptional<T extends z.ZodTypeAny>(
   }
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `API request failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   const data: unknown = await response.json();

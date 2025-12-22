@@ -5,7 +5,7 @@
  * Uses X25519 + AES-GCM encryption for end-to-end security.
  */
 
-import type { Address, Hex } from 'viem';
+import type { Hex } from 'viem';
 import type {
   DirectCast,
   DirectCastConversation,
@@ -14,7 +14,6 @@ import type {
   SendDCParams,
   GetMessagesParams,
   EncryptedDirectCast,
-  DirectCastEmbed,
 } from './types';
 import { ed25519 } from '@noble/curves/ed25519';
 import { x25519 } from '@noble/curves/ed25519';
@@ -24,14 +23,22 @@ import { randomBytes } from '@noble/ciphers/webcrypto';
 import { hkdf } from '@noble/hashes/hkdf';
 import { sha256 } from '@noble/hashes/sha256';
 
-// Custom DC message type (extending Farcaster protocol)
-const DC_MESSAGE_TYPE = 14;
-
 // ============ Types ============
 
 interface MessageHandler {
   (message: DirectCast): void;
 }
+
+// ============ Constants ============
+
+/** Maximum messages per conversation to prevent memory exhaustion */
+const MAX_MESSAGES_PER_CONVERSATION = 1000;
+/** Maximum conversations to prevent memory exhaustion */
+const MAX_CONVERSATIONS = 500;
+/** Maximum text length for direct casts */
+const MAX_DC_TEXT_LENGTH = 2000;
+/** Default timeout for relay requests */
+const RELAY_TIMEOUT_MS = 10000;
 
 // ============ Direct Cast Client ============
 
@@ -206,6 +213,20 @@ export class DirectCastClient {
   async send(params: SendDCParams): Promise<DirectCast> {
     this.ensureInitialized();
     
+    // Validate text length to prevent DoS
+    if (!params.text || params.text.length === 0) {
+      throw new Error('Message text cannot be empty');
+    }
+    
+    if (params.text.length > MAX_DC_TEXT_LENGTH) {
+      throw new Error(`Message text exceeds maximum length of ${MAX_DC_TEXT_LENGTH} characters`);
+    }
+    
+    // Validate recipient FID
+    if (!Number.isInteger(params.recipientFid) || params.recipientFid <= 0) {
+      throw new Error('Invalid recipient FID');
+    }
+    
     const conversationId = this.getConversationId(params.recipientFid);
     const timestamp = Date.now();
     const id = `dc-${this.config.fid}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
@@ -321,8 +342,9 @@ export class DirectCastClient {
     
     try {
       while (true) {
-        if (queue.length > 0) {
-          yield queue.shift()!;
+        const queued = queue.shift();
+        if (queued) {
+          yield queued;
         } else {
           yield await new Promise<DirectCast>(resolve => {
             resolveNext = resolve;
@@ -467,10 +489,11 @@ export class DirectCastClient {
    * Connect to relay server
    */
   private async connectToRelay(): Promise<void> {
-    if (!this.config.relayUrl) return;
+    const relayUrl = this.config.relayUrl;
+    if (!relayUrl) return;
     
-    return new Promise((resolve, reject) => {
-      const wsUrl = this.config.relayUrl!.replace('http', 'ws') + '/dc';
+    return new Promise((resolve) => {
+      const wsUrl = relayUrl.replace('http', 'ws') + '/dc';
       
       // In production, use actual WebSocket
       console.log(`[DC Client] Connecting to relay: ${wsUrl}`);
@@ -484,6 +507,27 @@ export class DirectCastClient {
   }
   
   /**
+   * Fetch with timeout
+   */
+  private async fetchWithTimeout(
+    url: string,
+    options: RequestInit,
+    timeoutMs: number = RELAY_TIMEOUT_MS,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    
+    try {
+      return await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  
+  /**
    * Send encrypted DC to relay
    */
   private async sendToRelay(encrypted: EncryptedDirectCast): Promise<void> {
@@ -492,15 +536,17 @@ export class DirectCastClient {
       return;
     }
     
-    // Send via relay API
-    await fetch(`${this.config.relayUrl}/api/dc/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(encrypted),
-    }).catch(() => {
+    // Send via relay API with timeout
+    try {
+      await this.fetchWithTimeout(`${this.config.relayUrl}/api/dc/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(encrypted),
+      });
+    } catch {
       // Relay unavailable, queue for later
       console.log(`[DC Client] Relay unavailable, message queued`);
-    });
+    }
   }
   
   /**
@@ -509,25 +555,34 @@ export class DirectCastClient {
   private async sendReadReceipt(recipientFid: number, conversationId: string): Promise<void> {
     if (!this.config.relayUrl) return;
     
-    await fetch(`${this.config.relayUrl}/api/dc/read`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        senderFid: this.config.fid,
-        recipientFid,
-        conversationId,
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {
+    try {
+      await this.fetchWithTimeout(`${this.config.relayUrl}/api/dc/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderFid: this.config.fid,
+          recipientFid,
+          conversationId,
+          timestamp: Date.now(),
+        }),
+      });
+    } catch {
       // Ignore relay errors for receipts
-    });
+    }
   }
   
   /**
-   * Handle incoming message from relay
+   * Verify signature on incoming encrypted message
    */
-  private async handleIncomingMessage(encrypted: EncryptedDirectCast): Promise<void> {
-    // Verify signature
+  private async verifyIncomingSignature(encrypted: EncryptedDirectCast): Promise<boolean> {
+    // Get sender's signer public key from hub
+    const senderSignerKey = await this.fetchSignerKeyFromHub(encrypted.senderFid);
+    if (!senderSignerKey) {
+      console.warn(`[DC Client] No signer key found for FID ${encrypted.senderFid}`);
+      return false;
+    }
+    
+    // Reconstruct the signature payload
     const signaturePayload = new TextEncoder().encode(
       JSON.stringify({
         senderFid: encrypted.senderFid,
@@ -537,7 +592,49 @@ export class DirectCastClient {
       })
     );
     
-    // TODO: Get sender's public key and verify
+    const signatureBytes = hexToBytes(encrypted.signature.slice(2));
+    
+    // Verify the Ed25519 signature
+    return ed25519.verify(signatureBytes, signaturePayload, senderSignerKey);
+  }
+  
+  /**
+   * Fetch signer public key from hub for signature verification
+   */
+  private async fetchSignerKeyFromHub(fid: number): Promise<Uint8Array | null> {
+    try {
+      const response = await fetch(`${this.config.hubUrl}/v1/onChainSignersByFid?fid=${fid}`);
+      if (!response.ok) return null;
+      
+      const data = await response.json() as {
+        events?: Array<{
+          signerEventBody?: { key?: string };
+        }>;
+      };
+      
+      // Get the first active signer key
+      const signerEvent = data.events?.find(e => e.signerEventBody?.key);
+      if (signerEvent?.signerEventBody?.key) {
+        return hexToBytes(signerEvent.signerEventBody.key.slice(2));
+      }
+      
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  
+  /**
+   * Handle incoming message from relay
+   * Called by WebSocket message handler when connected to relay
+   */
+  async handleIncomingMessage(encrypted: EncryptedDirectCast): Promise<void> {
+    // Verify sender's signature before processing
+    const signatureValid = await this.verifyIncomingSignature(encrypted);
+    if (!signatureValid) {
+      console.warn(`[DC Client] Rejecting message with invalid signature from FID ${encrypted.senderFid}`);
+      return;
+    }
     
     // Decrypt message
     const text = await this.decrypt(encrypted);
@@ -574,11 +671,35 @@ export class DirectCastClient {
   private addMessage(dc: DirectCast): void {
     const messages = this.messages.get(dc.conversationId) ?? [];
     messages.push(dc);
+    
+    // Enforce message limit per conversation to prevent memory exhaustion
+    if (messages.length > MAX_MESSAGES_PER_CONVERSATION) {
+      // Remove oldest messages
+      messages.splice(0, messages.length - MAX_MESSAGES_PER_CONVERSATION);
+    }
+    
     this.messages.set(dc.conversationId, messages);
     
-    // Update conversation
+    // Check if we need to create a new conversation
     let conv = this.conversations.get(dc.conversationId);
     if (!conv) {
+      // Enforce conversation limit to prevent memory exhaustion
+      if (this.conversations.size >= MAX_CONVERSATIONS) {
+        // Remove oldest conversation
+        let oldestId: string | null = null;
+        let oldestTime = Infinity;
+        for (const [id, c] of this.conversations) {
+          if (c.updatedAt < oldestTime) {
+            oldestTime = c.updatedAt;
+            oldestId = id;
+          }
+        }
+        if (oldestId) {
+          this.conversations.delete(oldestId);
+          this.messages.delete(oldestId);
+        }
+      }
+      
       conv = {
         id: dc.conversationId,
         participants: [dc.senderFid, dc.recipientFid].sort((a, b) => a - b),

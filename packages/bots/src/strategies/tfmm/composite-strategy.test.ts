@@ -9,7 +9,7 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { CompositeStrategy, type MarketRegime } from './composite-strategy';
+import { CompositeStrategy } from './composite-strategy';
 import { OracleAggregator } from '../../oracles';
 import { WEIGHT_PRECISION } from '../../schemas';
 import type { StrategyContext } from './base-strategy';

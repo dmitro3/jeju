@@ -91,10 +91,11 @@ export const rentGpuAction: Action = {
       return;
     }
 
-    const provider = params.provider
+    const targetAddress = params.provider;
+    const provider = targetAddress
       ? providers.find(
           (p: { address: string }) =>
-            p.address.toLowerCase() === params.provider!.toLowerCase(),
+            p.address.toLowerCase() === targetAddress.toLowerCase(),
         )
       : providers[0];
 

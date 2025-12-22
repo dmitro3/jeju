@@ -1,53 +1,8 @@
-import { describe, test, expect, mock } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { parseEther } from 'viem';
 
-// Mock graphql-request
-const mockRequest = mock(() => Promise.resolve({
-  marketPositions: [
-    {
-      id: 'position-1',
-      yesShares: '100000000000000000000',
-      noShares: '0',
-      totalSpent: '60000000000000000000',
-      totalReceived: '0',
-      hasClaimed: false,
-      market: {
-        sessionId: '0x1234',
-        question: 'Test market 1?',
-        resolved: false,
-        outcome: null,
-      },
-    },
-    {
-      id: 'position-2',
-      yesShares: '0',
-      noShares: '50000000000000000000',
-      totalSpent: '30000000000000000000',
-      totalReceived: '50000000000000000000',
-      hasClaimed: true,
-      market: {
-        sessionId: '0x5678',
-        question: 'Test market 2?',
-        resolved: true,
-        outcome: false,
-      },
-    },
-  ]
-}));
-
-mock.module('graphql-request', () => ({
-  request: mockRequest,
-  gql: (strings: TemplateStringsArray) => strings.join(''),
-}));
-
-describe('useUserPositions Hook', () => {
-  test('should export useUserPositions function', () => {
-    const { useUserPositions } = require('../useUserPositions');
-    expect(typeof useUserPositions).toBe('function');
-  });
-
-  test('should validate address parameter', () => {
-    // Valid Ethereum address format: 0x followed by 40 hex characters
+describe('useUserPositions - Address Validation', () => {
+  test('should validate correct address format', () => {
     const validAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
     expect(validAddress.length).toBe(42);
     expect(validAddress.startsWith('0x')).toBe(true);
@@ -56,14 +11,16 @@ describe('useUserPositions Hook', () => {
 
   test('should reject invalid address format', () => {
     const invalidAddresses = ['invalid', '0x123', '', '0xGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG'];
-    
+
     for (const addr of invalidAddresses) {
       const isValid = /^0x[a-fA-F0-9]{40}$/.test(addr);
       expect(isValid).toBe(false);
     }
   });
+});
 
-  test('should transform position data correctly', () => {
+describe('useUserPositions - Position Transformation', () => {
+  test('should transform raw position data correctly', () => {
     const rawPosition = {
       id: 'position-1',
       yesShares: '100000000000000000000',
@@ -98,12 +55,6 @@ describe('useUserPositions Hook', () => {
     expect(transformed.noShares).toBe(0n);
     expect(transformed.totalSpent).toBe(parseEther('60'));
     expect(transformed.hasClaimed).toBe(false);
-  });
-
-  test('should handle null address gracefully', () => {
-    // When address is undefined, hook should return empty positions
-    const positions: never[] = [];
-    expect(positions.length).toBe(0);
   });
 });
 

@@ -9,7 +9,13 @@ import { z } from 'zod';
 
 // ============ Common Schemas ============
 
-export const HexStringSchema = z.string().regex(/^[a-fA-F0-9]+$/, 'Invalid hex string');
+// Limit hex string length to prevent ReDoS and memory exhaustion
+// 1MB of hex = 2 million chars, which is more than sufficient for any message
+const MAX_HEX_LENGTH = 2 * 1024 * 1024;
+
+export const HexStringSchema = z.string()
+  .max(MAX_HEX_LENGTH, 'Hex string too long')
+  .regex(/^[a-fA-F0-9]+$/, 'Invalid hex string');
 
 // ============ Serialized Encrypted Message Schema ============
 

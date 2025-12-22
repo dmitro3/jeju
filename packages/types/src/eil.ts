@@ -10,7 +10,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema } from './validation';
+import { AddressSchema, MAX_ARRAY_LENGTH, MAX_SMALL_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_RECORD_KEYS } from './validation';
 import type { EVMChainId } from './chain';
 
 // ============ Chain & Network Types ============
@@ -71,9 +71,12 @@ export type XLPStake = z.infer<typeof XLPStakeSchema>;
 
 export const XLPChainLiquiditySchema = z.object({
   chainId: SupportedChainIdSchema,
-  ethBalance: z.string(),             // ETH available for gas sponsorship
-  tokenBalances: z.record(z.string(), z.string()), // token address -> balance (address as string key)
-  totalValueUsd: z.string(),
+  ethBalance: z.string().max(MAX_SHORT_STRING_LENGTH),
+  tokenBalances: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.string().max(MAX_SHORT_STRING_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} token balances` }
+  ),
+  totalValueUsd: z.string().max(MAX_SHORT_STRING_LENGTH),
   lastUpdated: z.number(),
 });
 export type XLPChainLiquidity = z.infer<typeof XLPChainLiquiditySchema>;
@@ -81,13 +84,13 @@ export type XLPChainLiquidity = z.infer<typeof XLPChainLiquiditySchema>;
 export const XLPProfileSchema = z.object({
   address: AddressSchema,
   stake: XLPStakeSchema,
-  liquidity: z.array(XLPChainLiquiditySchema),
+  liquidity: z.array(XLPChainLiquiditySchema).max(MAX_SMALL_ARRAY_LENGTH),
   totalVouchersIssued: z.number(),
   totalVouchersFulfilled: z.number(),
   totalVouchersFailed: z.number(),
-  totalFeesEarned: z.string(),        // Total fees earned (USD)
-  averageResponseTimeMs: z.number(),  // Avg time to issue voucher
-  reputation: z.number(),             // 0-100 score
+  totalFeesEarned: z.string().max(MAX_SHORT_STRING_LENGTH),
+  averageResponseTimeMs: z.number(),
+  reputation: z.number(),
   registeredAt: z.number(),
 });
 export type XLPProfile = z.infer<typeof XLPProfileSchema>;
@@ -167,16 +170,16 @@ export const CrossChainOperationSchema = z.object({
 export type CrossChainOperation = z.infer<typeof CrossChainOperationSchema>;
 
 export const CrossChainTransactionSchema = z.object({
-  id: z.string(),                     // Unique transaction ID
+  id: z.string().max(MAX_SHORT_STRING_LENGTH),
   user: AddressSchema,
-  operations: z.array(CrossChainOperationSchema),
-  merkleRoot: z.string(),             // Root of UserOp merkle tree
-  signature: z.string(),              // User's single signature
-  voucherRequests: z.array(z.string()), // Request IDs for cross-chain transfers
+  operations: z.array(CrossChainOperationSchema).max(MAX_SMALL_ARRAY_LENGTH),
+  merkleRoot: z.string().max(MAX_SHORT_STRING_LENGTH),
+  signature: z.string().max(MAX_SHORT_STRING_LENGTH),
+  voucherRequests: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   status: z.enum(['pending', 'partial', 'complete', 'failed']),
   createdAt: z.number(),
   completedAt: z.number().optional(),
-  totalFees: z.string(),
+  totalFees: z.string().max(MAX_SHORT_STRING_LENGTH),
 });
 export type CrossChainTransaction = z.infer<typeof CrossChainTransactionSchema>;
 
@@ -185,25 +188,31 @@ export type CrossChainTransaction = z.infer<typeof CrossChainTransactionSchema>;
 export const EILConfigSchema = z.object({
   // L1 Configuration
   l1StakeManager: AddressSchema,
-  minStake: z.string(),               // Minimum stake required (wei)
-  unbondingPeriod: z.number(),        // Seconds to unbond (default 8 days = 691200)
-  slashingPenalty: z.number(),        // Percentage of stake slashed (0-100)
+  minStake: z.string().max(MAX_SHORT_STRING_LENGTH),
+  unbondingPeriod: z.number(),
+  slashingPenalty: z.number(),
   
   // Cross-chain paymaster addresses per chain
-  paymasters: z.record(z.string(), AddressSchema), // chainId -> address
+  paymasters: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), AddressSchema).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} paymasters` }
+  ),
   
   // Supported tokens per chain
-  supportedTokens: z.record(z.string(), z.array(AddressSchema)), // chainId -> tokens[]
+  supportedTokens: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.array(AddressSchema).max(MAX_ARRAY_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} chain entries` }
+  ),
   
   // Fee configuration
-  minFee: z.string(),                 // Minimum fee per transfer (wei)
-  maxFee: z.string(),                 // Maximum fee per transfer (wei)
-  defaultFeeIncrement: z.string(),    // Default fee increment per block
+  minFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  maxFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  defaultFeeIncrement: z.string().max(MAX_SHORT_STRING_LENGTH),
   
   // Timing
-  requestTimeout: z.number(),         // Blocks until request expires
-  voucherTimeout: z.number(),         // Blocks until voucher expires
-  claimDelay: z.number(),             // Blocks before XLP can claim source funds
+  requestTimeout: z.number(),
+  voucherTimeout: z.number(),
+  claimDelay: z.number(),
 });
 export type EILConfig = z.infer<typeof EILConfigSchema>;
 
@@ -226,10 +235,10 @@ export const MultiChainUserOpBatchSchema = z.object({
   userOps: z.array(z.object({
     chainId: SupportedChainIdSchema,
     userOp: PackedUserOperationSchema,
-  })),
-  merkleRoot: z.string(),
-  merkleProofs: z.array(z.array(z.string())), // Proof for each userOp
-  signature: z.string(),              // Single signature over merkle root
+  })).max(MAX_SMALL_ARRAY_LENGTH),
+  merkleRoot: z.string().max(MAX_SHORT_STRING_LENGTH),
+  merkleProofs: z.array(z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_SMALL_ARRAY_LENGTH)).max(MAX_SMALL_ARRAY_LENGTH),
+  signature: z.string().max(MAX_SHORT_STRING_LENGTH),
 });
 export type MultiChainUserOpBatch = z.infer<typeof MultiChainUserOpBatchSchema>;
 

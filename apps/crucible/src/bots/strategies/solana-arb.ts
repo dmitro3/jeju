@@ -14,7 +14,7 @@
  * Note: Requires running Solana RPC and ZK prover infrastructure
  */
 
-import { Connection, PublicKey, Keypair } from '@solana/web3.js';
+import { Connection, Keypair } from '@solana/web3.js';
 import { createPublicClient, http, type PublicClient, type Address } from 'viem';
 import { EventEmitter } from 'events';
 import type { ChainId, StrategyConfig, CrossChainArbOpportunity, Token } from '../autocrat-types';

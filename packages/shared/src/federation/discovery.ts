@@ -50,6 +50,9 @@ interface CacheEntry<T> {
   timestamp: number;
 }
 
+// Max cache size to prevent memory exhaustion
+const MAX_DISCOVERY_CACHE_SIZE = 1000;
+
 export class FederationDiscovery {
   private config: DiscoveryConfig;
   private hubClient: PublicClient;
@@ -79,6 +82,19 @@ export class FederationDiscovery {
 
   private setCache<T extends NetworkInfo | NetworkInfo[] | FederatedSolver[] | NetworkLiquidity[]>(key: string, data: T): void {
     if (!this.config.cacheEnabled) return;
+    
+    // Evict oldest entries if cache is full
+    if (this.cache.size >= MAX_DISCOVERY_CACHE_SIZE) {
+      const entries = Array.from(this.cache.entries())
+        .sort((a, b) => a[1].timestamp - b[1].timestamp);
+      
+      // Remove oldest 10% of entries
+      const toRemove = Math.ceil(entries.length * 0.1);
+      for (let i = 0; i < toRemove; i++) {
+        this.cache.delete(entries[i][0]);
+      }
+    }
+    
     this.cache.set(key, { data, timestamp: Date.now() });
   }
 

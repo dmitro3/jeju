@@ -19,7 +19,8 @@ import {
 import { EVM_LIGHT_CLIENT_PROGRAM_ID } from '../light-client';
 import { evmAddressToBytes, bytesToEvmAddress } from '../dex/utils';
 
-export const TOKEN_BRIDGE_PROGRAM_ID = new PublicKey('TknBridge1111111111111111111111111111111111');
+// NOTE: This must match the program ID in Anchor.toml
+export const TOKEN_BRIDGE_PROGRAM_ID = new PublicKey('36Cx8V6UCkCGuSCjzQuE9oeeqojd9734TKmfnbDGWhCA');
 
 const BRIDGE_STATE_SEED = Buffer.from('bridge_state');
 const TOKEN_CONFIG_SEED = Buffer.from('token_config');

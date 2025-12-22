@@ -148,7 +148,7 @@ export function expandMessageXMD(
   const b0 = sha256(b0Input);
   
   // b_1 = H(b_0 || I2OSP(1, 1) || DST_prime)
-  let b1Input = concatBytes(b0, new Uint8Array([1]), dstPrime);
+  const b1Input = concatBytes(b0, new Uint8Array([1]), dstPrime);
   let bi = sha256(b1Input);
   
   const result = new Uint8Array(lenInBytes);

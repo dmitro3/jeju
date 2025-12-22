@@ -719,7 +719,6 @@ export class ExternalChainMevEngine extends EventEmitter {
   private buildTx(to: Address, data: Hex): Hex {
     // Encode transaction as RLP for bundle submission
     // This is a simplified version - real impl uses proper RLP encoding
-    const { encodeAbiParameters } = require('viem');
     return encodeAbiParameters(
       [{ type: 'address' }, { type: 'bytes' }],
       [to, data]

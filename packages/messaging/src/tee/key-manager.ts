@@ -18,9 +18,43 @@ import type {
   EncryptedBackup,
   GenerateKeyRequest,
   GenerateKeyResult,
-  KeyPolicy,
 } from './types';
-import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from 'node:crypto';
+import { randomBytes, createCipheriv, createDecipheriv, scrypt } from 'node:crypto';
+
+// Typed promisified scrypt for async usage
+const scryptAsync = (
+  password: string | Buffer,
+  salt: Buffer,
+  keylen: number,
+  options: { N: number; r: number; p: number }
+): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, options, (err, derivedKey) => {
+      if (err) reject(err);
+      else resolve(derivedKey);
+    });
+  });
+};
+
+// ============ Limits ============
+
+/** Max identity keys per manager to prevent memory exhaustion */
+export const MAX_IDENTITY_KEYS = 10000;
+/** Max pre-keys per manager to prevent memory exhaustion */
+export const MAX_PRE_KEYS = 100000;
+/** Max installation keys per manager to prevent memory exhaustion */
+export const MAX_INSTALLATION_KEYS = 50000;
+/** Max mock keys in test mode to prevent memory exhaustion */
+export const MAX_MOCK_KEYS = 100000;
+
+// Recommended scrypt parameters for backup encryption
+// N=2^14 (~16k), r=8, p=1, keylen=32
+// This provides strong security while staying within Bun's memory limits
+// Note: r=8 provides ~128x memory multiplier, so effective cost is ~2MB
+const SCRYPT_N = 16384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 1;
+const SCRYPT_KEYLEN = 32;
 
 // ============ Types ============
 
@@ -55,6 +89,11 @@ export class TEEXMTPKeyManager {
    * Generate XMTP identity key inside TEE
    */
   async generateIdentityKey(address: Address): Promise<TEEIdentityKey> {
+    // Check limit to prevent memory exhaustion
+    if (this.keys.size >= MAX_IDENTITY_KEYS) {
+      throw new Error(`Cannot generate identity key: maximum limit (${MAX_IDENTITY_KEYS}) reached`);
+    }
+    
     const keyId = `xmtp-identity-${address.toLowerCase()}-${Date.now()}`;
     
     // Generate Ed25519 key pair inside TEE
@@ -84,7 +123,8 @@ export class TEEXMTPKeyManager {
     
     this.keys.set(keyId, identityKey);
     
-    console.log(`[TEE] Generated identity key ${keyId} for ${address}`);
+    // Log without exposing full key ID or address (use truncated versions)
+    console.log(`[TEE] Generated identity key ${keyId.slice(0, 20)}... for ${address.slice(0, 10)}...`);
     
     return identityKey;
   }
@@ -114,6 +154,11 @@ export class TEEXMTPKeyManager {
    * Generate XMTP pre-key inside TEE
    */
   async generatePreKey(identityKeyId: string): Promise<TEEPreKey> {
+    // Check limit to prevent memory exhaustion
+    if (this.preKeys.size >= MAX_PRE_KEYS) {
+      throw new Error(`Cannot generate pre-key: maximum limit (${MAX_PRE_KEYS}) reached`);
+    }
+    
     const identityKey = this.keys.get(identityKeyId);
     if (!identityKey) {
       throw new Error(`Identity key not found: ${identityKeyId}`);
@@ -178,6 +223,11 @@ export class TEEXMTPKeyManager {
     const existing = this.installationKeys.get(installationKeyId);
     if (existing) return existing;
     
+    // Check limit to prevent memory exhaustion
+    if (this.installationKeys.size >= MAX_INSTALLATION_KEYS) {
+      throw new Error(`Cannot derive installation key: maximum limit (${MAX_INSTALLATION_KEYS}) reached`);
+    }
+    
     // Derive key using HKDF inside TEE
     const derivedKey = await this.deriveKeyInTEE(
       identityKeyId,
@@ -195,7 +245,8 @@ export class TEEXMTPKeyManager {
     
     this.installationKeys.set(installationKeyId, installationKey);
     
-    console.log(`[TEE] Derived installation key for device ${deviceId}`);
+    // Log truncated device ID only
+    console.log(`[TEE] Derived installation key for device ${deviceId.slice(0, 8)}...`);
     
     return installationKey;
   }
@@ -251,7 +302,7 @@ export class TEEXMTPKeyManager {
   // ============ Key Export/Import ============
   
   /**
-   * Export encrypted backup of keys
+   * Export encrypted backup of keys with strong KDF
    */
   async exportEncrypted(
     keyId: string,
@@ -262,9 +313,14 @@ export class TEEXMTPKeyManager {
       throw new Error(`Key not found: ${keyId}`);
     }
     
-    // Derive encryption key from password
+    // Derive encryption key from password using strong scrypt parameters
     const salt = randomBytes(32);
-    const encryptionKey = scryptSync(backupPassword, salt, 32);
+    const encryptionKey = await scryptAsync(
+      backupPassword,
+      salt,
+      SCRYPT_KEYLEN,
+      { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P }
+    ) as Buffer;
     
     // Encrypt private key
     const iv = randomBytes(16);
@@ -286,7 +342,7 @@ export class TEEXMTPKeyManager {
         algorithm: 'aes-256-gcm',
         kdfParams: {
           salt: `0x${salt.toString('hex')}` as Hex,
-          iterations: 100000,
+          iterations: SCRYPT_N, // N value for reference
         },
       },
       createdAt: Date.now(),
@@ -303,9 +359,14 @@ export class TEEXMTPKeyManager {
   ): Promise<TEEIdentityKey> {
     const { ciphertext, metadata } = encryptedBackup;
     
-    // Derive decryption key
+    // Derive decryption key using strong scrypt parameters
     const salt = Buffer.from(metadata.kdfParams.salt.slice(2), 'hex');
-    const decryptionKey = scryptSync(password, salt, 32);
+    const decryptionKey = await scryptAsync(
+      password,
+      salt,
+      SCRYPT_KEYLEN,
+      { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P }
+    ) as Buffer;
     
     // Parse ciphertext
     const data = Buffer.from(ciphertext.slice(2), 'hex');
@@ -326,7 +387,16 @@ export class TEEXMTPKeyManager {
     const { ed25519 } = await import('@noble/curves/ed25519');
     const publicKey = ed25519.getPublicKey(privateKey);
     
+    // Check keys limit
+    if (this.keys.size >= MAX_IDENTITY_KEYS) {
+      throw new Error(`Cannot import key: maximum identity keys limit (${MAX_IDENTITY_KEYS}) reached`);
+    }
+    
     // Store in mock key store
+    if (this.mockKeyStore.size >= MAX_MOCK_KEYS) {
+      throw new Error(`Cannot import key: maximum key store limit (${MAX_MOCK_KEYS}) reached`);
+    }
+    
     this.mockKeyStore.set(newKeyId, {
       privateKey: new Uint8Array(privateKey),
       publicKey,
@@ -485,10 +555,11 @@ export class TEEXMTPKeyManager {
     const nonce = randomBytes(32);
     const timestamp = Date.now();
     
-    // Mock attestation - in production, this comes from TEE
+    // Mock attestation - in production, this comes from TEE hardware
     const measurement = randomBytes(32);
     
-    // Sign attestation
+    // Sign attestation using key-derived secret
+    // In production, TEE hardware provides the signing capability
     const attestationData = Buffer.concat([
       Buffer.from(this.config.enclaveId),
       measurement,
@@ -496,8 +567,15 @@ export class TEEXMTPKeyManager {
       Buffer.from(timestamp.toString()),
     ]);
     
-    const { createHash, createHmac } = await import('node:crypto');
-    const signature = createHmac('sha256', 'tee-attestation-key')
+    // Use key material for HMAC instead of hardcoded secret
+    // The attestation key should be derived from TEE-specific secrets
+    const keyStore = this.mockKeyStore.get(keyId);
+    const hmacKey = keyStore 
+      ? keyStore.privateKey 
+      : randomBytes(32);  // Ephemeral key if no stored key
+    
+    const { createHmac } = await import('node:crypto');
+    const signature = createHmac('sha256', hmacKey)
       .update(attestationData)
       .digest();
     

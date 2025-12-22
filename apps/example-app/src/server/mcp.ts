@@ -21,7 +21,8 @@ import {
   addressSchema,
   todoIdSchema,
 } from '../schemas';
-import { expectValid, ValidationError } from '../utils/validation';
+import { expectValid, ValidationError, sanitizeErrorMessage } from '../utils/validation';
+import { getNetworkName } from '@jejunetwork/config';
 import type { MCPServerInfo, MCPResource, MCPTool, MCPPrompt, Todo, TodoStats } from '../types';
 
 const MCP_SERVER_INFO: MCPServerInfo = {
@@ -157,17 +158,27 @@ export function createMCPServer(): Hono {
   const app = new Hono();
   const todoService = getTodoService();
   const cronService = getCronService();
+  
+  // Determine if we're in localnet for error message detail level
+  const networkName = getNetworkName();
+  const isLocalnet = networkName === 'localnet' || networkName === 'Jeju';
 
-  // Error handler
+  // Error handler with sanitized messages
   app.onError((err, c) => {
+    // Log full error for debugging (server-side only)
+    console.error('[MCP Error]', err);
+    
     if (err instanceof ValidationError) {
       return c.json({
         content: [{ type: 'text', text: `Validation error: ${err.message}` }],
         isError: true,
       });
     }
+    
+    // Return sanitized message to client
+    const safeMessage = sanitizeErrorMessage(err, isLocalnet);
     return c.json({
-      content: [{ type: 'text', text: `Internal error: ${err.message || 'Unknown error'}` }],
+      content: [{ type: 'text', text: `Internal error: ${safeMessage}` }],
       isError: true,
     });
   });
@@ -289,7 +300,7 @@ export function createMCPServer(): Hono {
       | { completed: number; todos: Todo[] };
     
     let result: ToolResult;
-    let isError = false;
+    const isError = false;
 
     switch (validatedInput.name) {
       case 'list_todos': {

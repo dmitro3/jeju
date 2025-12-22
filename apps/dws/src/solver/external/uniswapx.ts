@@ -325,9 +325,14 @@ export class UniswapXAdapter extends EventEmitter {
       stateMutability: 'payable',
     }] as const;
 
+    const account = client.wallet.account;
+    if (!account) {
+      return { success: false, error: 'No account configured' };
+    }
+    
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account,
       address: reactor,
       abi: EXECUTE_SINGLE_ABI,
       functionName: 'executeSingle',

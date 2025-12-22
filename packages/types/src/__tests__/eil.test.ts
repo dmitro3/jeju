@@ -7,7 +7,6 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { z } from 'zod';
 import {
   isSupportedChainId,
   SupportedChainIdSchema,
@@ -45,11 +44,11 @@ describe('isSupportedChainId', () => {
     31337,    // Local EVM
   ];
 
-  test.each(supportedChains)('returns true for supported chain ID: %d', (chainId) => {
+  test.each(supportedChains)('returns true for supported chain ID: %d', (chainId: EVMChainId) => {
     expect(isSupportedChainId(chainId)).toBe(true);
   });
 
-  test.each(unsupportedChains)('returns false for unsupported chain ID: %d', (chainId) => {
+  test.each(unsupportedChains)('returns false for unsupported chain ID: %d', (chainId: EVMChainId) => {
     expect(isSupportedChainId(chainId)).toBe(false);
   });
 
@@ -126,11 +125,11 @@ describe('XLPStatusSchema', () => {
   const validStatuses = ['active', 'paused', 'unbonding', 'slashed'];
   const invalidStatuses = ['inactive', 'pending', 'unknown', ''];
 
-  test.each(validStatuses)('accepts valid status: %s', (status) => {
+  test.each(validStatuses)('accepts valid status: %s', (status: string) => {
     expect(XLPStatusSchema.safeParse(status).success).toBe(true);
   });
 
-  test.each(invalidStatuses)('rejects invalid status: %s', (status) => {
+  test.each(invalidStatuses)('rejects invalid status: %s', (status: string) => {
     expect(XLPStatusSchema.safeParse(status).success).toBe(false);
   });
 });
@@ -143,11 +142,11 @@ describe('VoucherStatusSchema', () => {
   const validStatuses = ['pending', 'claimed', 'fulfilled', 'expired', 'failed', 'slashed'];
   const invalidStatuses = ['active', 'cancelled', 'unknown', ''];
 
-  test.each(validStatuses)('accepts valid status: %s', (status) => {
+  test.each(validStatuses)('accepts valid status: %s', (status: string) => {
     expect(VoucherStatusSchema.safeParse(status).success).toBe(true);
   });
 
-  test.each(invalidStatuses)('rejects invalid status: %s', (status) => {
+  test.each(invalidStatuses)('rejects invalid status: %s', (status: string) => {
     expect(VoucherStatusSchema.safeParse(status).success).toBe(false);
   });
 });
@@ -160,11 +159,11 @@ describe('CrossChainOperationTypeSchema', () => {
   const validTypes = ['transfer', 'swap', 'mint', 'stake', 'custom'];
   const invalidTypes = ['bridge', 'withdraw', 'unknown', ''];
 
-  test.each(validTypes)('accepts valid type: %s', (type) => {
+  test.each(validTypes)('accepts valid type: %s', (type: string) => {
     expect(CrossChainOperationTypeSchema.safeParse(type).success).toBe(true);
   });
 
-  test.each(invalidTypes)('rejects invalid type: %s', (type) => {
+  test.each(invalidTypes)('rejects invalid type: %s', (type: string) => {
     expect(CrossChainOperationTypeSchema.safeParse(type).success).toBe(false);
   });
 });
@@ -189,7 +188,7 @@ describe('EILEventTypeSchema', () => {
     'LiquidityWithdrawn',
   ];
 
-  test.each(validEventTypes)('accepts valid event type: %s', (eventType) => {
+  test.each(validEventTypes)('accepts valid event type: %s', (eventType: string) => {
     expect(EILEventTypeSchema.safeParse(eventType).success).toBe(true);
   });
 

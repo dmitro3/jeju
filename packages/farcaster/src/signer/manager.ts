@@ -52,11 +52,9 @@ interface StoredSigner {
 export class FarcasterSignerManager {
   private signers: Map<string, StoredSigner> = new Map();
   private readonly storage: 'memory' | 'file';
-  private readonly storagePath?: string;
   
   constructor(config?: SignerManagerConfig) {
     this.storage = config?.storage ?? 'memory';
-    this.storagePath = config?.storagePath;
   }
   
   /**
@@ -250,7 +248,13 @@ export class FarcasterSignerManager {
   }
   
   /**
-   * Export signer for backup (encrypted in real implementation)
+   * Export signer for backup.
+   * 
+   * SECURITY WARNING: This method returns the raw private key.
+   * - Never log or transmit the returned privateKey
+   * - Store exported keys encrypted at rest
+   * - Clear memory containing the key after use
+   * - Consider using secure key storage (KMS, HSM) in production
    */
   async exportSigner(keyId: string): Promise<{
     publicKey: Hex;
@@ -262,6 +266,11 @@ export class FarcasterSignerManager {
     if (!stored) {
       throw new Error(`Signer not found: ${keyId}`);
     }
+    
+    console.warn(
+      `[SignerManager] SECURITY: Exporting private key for signer ${keyId}. ` +
+      `Ensure proper key handling and storage.`
+    );
     
     return {
       publicKey: stored.info.publicKey,

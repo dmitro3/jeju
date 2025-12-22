@@ -58,7 +58,7 @@ enum AlertSeverity {
   CRITICAL = 'critical',
 }
 
-// Metrics storage
+// Metrics storage with atomic update helpers to prevent race conditions
 interface Metrics {
   chainsRegistered: number;
   registriesAdded: number;
@@ -88,6 +88,32 @@ const metrics: Metrics = {
   alertsSent: 0,
   errors: 0,
 };
+
+// Mutex for serializing metric updates to prevent race conditions
+let metricsLock: Promise<void> = Promise.resolve();
+
+function withMetricsLock<T>(fn: () => T | Promise<T>): Promise<T> {
+  const currentLock = metricsLock;
+  let releaseLock: () => void;
+  metricsLock = new Promise((resolve) => { releaseLock = resolve; });
+  
+  return currentLock.then(async () => {
+    const result = await fn();
+    releaseLock();
+    return result;
+  });
+}
+
+// Safe metric increment helper
+function incrementMetric(key: keyof Omit<Metrics, 'lastBlockProcessed'>): void {
+  metrics[key]++;
+}
+
+function updateLastBlock(blockNumber: bigint): void {
+  if (blockNumber > metrics.lastBlockProcessed) {
+    metrics.lastBlockProcessed = blockNumber;
+  }
+}
 
 // Event ABIs
 const REGISTRY_HUB_EVENTS = parseAbi([
@@ -152,12 +178,15 @@ async function sendAlert(alert: Alert): Promise<void> {
     body: JSON.stringify(payload),
   });
 
-  if (!response.ok) {
-    console.error(`Failed to send alert: ${response.status}`);
-    metrics.errors++;
-  } else {
-    metrics.alertsSent++;
-  }
+  // Update metrics atomically
+  await withMetricsLock(() => {
+    if (!response.ok) {
+      console.error(`Failed to send alert: ${response.status}`);
+      incrementMetric('errors');
+    } else {
+      incrementMetric('alertsSent');
+    }
+  });
 }
 
 function createAlert(
@@ -256,87 +285,91 @@ async function handleRegistryHubEvent(log: Log, eventName: string): Promise<void
 }
 
 async function handleNetworkRegistryEvent(log: Log, eventName: string): Promise<void> {
-  switch (eventName) {
-    case 'NetworkVerified':
-      await sendAlert(
-        createAlert(
-          AlertSeverity.INFO,
-          'Network Verified',
-          `A network has achieved verified status`,
-          'NetworkRegistry',
-          eventName,
-          log
-        )
-      );
-      break;
+  await withMetricsLock(async () => {
+    switch (eventName) {
+      case 'NetworkVerified':
+        await sendAlert(
+          createAlert(
+            AlertSeverity.INFO,
+            'Network Verified',
+            `A network has achieved verified status`,
+            'NetworkRegistry',
+            eventName,
+            log
+          )
+        );
+        break;
 
-    case 'VerificationRevoked':
-      await sendAlert(
-        createAlert(
-          AlertSeverity.CRITICAL,
-          'Verification Revoked',
-          `Network verification has been revoked`,
-          'NetworkRegistry',
-          eventName,
-          log
-        )
-      );
-      break;
+      case 'VerificationRevoked':
+        await sendAlert(
+          createAlert(
+            AlertSeverity.CRITICAL,
+            'Verification Revoked',
+            `Network verification has been revoked`,
+            'NetworkRegistry',
+            eventName,
+            log
+          )
+        );
+        break;
 
-    case 'TrustEstablished':
-      metrics.trustRelationsCreated++;
-      break;
+      case 'TrustEstablished':
+        incrementMetric('trustRelationsCreated');
+        break;
 
-    case 'TrustRevoked':
-      metrics.trustRelationsBroken++;
-      await sendAlert(
-        createAlert(
-          AlertSeverity.HIGH,
-          'Trust Revoked',
-          `Trust relationship between networks has been broken`,
-          'NetworkRegistry',
-          eventName,
-          log
-        )
-      );
-      break;
-  }
+      case 'TrustRevoked':
+        incrementMetric('trustRelationsBroken');
+        await sendAlert(
+          createAlert(
+            AlertSeverity.HIGH,
+            'Trust Revoked',
+            `Trust relationship between networks has been broken`,
+            'NetworkRegistry',
+            eventName,
+            log
+          )
+        );
+        break;
+    }
+  });
 }
 
 async function handleCrossChainSyncEvent(log: Log, eventName: string): Promise<void> {
-  switch (eventName) {
-    case 'AgentSynced':
-      metrics.agentsSynced++;
-      break;
+  await withMetricsLock(async () => {
+    switch (eventName) {
+      case 'AgentSynced':
+        incrementMetric('agentsSynced');
+        break;
 
-    case 'AgentBanSynced':
-      metrics.bansPropagated++;
-      await sendAlert(
-        createAlert(
-          AlertSeverity.HIGH,
-          'Agent Ban Synced',
-          `An agent ban has been propagated cross-chain`,
-          'CrossChainIdentitySync',
-          eventName,
-          log
-        )
-      );
-      break;
+      case 'AgentBanSynced':
+        incrementMetric('bansPropagated');
+        await sendAlert(
+          createAlert(
+            AlertSeverity.HIGH,
+            'Agent Ban Synced',
+            `An agent ban has been propagated cross-chain`,
+            'CrossChainIdentitySync',
+            eventName,
+            log
+          )
+        );
+        break;
 
-    case 'AgentSlashSynced':
-      metrics.slashesPropagated++;
-      await sendAlert(
-        createAlert(
-          AlertSeverity.HIGH,
-          'Agent Slash Synced',
-          `An agent slash has been propagated cross-chain`,
-          'CrossChainIdentitySync',
-          eventName,
-          log
-        )
-      );
-      break;
-  }
+      case 'AgentSlashSynced':
+        incrementMetric('slashesPropagated');
+        await sendAlert(
+          createAlert(
+            AlertSeverity.HIGH,
+            'Agent Slash Synced',
+            `An agent slash has been propagated cross-chain`,
+            'CrossChainIdentitySync',
+            eventName,
+            log
+          )
+        );
+        break;
+    }
+  });
 }
 
 function serveMetrics(): void {
@@ -433,7 +466,8 @@ async function main(): Promise<void> {
       abi: REGISTRY_HUB_EVENTS,
       onLogs: async (logs) => {
         for (const log of logs) {
-          metrics.lastBlockProcessed = log.blockNumber || metrics.lastBlockProcessed;
+          const blockNumber = log.blockNumber ?? 0n;
+          await withMetricsLock(() => updateLastBlock(blockNumber));
           const eventName = (log as Log & { eventName?: string }).eventName || 'Unknown';
           await handleRegistryHubEvent(log, eventName);
         }
@@ -447,7 +481,8 @@ async function main(): Promise<void> {
       abi: NETWORK_REGISTRY_EVENTS,
       onLogs: async (logs) => {
         for (const log of logs) {
-          metrics.lastBlockProcessed = log.blockNumber || metrics.lastBlockProcessed;
+          const blockNumber = log.blockNumber ?? 0n;
+          await withMetricsLock(() => updateLastBlock(blockNumber));
           const eventName = (log as Log & { eventName?: string }).eventName || 'Unknown';
           await handleNetworkRegistryEvent(log, eventName);
         }
@@ -461,7 +496,8 @@ async function main(): Promise<void> {
       abi: CROSS_CHAIN_SYNC_EVENTS,
       onLogs: async (logs) => {
         for (const log of logs) {
-          metrics.lastBlockProcessed = log.blockNumber || metrics.lastBlockProcessed;
+          const blockNumber = log.blockNumber ?? 0n;
+          await withMetricsLock(() => updateLastBlock(blockNumber));
           const eventName = (log as Log & { eventName?: string }).eventName || 'Unknown';
           await handleCrossChainSyncEvent(log, eventName);
         }
@@ -469,8 +505,10 @@ async function main(): Promise<void> {
     });
   }
 
-  // Keep process alive
-  await new Promise(() => {});
+  // Keep process alive - never resolves to keep the daemon running
+  await new Promise<never>(() => {
+    // Intentionally empty - this promise never resolves, keeping the process alive
+  });
 }
 
 main().catch((error) => {

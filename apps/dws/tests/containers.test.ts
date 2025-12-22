@@ -13,7 +13,7 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import type { Address } from 'viem';
 
 // Check if Docker is available
-async function isDockerAvailable(): Promise<boolean> {
+async function _isDockerAvailable(): Promise<boolean> {
   const dockerHost = process.env.DOCKER_HOST || 'unix:///var/run/docker.sock';
   const url = dockerHost.startsWith('unix://') ? 'http://localhost' : dockerHost;
   
@@ -30,7 +30,6 @@ import {
   // Types
   type ContainerResources,
   type ExecutionRequest,
-  type WarmthConfig,
   type ComputeNode,
   
   // Image Cache
@@ -45,16 +44,12 @@ import {
   
   // Warm Pool
   getOrCreatePool,
-  getPool,
   addInstance,
   getInstance,
   updateInstanceState,
-  removeInstance,
   acquireWarmInstance,
   releaseInstance,
   getPoolStats,
-  getAllPoolStats,
-  prewarmInstances,
   cleanupPool,
   cleanupAllPools,
   onContainerEvent,
@@ -62,10 +57,6 @@ import {
   // Executor
   executeContainer,
   executeBatch,
-  getExecution,
-  getExecutionResult,
-  listExecutions,
-  cancelExecution,
   calculateCost,
   estimateCost,
   getExecutorStats,
@@ -74,10 +65,8 @@ import {
   // Scheduler
   registerNode,
   updateNodeResources,
-  updateNodeStatus,
   removeNode,
   getNode,
-  getAllNodes,
   getNodesByRegion,
   scheduleExecution,
   reserveResources,
@@ -205,7 +194,7 @@ describe('Warm Pool', () => {
 
   test('should acquire and release warm instances', async () => {
     const resources: ContainerResources = { cpuCores: 1, memoryMb: 512, storageMb: 1024 };
-    const instance = addInstance(testDigest, 'inst-warm', resources, TEST_USER, 'node-1');
+    const _instance = addInstance(testDigest, 'inst-warm', resources, TEST_USER, 'node-1');
 
     // Make it warm
     updateInstanceState(testDigest, 'inst-warm', 'warm', {

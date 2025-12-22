@@ -436,7 +436,7 @@ describe('Authentication', () => {
 });
 
 describe('Bulk Operations', () => {
-  let todoIds: string[] = [];
+  const todoIds: string[] = [];
 
   beforeAll(async () => {
     if (!serverRunning) return;

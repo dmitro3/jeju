@@ -94,7 +94,7 @@ test.describe('Portfolio - Complete Management', () => {
     
     expect(pnlText).toBeTruthy()
     // Should show +/- and ETH
-    expect(pnlText).toMatch(/[+\-]?\d+\.?\d*\s*ETH/)
+    expect(pnlText).toMatch(/[+-]?\d+\.?\d*\s*ETH/)
   })
 
   test('should click position to navigate to market', async ({ context, page, metamaskPage, extensionId }) => {
@@ -158,7 +158,7 @@ test.describe('Portfolio - Complete Management', () => {
       
       // Should show success or update position
       const body = await page.textContent('body')
-      const hasClaimed = body?.includes('Claimed') || 
+      const _hasClaimed = body?.includes('Claimed') || 
                         body?.includes('successfully') ||
                         body?.includes('Success')
       

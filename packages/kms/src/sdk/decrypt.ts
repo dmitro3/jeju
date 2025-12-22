@@ -3,6 +3,7 @@
  */
 
 import type { Address, Hex } from 'viem';
+import type { ZodSchema } from 'zod';
 import { getKMS } from '../kms.js';
 import type { AuthSignature, EncryptedPayload } from '../types.js';
 
@@ -37,10 +38,46 @@ export async function canDecrypt(payload: EncryptedPayload): Promise<boolean> {
   return false;
 }
 
-export async function decryptJSON<T>(payload: EncryptedPayload, authSig?: AuthSignature): Promise<T> {
+/**
+ * Decrypt and parse JSON with optional schema validation.
+ * 
+ * SECURITY: Always provide a schema when decrypting untrusted data to prevent
+ * type confusion and prototype pollution attacks.
+ * 
+ * @param payload - The encrypted payload
+ * @param authSig - Optional auth signature for access control
+ * @param schema - Optional Zod schema for validation (RECOMMENDED)
+ * @throws Error if schema validation fails
+ */
+export async function decryptJSON<T>(
+  payload: EncryptedPayload, 
+  authSig?: AuthSignature,
+  schema?: ZodSchema<T>
+): Promise<T> {
   const kms = getKMS();
   await kms.initialize();
-  return JSON.parse(await kms.decrypt({ payload, authSig })) as T;
+  const decrypted = await kms.decrypt({ payload, authSig });
+  
+  // Parse JSON in a way that prevents prototype pollution
+  const parsed: unknown = JSON.parse(decrypted, (key, value) => {
+    // Reject __proto__ and constructor to prevent prototype pollution
+    if (key === '__proto__' || key === 'constructor') {
+      throw new Error('Prototype pollution attempt detected');
+    }
+    return value;
+  });
+  
+  // If schema provided, validate the parsed data
+  if (schema) {
+    const result = schema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error(`Decrypted JSON validation failed: ${result.error.message}`);
+    }
+    return result.data;
+  }
+  
+  // Without schema, return parsed data (caller assumes type safety)
+  return parsed as T;
 }
 
 export async function decryptAndVerify(payload: EncryptedPayload, authSig: AuthSignature, expectedHash?: Hex): Promise<{ data: string; verified: boolean }> {

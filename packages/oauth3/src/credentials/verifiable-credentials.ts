@@ -7,7 +7,7 @@
  * @see https://www.w3.org/TR/vc-data-model/
  */
 
-import { keccak256, toBytes, type Address, type Hex } from 'viem';
+import { keccak256, toBytes, recoverMessageAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import type {
   AuthProvider,
@@ -337,14 +337,39 @@ export class VerifiableCredentialVerifier {
   }
 
   private async verifySignature(credential: VerifiableCredential): Promise<boolean> {
-    // In a full implementation, we would verify the signature against the credential hash
-    // For now, just validate the issuer address format
+    // SECURITY: Actually verify the signature against the credential hash
     const issuerAddress = this.extractAddressFromDid(credential.issuer.id);
     if (!issuerAddress) {
       return false;
     }
 
-    return true;
+    // Verify the proof value exists and is a valid signature
+    if (!credential.proof.proofValue || credential.proof.proofValue === '0x') {
+      return false;
+    }
+
+    // Recreate the credential hash the same way it was signed
+    const credentialWithoutProof = {
+      ...credential,
+      proof: { ...credential.proof, proofValue: undefined },
+    };
+
+    const canonicalized = JSON.stringify(credentialWithoutProof);
+    const hash = keccak256(toBytes(canonicalized));
+
+    // Recover the signer address from the signature
+    try {
+      const recoveredAddress = await recoverMessageAddress({
+        message: { raw: toBytes(hash) },
+        signature: credential.proof.proofValue,
+      });
+
+      // Compare addresses (case-insensitive)
+      return recoveredAddress.toLowerCase() === issuerAddress.toLowerCase();
+    } catch {
+      // Signature recovery failed - invalid signature
+      return false;
+    }
   }
 
   private verifyExpiration(credential: VerifiableCredential): boolean {

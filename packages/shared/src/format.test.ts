@@ -283,7 +283,9 @@ describe('classNames / cn', () => {
   });
 
   test('handles conditional classes', () => {
-    expect(classNames('btn', true && 'active', false && 'disabled')).toBe('btn active');
+    const isActive = true;
+    const isDisabled = false;
+    expect(classNames('btn', isActive && 'active', isDisabled && 'disabled')).toBe('btn active');
   });
 
   test('filters falsy values', () => {

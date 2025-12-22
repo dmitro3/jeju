@@ -10,6 +10,15 @@ import {
   type BanCheckConfig,
   type BanCheckResult,
 } from '@jejunetwork/shared';
+import { z } from 'zod';
+
+// Schema for address extraction from request body
+const AddressBodySchema = z.object({
+  address: z.string().optional(),
+  from: z.string().optional(),
+  sender: z.string().optional(),
+  agentOwner: z.string().optional(),
+}).passthrough(); // Allow other fields but only validate address-related ones
 
 // Get config from environment
 const BAN_MANAGER_ADDRESS = process.env.BAN_MANAGER_ADDRESS as Address | undefined;
@@ -54,16 +63,16 @@ export function banCheckMiddleware() {
     let address = c.req.header('x-wallet-address') || c.req.query('address');
     
     if (!address) {
-      // Try to get from JSON body
+      // Try to get from JSON body with schema validation
       const contentType = c.req.header('content-type') || '';
       if (contentType.includes('application/json')) {
-        const body = await c.req.json().catch(() => ({})) as {
-          address?: string;
-          from?: string;
-          sender?: string;
-          agentOwner?: string;
-        };
-        address = body.address || body.from || body.sender || body.agentOwner;
+        const rawBody = await c.req.json().catch(() => null);
+        if (rawBody !== null) {
+          const parsed = AddressBodySchema.safeParse(rawBody);
+          if (parsed.success) {
+            address = parsed.data.address || parsed.data.from || parsed.data.sender || parsed.data.agentOwner;
+          }
+        }
       }
     }
 

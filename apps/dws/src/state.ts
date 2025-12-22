@@ -21,10 +21,13 @@ let initPromise: Promise<void> | null = null;
 const testStore = new Map<string, Map<string, Record<string, unknown>>>();
 
 function getTestStore(table: string): Map<string, Record<string, unknown>> {
-  if (!testStore.has(table)) {
-    testStore.set(table, new Map());
+  const existing = testStore.get(table);
+  if (existing) {
+    return existing;
   }
-  return testStore.get(table)!;
+  const newStore = new Map<string, Record<string, unknown>>();
+  testStore.set(table, newStore);
+  return newStore;
 }
 
 async function getCQLClient(): Promise<CQLClient> {
@@ -306,7 +309,7 @@ async function ensureTablesExist(): Promise<void> {
   }
   
   for (const idx of indexes) {
-    await cqlClient.exec(idx, [], CQL_DATABASE_ID).catch(() => {});
+    await cqlClient.exec(idx, [], CQL_DATABASE_ID).catch(() => { /* no-op */ });
   }
   
   console.log('[DWS State] CovenantSQL tables ensured');
@@ -438,7 +441,7 @@ export const computeJobState = {
       CQL_DATABASE_ID
     );
     
-    getCache().delete(`job:${row.job_id}`).catch(() => {});
+    getCache().delete(`job:${row.job_id}`).catch(() => { /* no-op */ });
   },
   
   async get(jobId: string): Promise<ComputeJobRow | null> {

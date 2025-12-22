@@ -1,3 +1,4 @@
+// Hook exports
 export {
   useTokenLaunchpad,
   useLaunchInfo,
@@ -23,4 +24,18 @@ export {
   type PresaleStatus,
   type UserContribution,
 } from './useICOPresale'
+
+// Re-export useful utilities and presets from lib
+export {
+  DEFAULT_BONDING_CONFIG,
+  DEFAULT_ICO_CONFIG,
+  DEGEN_ICO_CONFIG,
+  calculateInitialPrice,
+  calculateGraduationMarketCap,
+  calculateBuyPriceImpact,
+  calculateTokensOut,
+  calculateEthOut,
+  validateBondingCurveLaunch,
+  validateICOLaunch,
+} from '@/lib/launchpad'
 

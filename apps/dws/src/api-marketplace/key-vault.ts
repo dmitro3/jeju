@@ -5,6 +5,7 @@
  * Keys never leave the enclave - only injected into outbound requests.
  */
 
+import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import type { Address } from 'viem';
 import type { VaultKey, VaultDecryptRequest } from './types';
 import { PROVIDERS_BY_ID } from './providers';
@@ -14,6 +15,7 @@ import { PROVIDERS_BY_ID } from './providers';
 // ============================================================================
 
 const vault = new Map<string, VaultKey>();
+const MAX_ACCESS_LOG_ENTRIES = 10000;
 const accessLog: Array<{
   keyId: string;
   requester: Address;
@@ -25,13 +27,72 @@ const accessLog: Array<{
 // System keys loaded from environment
 const systemKeys = new Map<string, string>();
 
+// Start cleanup interval for old access log entries (older than 24 hours)
+const ACCESS_LOG_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+const ACCESS_LOG_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+setInterval(() => {
+  const cutoff = Date.now() - ACCESS_LOG_MAX_AGE_MS;
+  // Remove entries older than 24 hours, keeping at least the most recent MAX_ACCESS_LOG_ENTRIES
+  while (accessLog.length > 0 && accessLog[0].timestamp < cutoff) {
+    accessLog.shift();
+  }
+}, ACCESS_LOG_CLEANUP_INTERVAL_MS);
+
+// ============================================================================
+// Encryption Helpers (AES-256-GCM)
+// ============================================================================
+
+/**
+ * Derive encryption key from server secret + keyId
+ * SECURITY: VAULT_ENCRYPTION_SECRET MUST be set in production
+ */
+function deriveKey(keyId: string): Buffer {
+  const serverSecret = process.env.VAULT_ENCRYPTION_SECRET;
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  if (!serverSecret) {
+    if (isProduction) {
+      throw new Error('CRITICAL: VAULT_ENCRYPTION_SECRET must be set in production. API keys cannot be secured without it.');
+    }
+    console.warn('[Key Vault] WARNING: VAULT_ENCRYPTION_SECRET not set. API keys are NOT properly secured.');
+  }
+  return createHash('sha256').update(`${serverSecret ?? 'INSECURE_VAULT_SECRET'}:${keyId}`).digest();
+}
+
+/**
+ * Encrypt an API key with AES-256-GCM
+ */
+function encryptApiKey(apiKey: string, keyId: string): string {
+  const key = deriveKey(keyId);
+  const iv = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(apiKey, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  // Format: iv (12) + authTag (16) + ciphertext, base64 encoded
+  return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+}
+
+/**
+ * Decrypt an API key with AES-256-GCM
+ */
+function decryptApiKey(encryptedKey: string, keyId: string): string {
+  const key = deriveKey(keyId);
+  const data = Buffer.from(encryptedKey, 'base64');
+  const iv = data.subarray(0, 12);
+  const authTag = data.subarray(12, 28);
+  const ciphertext = data.subarray(28);
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+}
+
 // ============================================================================
 // Key Storage
 // ============================================================================
 
 /**
  * Store a key in the vault (encrypted)
- * In production, this would use TEE sealed storage
+ * Uses AES-256-GCM encryption with server secret
  */
 export function storeKey(
   providerId: string,
@@ -40,8 +101,8 @@ export function storeKey(
 ): VaultKey {
   const id = crypto.randomUUID();
 
-  // Simulate encryption (in production would use TEE sealing)
-  const encryptedKey = Buffer.from(apiKey).toString('base64');
+  // Encrypt the API key with AES-256-GCM
+  const encryptedKey = encryptApiKey(apiKey, id);
 
   const vaultKey: VaultKey = {
     id,
@@ -125,8 +186,8 @@ export function decryptKeyForRequest(request: VaultDecryptRequest): string | nul
     return null;
   }
 
-  // Simulate decryption (in production would use TEE unsealing)
-  const decrypted = Buffer.from(vaultKey.encryptedKey, 'base64').toString('utf-8');
+  // Decrypt the API key with AES-256-GCM
+  const decrypted = decryptApiKey(vaultKey.encryptedKey, vaultKey.id);
 
   logAccess(request.keyId, request.requester, request.requestContext.requestId, true);
   return decrypted;
@@ -177,9 +238,9 @@ function logAccess(
     success,
   });
 
-  // Keep last 10000 entries
-  if (accessLog.length > 10000) {
-    accessLog.splice(0, accessLog.length - 10000);
+  // Keep last MAX_ACCESS_LOG_ENTRIES entries to prevent memory exhaustion
+  if (accessLog.length > MAX_ACCESS_LOG_ENTRIES) {
+    accessLog.splice(0, accessLog.length - MAX_ACCESS_LOG_ENTRIES);
   }
 }
 

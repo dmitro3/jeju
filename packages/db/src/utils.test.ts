@@ -1,12 +1,12 @@
 /**
  * Utility Functions Unit Tests
  * 
- * Tests for parsePort, parseTimeout, and parseBoolean with edge cases,
- * boundary conditions, and property-based testing patterns.
+ * Tests for parsePort, parseTimeout, parseBoolean, and SQL identifier validation
+ * with edge cases, boundary conditions, and property-based testing patterns.
  */
 
 import { describe, it, expect } from 'bun:test';
-import { parsePort, parseTimeout, parseBoolean } from './utils.js';
+import { parsePort, parseTimeout, parseBoolean, validateSQLIdentifier, validateSQLIdentifiers, validateSQLDefault, sanitizeObject, sanitizeRows } from './utils.js';
 
 describe('parsePort', () => {
   describe('valid ports', () => {
@@ -230,5 +230,280 @@ describe('parseBoolean', () => {
         expect(parseBoolean(val, false)).toBe(false);
       }
     });
+  });
+});
+
+describe('validateSQLIdentifier', () => {
+  describe('valid identifiers', () => {
+    it('should accept simple table names', () => {
+      expect(validateSQLIdentifier('users', 'table')).toBe('users');
+      expect(validateSQLIdentifier('posts', 'table')).toBe('posts');
+      expect(validateSQLIdentifier('orders', 'table')).toBe('orders');
+    });
+
+    it('should accept identifiers starting with underscore', () => {
+      expect(validateSQLIdentifier('_migrations', 'table')).toBe('_migrations');
+      expect(validateSQLIdentifier('_internal', 'table')).toBe('_internal');
+    });
+
+    it('should accept identifiers with underscores', () => {
+      expect(validateSQLIdentifier('user_accounts', 'table')).toBe('user_accounts');
+      expect(validateSQLIdentifier('order_items', 'table')).toBe('order_items');
+      expect(validateSQLIdentifier('created_at', 'column')).toBe('created_at');
+    });
+
+    it('should accept identifiers with numbers', () => {
+      expect(validateSQLIdentifier('table1', 'table')).toBe('table1');
+      expect(validateSQLIdentifier('v2_schema', 'table')).toBe('v2_schema');
+      expect(validateSQLIdentifier('user123', 'table')).toBe('user123');
+    });
+
+    it('should accept mixed case identifiers', () => {
+      expect(validateSQLIdentifier('UserAccounts', 'table')).toBe('UserAccounts');
+      expect(validateSQLIdentifier('createdAt', 'column')).toBe('createdAt');
+    });
+
+    it('should accept index names', () => {
+      expect(validateSQLIdentifier('idx_users_email', 'index')).toBe('idx_users_email');
+      expect(validateSQLIdentifier('pk_orders', 'index')).toBe('pk_orders');
+    });
+  });
+
+  describe('SQL injection prevention', () => {
+    it('should reject identifiers with SQL keywords injected', () => {
+      expect(() => validateSQLIdentifier('users; DROP TABLE users;--', 'table')).toThrow();
+      expect(() => validateSQLIdentifier("users' OR '1'='1", 'table')).toThrow();
+      expect(() => validateSQLIdentifier('users--', 'table')).toThrow();
+    });
+
+    it('should reject identifiers with special characters', () => {
+      expect(() => validateSQLIdentifier('user@domain', 'table')).toThrow();
+      expect(() => validateSQLIdentifier('column#1', 'column')).toThrow();
+      expect(() => validateSQLIdentifier('data$value', 'column')).toThrow();
+    });
+
+    it('should reject identifiers with spaces', () => {
+      expect(() => validateSQLIdentifier('table name', 'table')).toThrow();
+      expect(() => validateSQLIdentifier('column name', 'column')).toThrow();
+    });
+
+    it('should reject identifiers with quotes', () => {
+      expect(() => validateSQLIdentifier("user's", 'table')).toThrow();
+      expect(() => validateSQLIdentifier('table"name', 'table')).toThrow();
+      expect(() => validateSQLIdentifier('col`name', 'column')).toThrow();
+    });
+
+    it('should reject identifiers with parentheses', () => {
+      expect(() => validateSQLIdentifier('table()', 'table')).toThrow();
+      expect(() => validateSQLIdentifier('func(x)', 'column')).toThrow();
+    });
+
+    it('should reject identifiers with semicolons', () => {
+      expect(() => validateSQLIdentifier('table;', 'table')).toThrow();
+      expect(() => validateSQLIdentifier(';column', 'column')).toThrow();
+    });
+  });
+
+  describe('invalid identifiers', () => {
+    it('should reject empty strings', () => {
+      expect(() => validateSQLIdentifier('', 'table')).toThrow('must be a non-empty string');
+    });
+
+    it('should reject identifiers starting with numbers', () => {
+      expect(() => validateSQLIdentifier('1table', 'table')).toThrow();
+      expect(() => validateSQLIdentifier('123', 'column')).toThrow();
+    });
+
+    it('should reject very long identifiers', () => {
+      const longName = 'a'.repeat(200);
+      expect(() => validateSQLIdentifier(longName, 'table')).toThrow();
+    });
+
+    it('should reject SQL reserved words', () => {
+      expect(() => validateSQLIdentifier('SELECT', 'table')).toThrow('reserved word');
+      expect(() => validateSQLIdentifier('INSERT', 'table')).toThrow('reserved word');
+      expect(() => validateSQLIdentifier('DROP', 'table')).toThrow('reserved word');
+      expect(() => validateSQLIdentifier('TABLE', 'table')).toThrow('reserved word');
+    });
+
+    it('should reject reserved words case-insensitively', () => {
+      expect(() => validateSQLIdentifier('select', 'table')).toThrow('reserved word');
+      expect(() => validateSQLIdentifier('Select', 'table')).toThrow('reserved word');
+      expect(() => validateSQLIdentifier('DROP', 'column')).toThrow('reserved word');
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should handle single character identifiers', () => {
+      expect(validateSQLIdentifier('a', 'table')).toBe('a');
+      expect(validateSQLIdentifier('_', 'column')).toBe('_');
+    });
+
+    it('should handle max length identifier (128 chars)', () => {
+      const maxName = 'a' + 'b'.repeat(127);
+      expect(validateSQLIdentifier(maxName, 'table')).toBe(maxName);
+    });
+
+    it('should reject identifier just over max length', () => {
+      const tooLong = 'a' + 'b'.repeat(128);
+      expect(() => validateSQLIdentifier(tooLong, 'table')).toThrow();
+    });
+  });
+});
+
+describe('validateSQLIdentifiers', () => {
+  it('should validate array of column names', () => {
+    const columns = ['id', 'name', 'email', 'created_at'];
+    const result = validateSQLIdentifiers(columns, 'column');
+    expect(result).toEqual(columns);
+  });
+
+  it('should throw if any identifier is invalid', () => {
+    const columns = ['id', 'valid_name', 'invalid;column'];
+    expect(() => validateSQLIdentifiers(columns, 'column')).toThrow();
+  });
+
+  it('should handle empty array', () => {
+    expect(validateSQLIdentifiers([], 'column')).toEqual([]);
+  });
+
+  it('should handle single element array', () => {
+    expect(validateSQLIdentifiers(['id'], 'column')).toEqual(['id']);
+  });
+});
+
+describe('validateSQLDefault', () => {
+  describe('valid default values', () => {
+    it('should accept numeric literals', () => {
+      expect(validateSQLDefault('0')).toBe('0');
+      expect(validateSQLDefault('123')).toBe('123');
+      expect(validateSQLDefault('-456')).toBe('-456');
+      expect(validateSQLDefault('3.14')).toBe('3.14');
+      expect(validateSQLDefault('-0.5')).toBe('-0.5');
+    });
+
+    it('should accept string literals', () => {
+      expect(validateSQLDefault("'hello'")).toBe("'hello'");
+      expect(validateSQLDefault("'active'")).toBe("'active'");
+      expect(validateSQLDefault("'hello world'")).toBe("'hello world'");
+      expect(validateSQLDefault("''")).toBe("''");
+    });
+
+    it('should accept boolean values', () => {
+      expect(validateSQLDefault('TRUE')).toBe('TRUE');
+      expect(validateSQLDefault('FALSE')).toBe('FALSE');
+      expect(validateSQLDefault('true')).toBe('true');
+      expect(validateSQLDefault('false')).toBe('false');
+    });
+
+    it('should accept NULL', () => {
+      expect(validateSQLDefault('NULL')).toBe('NULL');
+      expect(validateSQLDefault('null')).toBe('null');
+    });
+
+    it('should accept CURRENT_TIMESTAMP variants', () => {
+      expect(validateSQLDefault('CURRENT_TIMESTAMP')).toBe('CURRENT_TIMESTAMP');
+      expect(validateSQLDefault('CURRENT_DATE')).toBe('CURRENT_DATE');
+      expect(validateSQLDefault('CURRENT_TIME')).toBe('CURRENT_TIME');
+    });
+
+    it('should trim whitespace', () => {
+      expect(validateSQLDefault('  123  ')).toBe('123');
+      expect(validateSQLDefault('  TRUE  ')).toBe('TRUE');
+    });
+  });
+
+  describe('SQL injection prevention', () => {
+    it('should reject SQL injection attempts', () => {
+      expect(() => validateSQLDefault("0; DROP TABLE users;--")).toThrow();
+      expect(() => validateSQLDefault("'test' OR '1'='1'")).toThrow();
+      expect(() => validateSQLDefault("(SELECT password FROM users)")).toThrow();
+    });
+
+    it('should reject unquoted strings', () => {
+      expect(() => validateSQLDefault('hello')).toThrow();
+      expect(() => validateSQLDefault('active')).toThrow();
+    });
+
+    it('should reject function calls that are not allowed', () => {
+      expect(() => validateSQLDefault('random()')).toThrow();
+      expect(() => validateSQLDefault('abs(-1)')).toThrow();
+    });
+
+    it('should reject expressions', () => {
+      expect(() => validateSQLDefault('1 + 1')).toThrow();
+      expect(() => validateSQLDefault('length(name)')).toThrow();
+    });
+  });
+
+  describe('invalid inputs', () => {
+    it('should reject empty string', () => {
+      expect(() => validateSQLDefault('')).toThrow('must be a non-empty string');
+    });
+  });
+});
+
+describe('sanitizeObject', () => {
+  it('should pass through normal objects', () => {
+    const obj = { id: 1, name: 'test', value: null };
+    const result = sanitizeObject(obj);
+    expect(result).toEqual(obj);
+  });
+
+  it('should remove __proto__ key', () => {
+    const obj = { id: 1, __proto__: { malicious: true } };
+    const result = sanitizeObject(obj);
+    expect(result).toEqual({ id: 1 });
+    expect('__proto__' in result).toBe(false);
+  });
+
+  it('should remove constructor key', () => {
+    const obj = { id: 1, constructor: 'malicious' };
+    const result = sanitizeObject(obj);
+    expect(result).toEqual({ id: 1 });
+    expect('constructor' in result).toBe(false);
+  });
+
+  it('should remove prototype key', () => {
+    const obj = { id: 1, prototype: { evil: true } };
+    const result = sanitizeObject(obj);
+    expect(result).toEqual({ id: 1 });
+    expect('prototype' in result).toBe(false);
+  });
+
+  it('should remove all dangerous keys at once', () => {
+    const obj = { 
+      id: 1, 
+      name: 'safe',
+      __proto__: 'bad',
+      constructor: 'bad',
+      prototype: 'bad'
+    };
+    const result = sanitizeObject(obj);
+    expect(result).toEqual({ id: 1, name: 'safe' });
+  });
+});
+
+describe('sanitizeRows', () => {
+  it('should sanitize array of objects', () => {
+    const rows = [
+      { id: 1, name: 'test1', __proto__: 'bad' },
+      { id: 2, name: 'test2', constructor: 'bad' },
+    ];
+    const result = sanitizeRows(rows);
+    expect(result).toEqual([
+      { id: 1, name: 'test1' },
+      { id: 2, name: 'test2' },
+    ]);
+  });
+
+  it('should handle empty array', () => {
+    expect(sanitizeRows([])).toEqual([]);
+  });
+
+  it('should pass through safe arrays', () => {
+    const rows = [{ id: 1 }, { id: 2 }];
+    const result = sanitizeRows(rows);
+    expect(result).toEqual(rows);
   });
 });

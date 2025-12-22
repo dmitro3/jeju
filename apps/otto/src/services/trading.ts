@@ -57,6 +57,10 @@ function getIndexerApi(): string {
   return getRequiredEnv('INDEXER_API_URL', 'http://localhost:4350');
 }
 
+// Bounded limits to prevent memory exhaustion
+const MAX_LIMIT_ORDERS = 10000;
+const MAX_ORDERS_PER_USER = 100;
+
 export class TradingService {
   private limitOrders = new Map<string, LimitOrder>();
 
@@ -199,6 +203,11 @@ export class TradingService {
     if (!quote) {
       return { success: false, fromAmount: validatedParams.amount, toAmount: '0', error: 'Failed to get swap quote' };
     }
+    
+    // Check quote hasn't expired to prevent stale/front-run transactions
+    if (quote.validUntil < Date.now()) {
+      return { success: false, fromAmount: validatedParams.amount, toAmount: '0', error: 'Quote expired, please try again' };
+    }
 
     // Use smart account if available, otherwise primary wallet
     const walletAddress = validatedUser.smartAccountAddress ?? validatedUser.primaryWallet;
@@ -282,6 +291,11 @@ export class TradingService {
     const quote = await this.getBridgeQuote(validatedParams);
     if (!quote) {
       return { success: false, status: 'failed', error: 'Failed to get bridge quote' };
+    }
+    
+    // Check quote hasn't expired to prevent stale/front-run transactions
+    if (quote.validUntil < Date.now()) {
+      return { success: false, status: 'failed', error: 'Quote expired, please try again' };
     }
 
     const walletAddress = validatedUser.smartAccountAddress ?? validatedUser.primaryWallet;
@@ -410,6 +424,27 @@ export class TradingService {
   async createLimitOrder(user: OttoUser, params: CreateLimitOrderParams): Promise<LimitOrder> {
     expectValid(OttoUserSchema, user, 'user');
     const validatedParams = expectValid(CreateLimitOrderParamsSchema, params, 'limit order params');
+    
+    // Enforce max orders per user to prevent abuse
+    const userOrders = this.getOpenOrders(validatedParams.userId);
+    if (userOrders.length >= MAX_ORDERS_PER_USER) {
+      throw new Error(`Maximum ${MAX_ORDERS_PER_USER} open orders per user`);
+    }
+    
+    // Enforce global limit and cleanup old orders if needed
+    if (this.limitOrders.size >= MAX_LIMIT_ORDERS) {
+      // Remove oldest non-open orders first
+      for (const [orderId, order] of this.limitOrders) {
+        if (order.status !== 'open') {
+          this.limitOrders.delete(orderId);
+          if (this.limitOrders.size < MAX_LIMIT_ORDERS) break;
+        }
+      }
+      // If still at limit, reject new order
+      if (this.limitOrders.size >= MAX_LIMIT_ORDERS) {
+        throw new Error('Maximum limit orders reached, please try again later');
+      }
+    }
     
     const chainId = validatedParams.chainId ?? DEFAULT_CHAIN_ID;
     const fromToken = await this.getTokenInfo(validatedParams.fromToken.toString(), chainId);
@@ -561,11 +596,31 @@ export class TradingService {
       throw new Error('Amount must be a non-empty string');
     }
     
+    // Validate amount format to prevent overflow attacks
+    if (!/^\d+(\.\d+)?$/.test(amount)) {
+      throw new Error('Amount must be a valid decimal number');
+    }
+    
+    // Limit amount length to prevent BigInt overflow (max ~77 digits for uint256)
+    const maxLength = 77;
+    const amountWithoutDecimal = amount.replace('.', '');
+    if (amountWithoutDecimal.length > maxLength) {
+      throw new Error(`Amount too large: max ${maxLength} digits`);
+    }
+    
     if (decimals < 0 || decimals > 255) {
       throw new Error(`Invalid decimals: ${decimals}`);
     }
     
-    return parseUnits(amount, decimals).toString();
+    const result = parseUnits(amount, decimals);
+    
+    // Ensure result is within uint256 bounds
+    const MAX_UINT256 = 2n ** 256n - 1n;
+    if (result > MAX_UINT256) {
+      throw new Error('Amount exceeds maximum token amount (uint256)');
+    }
+    
+    return result.toString();
   }
 
   formatUsd(amount: number): string {

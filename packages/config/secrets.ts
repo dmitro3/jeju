@@ -198,23 +198,33 @@ export async function getSecretWithProvider(name: SecretName): Promise<SecretRes
 
 /**
  * Require a secret - throws if not found
+ * 
+ * In production, error messages are minimal to prevent information leakage.
+ * Set DEBUG_SECRETS=true for detailed error messages during development.
  */
 export async function requireSecret(name: SecretName): Promise<string> {
   const result = await getSecretWithProvider(name);
   if (!result) {
-    throw new Error(
-      `Required secret ${name} not found. Set it via:\n` +
-      `  - Environment variable: export ${name}=...\n` +
-      `  - AWS Secrets Manager: jeju/secrets/${name.toLowerCase()}\n` +
-      `  - GCP Secret Manager: ${name.toLowerCase()}\n` +
-      `  - Local file: .secrets/${name.toLowerCase()}.txt`
-    );
+    const isDebug = process.env.DEBUG_SECRETS === 'true' || process.env.NODE_ENV === 'development';
+    
+    if (isDebug) {
+      throw new Error(
+        `Required secret ${name} not found. Set it via:\n` +
+        `  - Environment variable: export ${name}=...\n` +
+        `  - Cloud secret manager (AWS/GCP)\n` +
+        `  - Local secrets directory`
+      );
+    }
+    
+    throw new Error(`Required secret not found: ${name}`);
   }
   return result.value;
 }
 
 /**
  * Require a secret synchronously (env or local only)
+ * 
+ * In production, error messages are minimal to prevent information leakage.
  */
 export function requireSecretSync(name: SecretName): string {
   const envValue = process.env[name];
@@ -223,10 +233,16 @@ export function requireSecretSync(name: SecretName): string {
   const localValue = getFromLocalFile(name);
   if (localValue) return localValue;
   
-  throw new Error(
-    `Required secret ${name} not found synchronously. ` +
-    `For async cloud provider lookup, use requireSecret() instead.`
-  );
+  const isDebug = process.env.DEBUG_SECRETS === 'true' || process.env.NODE_ENV === 'development';
+  
+  if (isDebug) {
+    throw new Error(
+      `Required secret ${name} not found synchronously. ` +
+      `For async cloud provider lookup, use requireSecret() instead.`
+    );
+  }
+  
+  throw new Error(`Required secret not found: ${name}`);
 }
 
 // ============================================================================

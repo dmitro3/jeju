@@ -17,7 +17,7 @@
 
 import { createPublicClient, createWalletClient, http, parseEther, formatEther, formatUnits, waitForTransactionReceipt, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/packages/deployment/scripts/shared/chain-utils';
 import { TEST_ACCOUNTS } from '../tests/setup';
 
 interface TestResultDetails {

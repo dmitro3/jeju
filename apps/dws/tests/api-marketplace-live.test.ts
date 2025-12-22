@@ -14,7 +14,6 @@ const CQL_AVAILABLE = !!process.env.CQL_BLOCK_PRODUCER_ENDPOINT;
 
 import {
   ALL_PROVIDERS,
-  getProvider,
   createListing,
   deposit,
   storeKey,
@@ -22,13 +21,10 @@ import {
   initializeSystemListings,
   loadSystemKeys,
   findCheapestListing,
-  hasSystemKey,
-  type ProxyRequest,
 } from '../src/api-marketplace';
 
 // Test user
 const TEST_USER: Address = '0x1234567890123456789012345678901234567890';
-const SYSTEM_SELLER: Address = '0x0000000000000000000000000000000000000001';
 
 // Initialize marketplace
 beforeAll(async () => {

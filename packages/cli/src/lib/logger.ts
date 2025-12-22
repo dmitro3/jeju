@@ -3,7 +3,7 @@
  */
 
 import chalk from 'chalk';
-import { createLogger, type Logger as BaseLogger } from '@jejunetwork/shared';
+import { createLogger } from '@jejunetwork/shared';
 
 export interface LoggerOptions {
   verbose?: boolean;

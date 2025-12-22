@@ -54,7 +54,7 @@ beforeAll(async () => {
   } catch (e) {
     console.error("E2E setup failed:", e);
   }
-}, 120000);
+});
 
 afterAll(async () => {
   // Cleanup code - try/catch is valid here as we don't want cleanup failures to fail tests

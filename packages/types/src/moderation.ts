@@ -4,7 +4,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema } from './validation';
+import { AddressSchema, MAX_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_STRING_LENGTH } from './validation';
 
 // ============ Enums ============
 
@@ -60,10 +60,10 @@ export const BanRecordSchema = z.object({
   banType: BanTypeSchema,
   bannedAt: z.number(),
   expiresAt: z.number(),
-  reason: z.string(),
-  proposalId: z.string(),
+  reason: z.string().max(MAX_STRING_LENGTH),
+  proposalId: z.string().max(MAX_SHORT_STRING_LENGTH),
   reporter: AddressSchema,
-  caseId: z.string(),
+  caseId: z.string().max(MAX_SHORT_STRING_LENGTH),
 });
 export type BanRecord = z.infer<typeof BanRecordSchema>;
 
@@ -140,9 +140,9 @@ export const ModeratorReputationSchema = z.object({
 export type ModeratorReputation = z.infer<typeof ModeratorReputationSchema>;
 
 export const ReportEvidenceSchema = z.object({
-  evidenceHashes: z.array(z.string()),
-  notes: z.array(z.string()),
-  category: z.string(),
+  evidenceHashes: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
+  notes: z.array(z.string().max(MAX_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
+  category: z.string().max(MAX_SHORT_STRING_LENGTH),
   timestamp: z.number(),
 });
 export type ReportEvidence = z.infer<typeof ReportEvidenceSchema>;
@@ -151,7 +151,7 @@ export const QuorumStatusSchema = z.object({
   reached: z.boolean(),
   currentCount: z.number(),
   requiredCount: z.number(),
-  reporters: z.array(AddressSchema),
+  reporters: z.array(AddressSchema).max(MAX_ARRAY_LENGTH),
 });
 export type QuorumStatus = z.infer<typeof QuorumStatusSchema>;
 
@@ -523,11 +523,22 @@ export function calculateVotePercentages(yesVotes: bigint, noVotes: bigint): { y
 
 /**
  * Format stake for display
+ * Uses BigInt arithmetic to preserve precision for large values
  */
 export function formatStake(stake: bigint): string {
-  const eth = Number(stake) / 1e18;
-  if (eth < 0.001) return '<0.001 ETH';
-  return `${eth.toFixed(3)} ETH`;
+  const decimals = 18n;
+  const divisor = 10n ** decimals;
+  const wholePart = stake / divisor;
+  const fracPart = stake % divisor;
+  
+  // For very small amounts
+  if (wholePart === 0n && fracPart < 10n ** 15n) {
+    return '<0.001 ETH';
+  }
+  
+  // Format with 3 decimal places using BigInt math
+  const fracScaled = (fracPart * 1000n) / divisor;
+  return `${wholePart}.${fracScaled.toString().padStart(3, '0')} ETH`;
 }
 
 /**
@@ -590,11 +601,21 @@ export function getQuorumForTier(tier: ReputationTier): number {
 
 /**
  * Format P&L for display
+ * Uses BigInt arithmetic to preserve precision for large values
  */
 export function formatPnL(pnl: bigint): string {
-  const eth = Number(pnl) / 1e18;
-  const sign = eth >= 0 ? '+' : '';
-  return `${sign}${eth.toFixed(4)} ETH`;
+  const decimals = 18n;
+  const divisor = 10n ** decimals;
+  const isNegative = pnl < 0n;
+  const absPnl = isNegative ? -pnl : pnl;
+  
+  const wholePart = absPnl / divisor;
+  const fracPart = absPnl % divisor;
+  
+  // Format with 4 decimal places using BigInt math
+  const fracScaled = (fracPart * 10000n) / divisor;
+  const sign = isNegative ? '-' : '+';
+  return `${sign}${wholePart}.${fracScaled.toString().padStart(4, '0')} ETH`;
 }
 
 /**

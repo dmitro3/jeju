@@ -164,7 +164,7 @@ test.describe('NFT Marketplace - Complete Flow', () => {
     
     // Look for stat displays (⚔️, 🛡️, 💪)
     const body = await page.textContent('body')
-    const hasStats = body?.includes('Attack') || 
+    const _hasStats = body?.includes('Attack') || 
                     body?.includes('Defense') ||
                     body?.includes('Strength') ||
                     body?.includes('⚔️') ||
@@ -187,7 +187,7 @@ test.describe('NFT Marketplace - Complete Flow', () => {
     
     // Should mention minter or provenance
     const body = await page.textContent('body')
-    const hasMinterInfo = body?.includes('Minted by') || 
+    const _hasMinterInfo = body?.includes('Minted by') || 
                          body?.includes('minter') ||
                          body?.includes('provenance')
     

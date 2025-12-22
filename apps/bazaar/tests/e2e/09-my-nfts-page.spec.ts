@@ -67,7 +67,11 @@ test.describe('NFTs Page', () => {
   });
 
   test('should change sort order when dropdown changes', async ({ page }) => {
-    const sortSelect = page.locator('select');
+    // Wait for page to load
+    await page.waitForTimeout(500);
+    
+    const sortSelect = page.locator('select').first();
+    await expect(sortSelect).toBeVisible();
     
     // Select Collection sort
     await sortSelect.selectOption('collection');

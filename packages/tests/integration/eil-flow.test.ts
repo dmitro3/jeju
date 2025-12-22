@@ -11,11 +11,13 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, waitForTransactionReceipt, getLogs, decodeEventLog, parseEther, keccak256, encodePacked, zeroAddress, getBalance, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, decodeEventLog, parseEther, keccak256, encodePacked, zeroAddress, type Address } from 'viem';
+import { readContract, waitForTransactionReceipt, getLogs, getBalance } from 'viem/actions';
 import { privateKeyToAccount, signMessage as signMsg } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { TEST_ACCOUNTS } from '../shared/utils';
 
 // Skip if no localnet running
 const L1_RPC = process.env.L1_RPC_URL || 'http://127.0.0.1:8545';
@@ -50,11 +52,11 @@ interface EILConfig {
   entryPoint: string;
 }
 
-// Test accounts (from Anvil)
-const ANVIL_KEY_0 = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const ANVIL_KEY_1 = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
-// Deployer key for owner-only functions
-const DEPLOYER_KEY = '0x805ab516daae3f0871237da6fcc3db33416e515d700a5d470469215b75f3696e';
+// Test accounts from shared constants (Anvil defaults)
+const ANVIL_KEY_0 = TEST_ACCOUNTS.deployer.privateKey;
+const ANVIL_KEY_1 = TEST_ACCOUNTS.user1.privateKey;
+// Deployer key for owner-only functions - use operator account for privileged operations
+const DEPLOYER_KEY = TEST_ACCOUNTS.operator.privateKey;
 
 // Contract ABIs
 const L1_STAKE_MANAGER_ABI = [

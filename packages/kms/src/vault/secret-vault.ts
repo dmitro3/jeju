@@ -2,7 +2,7 @@
  * SecretVault - Encrypted secret storage with access control and audit logging
  */
 
-import { keccak256, toBytes, toHex, type Address } from 'viem';
+import { keccak256, toBytes, type Address } from 'viem';
 import { kmsLogger as log } from '../logger.js';
 import {
   generateKeyId,
@@ -296,15 +296,25 @@ export class SecretVault {
   }
 
   private async encryptValue(value: string, keyId: string): Promise<string> {
-    const salt = toBytes(keccak256(toBytes(`${keyId}:${toHex(this.encryptionKey)}`)));
-    const keyMaterial = await deriveEncryptionKey(this.encryptionKey, salt, 'vault');
-    return encryptToPayload(value, keyMaterial);
+    // Use keyId with a fixed domain separator for salt derivation
+    // Never include the encryption key in derivation input - use HKDF properly
+    const salt = toBytes(keccak256(toBytes(`vault:salt:${keyId}`)));
+    const keyMaterial = await deriveEncryptionKey(this.encryptionKey, salt, 'vault-encrypt');
+    const result = await encryptToPayload(value, keyMaterial);
+    // Zero the derived key after use
+    keyMaterial.fill(0);
+    return result;
   }
 
   private async decryptValue(encryptedValue: string, keyId: string): Promise<string> {
-    const salt = toBytes(keccak256(toBytes(`${keyId}:${toHex(this.encryptionKey)}`)));
-    const keyMaterial = await deriveEncryptionKey(this.encryptionKey, salt, 'vault');
-    return decryptFromPayload(encryptedValue, keyMaterial);
+    // Use keyId with a fixed domain separator for salt derivation
+    // Never include the encryption key in derivation input - use HKDF properly
+    const salt = toBytes(keccak256(toBytes(`vault:salt:${keyId}`)));
+    const keyMaterial = await deriveEncryptionKey(this.encryptionKey, salt, 'vault-encrypt');
+    const result = await decryptFromPayload(encryptedValue, keyMaterial);
+    // Zero the derived key after use
+    keyMaterial.fill(0);
+    return result;
   }
 
   private logAccess(secretId: string, accessor: Address, action: SecretAccessLog['action'], success: boolean, reason?: string): void {

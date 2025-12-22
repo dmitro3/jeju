@@ -3,8 +3,8 @@
  * @description E2E tests for deep funding system
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseEther, formatEther } from 'viem';
+import { describe, test, expect } from 'bun:test';
+import { createPublicClient, createWalletClient, http, parseEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 
@@ -14,7 +14,7 @@ const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae78
 const RPC_URL = process.env.RPC_URL || 'http://localhost:8545';
 
 // Mock addresses (would be deployed contracts in real tests)
-const MOCK_ADDRESSES = {
+const _MOCK_ADDRESSES = {
   contributorRegistry: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
   paymentRequestRegistry: '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512',
   workAgreementRegistry: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
@@ -29,7 +29,7 @@ const TEST_CONTRIBUTOR_ID = '0x' + 'b'.repeat(64);
 
 // ============ Utility Functions ============
 
-function createTestClients() {
+function _createTestClients() {
   const account = privateKeyToAccount(TEST_PRIVATE_KEY);
 
   const publicClient = createPublicClient({

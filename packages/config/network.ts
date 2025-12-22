@@ -12,10 +12,24 @@
  * - Everything works out of the box for local development
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { ChainConfigSchema, NetworkSchema, type NetworkType, type ChainConfig } from './schemas';
+
+/** Maximum config file size (10MB) - prevents DoS via large files */
+const MAX_CONFIG_FILE_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Safely read a file with size limit protection
+ */
+function safeReadFile(path: string): string {
+  const stats = statSync(path);
+  if (stats.size > MAX_CONFIG_FILE_SIZE) {
+    throw new Error(`Config file exceeds maximum size limit (${MAX_CONFIG_FILE_SIZE} bytes): ${path}`);
+  }
+  return readFileSync(path, 'utf-8');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -110,7 +124,13 @@ export interface NetworkInfo {
 // Defaults
 // ============================================================================
 
-/** Default test accounts (Anvil/Foundry) - use for local development only */
+/**
+ * Default test accounts from Anvil/Foundry - use for local development only.
+ * 
+ * @security WARNING: These private keys are publicly known and included in every Anvil instance.
+ * NEVER send real funds to these addresses. The getDeployerConfig() function enforces
+ * that these keys can ONLY be used on localnet - testnet/mainnet require explicit env vars.
+ */
 export const TEST_ACCOUNTS = {
   DEPLOYER: {
     address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
@@ -155,7 +175,7 @@ export function loadChainConfig(network: NetworkType): ChainConfig {
     throw new Error(`Chain config not found: ${configPath}`);
   }
   
-  return ChainConfigSchema.parse(JSON.parse(readFileSync(configPath, 'utf-8')));
+  return ChainConfigSchema.parse(JSON.parse(safeReadFile(configPath)));
 }
 
 /**
@@ -188,8 +208,14 @@ export function loadDeployedContracts(network: NetworkType): DeployedContracts {
   
   for (const file of deploymentFiles) {
     if (existsSync(file)) {
-      const data = JSON.parse(readFileSync(file, 'utf-8')) as DeploymentFileData;
-      Object.assign(contracts, flattenContracts(data));
+      const data = JSON.parse(safeReadFile(file)) as DeploymentFileData;
+      // Safely merge without Object.assign to avoid prototype pollution
+      const flattened = flattenContracts(data);
+      for (const [key, value] of Object.entries(flattened)) {
+        if (isSafeKey(key)) {
+          contracts[key] = value;
+        }
+      }
     }
   }
   
@@ -201,17 +227,35 @@ interface DeploymentFileData {
 }
 
 /**
+ * Check if a key is safe from prototype pollution attacks
+ */
+function isSafeKey(key: string): boolean {
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+  return !dangerousKeys.includes(key);
+}
+
+/**
  * Flatten nested contract structures
+ * Protected against prototype pollution by filtering dangerous keys
  */
 function flattenContracts(data: DeploymentFileData): DeployedContracts {
   const result: DeployedContracts = {};
   
   for (const [key, value] of Object.entries(data)) {
+    // Protect against prototype pollution
+    if (!isSafeKey(key)) continue;
+    
     if (typeof value === 'string' && value.startsWith('0x')) {
       result[key] = value;
     } else if (typeof value === 'object' && value !== null && 'contracts' in value) {
       const nested = value as { contracts: DeploymentFileData };
-      Object.assign(result, flattenContracts(nested.contracts));
+      const nestedResult = flattenContracts(nested.contracts);
+      // Safely merge without Object.assign to avoid prototype pollution
+      for (const [nestedKey, nestedValue] of Object.entries(nestedResult)) {
+        if (isSafeKey(nestedKey)) {
+          result[nestedKey] = nestedValue;
+        }
+      }
     }
   }
   

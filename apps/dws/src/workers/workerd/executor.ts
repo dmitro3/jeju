@@ -20,7 +20,6 @@ import type {
   WorkerdPoolMetrics,
   WorkerdEvent,
   WorkerdEventHandler,
-  WorkerdModule,
 } from './types';
 import { DEFAULT_WORKERD_CONFIG } from './types';
 import { generateWorkerConfig, wrapHandlerAsWorker } from './config-generator';
@@ -569,13 +568,13 @@ export class WorkerdExecutor {
     let activeProcesses = 0;
     let activeWorkers = 0;
     let pendingRequests = 0;
-    let totalRequests = 0;
+    let _totalRequests = 0;
 
     for (const proc of this.processes.values()) {
       if (proc.status === 'ready' || proc.status === 'busy') {
         activeProcesses++;
       }
-      totalRequests += proc.requestCount;
+      _totalRequests += proc.requestCount;
     }
 
     for (const instance of this.instances.values()) {

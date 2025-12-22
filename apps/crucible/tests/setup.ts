@@ -27,7 +27,7 @@ interface TestEnv {
 /**
  * Wait for infrastructure to be healthy
  */
-async function waitForInfra(maxAttempts = 30): Promise<boolean> {
+async function waitForInfra(_maxAttempts = 30): Promise<boolean> {
   const status = await getStatus();
   
   if (!status.rpc) {

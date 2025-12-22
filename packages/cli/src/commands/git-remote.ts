@@ -15,6 +15,10 @@
  *   2. Link CLI: npm link or add to PATH
  *   3. Create symlink: ln -s $(which jeju) /usr/local/bin/git-remote-jeju
  *   4. Git will automatically find it when using jeju:// URLs
+ * 
+ * Security notes:
+ * - Remote URLs are validated to prevent injection
+ * - All user inputs are sanitized
  */
 
 import { createHash } from 'crypto';
@@ -24,6 +28,33 @@ import { deflateSync } from 'zlib';
 // Configuration
 const DWS_URL = process.env.DWS_URL || 'http://localhost:4030';
 
+/** Validate owner format (Ethereum address or username) */
+function validateOwner(owner: string): string {
+  if (!owner) {
+    throw new Error('Owner is required');
+  }
+  // Allow Ethereum addresses or alphanumeric usernames
+  const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+  const usernamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+  
+  if (!ethAddressPattern.test(owner) && !usernamePattern.test(owner)) {
+    throw new Error('Invalid owner format');
+  }
+  return owner;
+}
+
+/** Validate repository name */
+function validateRepoName(name: string): string {
+  if (!name) {
+    throw new Error('Repository name is required');
+  }
+  const repoPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+  if (!repoPattern.test(name) || name.length > 100) {
+    throw new Error('Invalid repository name');
+  }
+  return name;
+}
+
 interface GitObject {
   oid: string;
   type: 'blob' | 'tree' | 'commit' | 'tag';
@@ -31,15 +62,23 @@ interface GitObject {
 }
 
 export class JejuGitRemote {
-  private _remoteName: string;
   private remoteUrl: string;
   private owner: string;
   private repoName: string;
   private refs: Map<string, string> = new Map();
   private address: string | null = null;
 
-  constructor(remoteName: string, remoteUrl: string) {
-    this._remoteName = remoteName;
+  constructor(_remoteName: string, remoteUrl: string) {
+    // Validate URL doesn't contain dangerous characters
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+      throw new Error('Remote URL is required');
+    }
+    
+    // Reject URLs with injection attempts
+    if (remoteUrl.includes('\n') || remoteUrl.includes('\r') || remoteUrl.includes('\0')) {
+      throw new Error('Invalid characters in remote URL');
+    }
+    
     this.remoteUrl = remoteUrl;
 
     // Parse URL: jeju://owner/repo or http://localhost:4030/git/owner/repo
@@ -47,17 +86,26 @@ export class JejuGitRemote {
     const httpMatch = this.remoteUrl.match(/\/git\/([^/]+)\/(.+)$/);
 
     if (urlMatch) {
-      this.owner = urlMatch[1];
-      this.repoName = urlMatch[2];
+      this.owner = validateOwner(urlMatch[1]);
+      this.repoName = validateRepoName(urlMatch[2]);
     } else if (httpMatch) {
-      this.owner = httpMatch[1];
-      this.repoName = httpMatch[2];
+      this.owner = validateOwner(httpMatch[1]);
+      this.repoName = validateRepoName(httpMatch[2]);
     } else {
       throw new Error(`Invalid Jeju remote URL: ${this.remoteUrl}`);
     }
 
-    // Get address from environment
-    this.address = process.env.JEJU_ADDRESS || null;
+    // Get and validate address from environment
+    const envAddress = process.env.JEJU_ADDRESS;
+    if (envAddress) {
+      const ethAddressPattern = /^0x[a-fA-F0-9]{40}$/;
+      if (!ethAddressPattern.test(envAddress)) {
+        throw new Error('Invalid JEJU_ADDRESS format');
+      }
+      this.address = envAddress;
+    } else {
+      this.address = null;
+    }
   }
 
   async run(): Promise<void> {
@@ -130,13 +178,13 @@ export class JejuGitRemote {
     for (const line of lines) {
       if (line.startsWith('#') || !line.trim()) continue;
 
-      // eslint-disable-next-line no-control-regex -- Git protocol uses NUL bytes
-      const match = line.match(/^([0-9a-f]{40})\s+([^\x00]+)/);
+      // Git protocol includes capabilities after NUL byte - extract the ref part first
+      const refPart = line.split('\x00')[0];
+      const match = refPart.match(/^([0-9a-f]{40})\s+(.+)$/);
       if (match) {
         const [, oid, refName] = match;
-        const cleanRef = refName.split('\x00')[0];
-        this.refs.set(cleanRef, oid);
-        console.log(`${oid} ${cleanRef}`);
+        this.refs.set(refName, oid);
+        console.log(`${oid} ${refName}`);
       }
     }
 
@@ -181,7 +229,7 @@ export class JejuGitRemote {
         ...this.getHeaders(),
         'Content-Type': 'application/x-git-upload-pack-request',
       },
-      body: pktRequest,
+      body: new Uint8Array(pktRequest),
     }).catch(() => null);
 
     if (!response?.ok) {
@@ -239,7 +287,7 @@ export class JejuGitRemote {
           ...this.getHeaders(),
           'Content-Type': 'application/x-git-receive-pack-request',
         },
-        body: request,
+        body: new Uint8Array(request),
       }).catch(() => null);
 
       if (!response?.ok) {

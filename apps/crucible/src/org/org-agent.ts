@@ -7,7 +7,7 @@
 import { CQLClient, type QueryParam } from '@jeju/db';
 import type { OrgTodo, OrgCheckinSchedule, OrgCheckinResponse, OrgTeamMember } from '../types';
 import { createLogger, type Logger } from '../sdk/logger';
-import { StringArraySchema, parseOrThrow, expect } from '../schemas';
+import { StringArraySchema, expect } from '../schemas';
 
 interface TodoRow {
   id: string;

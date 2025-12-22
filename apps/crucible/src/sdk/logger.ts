@@ -82,9 +82,11 @@ const loggers = new Map<string, Logger>();
  * Get or create a logger for a service (cached)
  */
 export function getLogger(service: string): Logger {
-  if (!loggers.has(service)) {
-    loggers.set(service, createLogger(service));
+  let logger = loggers.get(service);
+  if (!logger) {
+    logger = createLogger(service);
+    loggers.set(service, logger);
   }
-  return loggers.get(service)!;
+  return logger;
 }
 

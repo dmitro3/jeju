@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test';
-import { createPublicClient, http, getBlockNumber, getBalance, getTransactionReceipt, getChainId, type PublicClient, type TransactionReceipt } from 'viem';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { createPublicClient, http, type PublicClient, type TransactionReceipt } from 'viem';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 
 // ============================================================================
 // Test Configuration
@@ -48,8 +48,8 @@ async function createProvider(endpoint: ClientEndpoint): Promise<PublicClient> {
 async function isClientHealthy(endpoint: ClientEndpoint): Promise<{ healthy: boolean; blockNumber?: bigint; chainId?: bigint; error?: string }> {
   try {
     const publicClient = await createProvider(endpoint);
-    const chainId = await getChainId(publicClient);
-    const blockNumber = await getBlockNumber(publicClient);
+    const chainId = await publicClient.getChainId();
+    const blockNumber = await publicClient.getBlockNumber();
     return { healthy: true, blockNumber: BigInt(blockNumber), chainId: BigInt(chainId) };
   } catch (error) {
     return { healthy: false, error: error instanceof Error ? error.message : String(error) };
@@ -244,7 +244,7 @@ describe('Cross-Client State Consistency', () => {
 
     for (const client of availableClients) {
       const publicClient = await createProvider(client);
-      const balance = await getBalance(publicClient, { address: testAddress as `0x${string}` });
+      const balance = await publicClient.getBalance({ address: testAddress as `0x${string}` });
       balances.push(balance);
     }
 
@@ -264,7 +264,7 @@ describe('Cross-Client State Consistency', () => {
 
     // Get a recent block and check if transaction receipts match
     const publicClient1 = await createProvider(availableSequencers[0]);
-    const blockNumber = await getBlockNumber(publicClient1);
+    const blockNumber = await publicClient1.getBlockNumber();
     
     if (blockNumber === 0n) return;
 
@@ -276,7 +276,7 @@ describe('Cross-Client State Consistency', () => {
 
     for (const client of availableSequencers) {
       const publicClient = await createProvider(client);
-      const receipt = await getTransactionReceipt(publicClient, { hash: txHash });
+      const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
       receipts.push(receipt);
     }
 
@@ -314,17 +314,15 @@ describe('Sequencer Registration Validation', () => {
       'function totalStaked() view returns (uint256)',
     ] as const;
 
-    const { readContract } = await import('viem');
-    
     try {
-      const result = await readContract(publicClient, {
+      const result = await publicClient.readContract({
         address: SEQUENCER_REGISTRY_ADDRESS as `0x${string}`,
         abi: registryAbi,
         functionName: 'getActiveSequencers',
       }) as [readonly `0x${string}`[], readonly bigint[]];
       
       const [addresses, weights] = result;
-      const totalStaked = await readContract(publicClient, {
+      const totalStaked = await publicClient.readContract({
         address: SEQUENCER_REGISTRY_ADDRESS as `0x${string}`,
         abi: registryAbi,
         functionName: 'totalStaked',

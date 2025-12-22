@@ -10,9 +10,34 @@ const props = defineProps<Props>();
 
 const config = computed(() => chainConfigs[props.network]);
 
+// Allowed explorer domains to prevent link injection
+const ALLOWED_EXPLORER_DOMAINS = [
+  'explorer.jejunetwork.org',
+  'testnet-explorer.jejunetwork.org',
+];
+
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);
 };
+
+/**
+ * Validates that a URL hostname is in the allowed list.
+ */
+const isValidExplorerUrl = (urlString: string): boolean => {
+  try {
+    const url = new URL(urlString);
+    return ALLOWED_EXPLORER_DOMAINS.some(domain => 
+      url.hostname === domain || url.hostname.endsWith('.' + domain)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const safeExplorerUrl = computed(() => {
+  const url = config.value.explorerUrl;
+  return isValidExplorerUrl(url) ? url : '';
+});
 </script>
 
 <template>
@@ -46,9 +71,9 @@ const copyToClipboard = (text: string) => {
       </button>
     </div>
 
-    <div class="info-row">
+    <div class="info-row" v-if="safeExplorerUrl">
       <span class="label">Explorer:</span>
-      <a :href="config.explorerUrl" target="_blank" class="value link">
+      <a :href="safeExplorerUrl" target="_blank" rel="noopener noreferrer" class="value link">
         {{ config.explorerUrl }}
       </a>
     </div>

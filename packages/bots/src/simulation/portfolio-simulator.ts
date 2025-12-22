@@ -14,6 +14,10 @@ import type { StrategyContext, WeightCalculation } from '../strategies/tfmm/base
 import { OracleAggregator } from '../oracles';
 import { WEIGHT_PRECISION, BPS_PRECISION } from '../schemas';
 
+// Maximum history entries to prevent memory leaks
+const MAX_SWAP_HISTORY = 10000;
+const MAX_WEIGHT_HISTORY = 10000;
+
 export interface SimulatedPool {
   address: string;
   tokens: Token[];
@@ -164,6 +168,12 @@ export class PortfolioSimulator {
     };
 
     this.swapHistory.push(swap);
+
+    // Prevent unbounded memory growth
+    if (this.swapHistory.length > MAX_SWAP_HISTORY) {
+      this.swapHistory = this.swapHistory.slice(-MAX_SWAP_HISTORY);
+    }
+
     return swap;
   }
 
@@ -211,6 +221,11 @@ export class PortfolioSimulator {
     }
 
     this.weightHistory.push({ block: this.currentBlock, weights: [...newWeights] });
+
+    // Prevent unbounded memory growth
+    if (this.weightHistory.length > MAX_WEIGHT_HISTORY) {
+      this.weightHistory = this.weightHistory.slice(-MAX_WEIGHT_HISTORY);
+    }
   }
 
   /**

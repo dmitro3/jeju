@@ -51,41 +51,10 @@ const localnet = {
 // ABIS
 // =============================================================================
 
-const ERC20_ABI = parseAbi([
-  'function name() view returns (string)',
-  'function symbol() view returns (string)',
-  'function decimals() view returns (uint8)',
-  'function totalSupply() view returns (uint256)',
-  'function balanceOf(address account) view returns (uint256)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function transfer(address to, uint256 amount) returns (bool)',
-])
-
-const POOL_MANAGER_ABI = parseAbi([
-  'function protocolFees(address token) view returns (uint256)',
-])
-
-const SWAP_ROUTER_ABI = parseAbi([
-  'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) payable returns (uint256 amountOut)',
-])
-
-const POSITION_MANAGER_ABI = parseAbi([
-  'function mint((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline)) returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)',
-])
-
 const NFT_MARKETPLACE_ABI = parseAbi([
   'function buyListing(uint256 listingId) payable',
   'function cancelListing(uint256 listingId)',
   'function version() view returns (string)',
-])
-
-const ERC721_ABI = parseAbi([
-  'function mint(address to) returns (uint256)',
-  'function ownerOf(uint256 tokenId) view returns (address)',
-  'function approve(address to, uint256 tokenId)',
-  'function getApproved(uint256 tokenId) view returns (address)',
-  'function balanceOf(address owner) view returns (uint256)',
 ])
 
 const TOKEN_FACTORY_ABI = parseAbi([
@@ -145,7 +114,7 @@ function loadDeployments(): Deployments {
 
 let publicClient: PublicClient
 let deployerWallet: WalletClient
-let userWallet: WalletClient
+let _userWallet: WalletClient
 let deployments: Deployments
 let skipTests = false
 
@@ -165,7 +134,7 @@ beforeAll(async () => {
     transport: http(RPC_URL),
   })
 
-  userWallet = createWalletClient({
+  _userWallet = createWalletClient({
     account: userAccount,
     chain: localnet,
     transport: http(RPC_URL),

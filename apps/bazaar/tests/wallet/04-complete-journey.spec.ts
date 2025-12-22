@@ -1,5 +1,4 @@
 import { testWithSynpress } from '@synthetixio/synpress'
-import type { Page } from "@playwright/test";
 import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
 import { basicSetup } from '../../synpress.config'
 

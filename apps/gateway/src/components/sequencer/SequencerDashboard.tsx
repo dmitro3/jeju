@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, type ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
 import { formatEther, type Address } from 'viem';
 import { RefreshCw, Users, Activity, Clock, Shield, TrendingUp, AlertCircle, Check, type LucideProps } from 'lucide-react';
@@ -65,7 +65,7 @@ function getChainName(chainId: number): string {
 }
 
 export function SequencerDashboard() {
-  const { address, isConnected } = useAccount();
+  const { isConnected: _isConnected } = useAccount();
   const [selectedTab, setSelectedTab] = useState<'overview' | 'rotation' | 'sequencers'>('overview');
 
   // Read current sequencer
@@ -253,8 +253,9 @@ export function SequencerDashboard() {
             <div className="space-y-4">
               {verifiedChains?.map((chainId, index) => {
                 const isCurrent = chainId === currentSequencer;
-                const isNext = verifiedChains.length > 1 && 
-                  verifiedChains[(verifiedChains.indexOf(currentSequencer!) + 1) % verifiedChains.length] === chainId;
+                const currentIdx = currentSequencer ? verifiedChains.indexOf(currentSequencer) : -1;
+                const isNext = verifiedChains.length > 1 && currentIdx >= 0 && 
+                  verifiedChains[(currentIdx + 1) % verifiedChains.length] === chainId;
 
                 return (
                   <div

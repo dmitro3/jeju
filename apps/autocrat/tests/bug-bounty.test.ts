@@ -10,16 +10,14 @@
  * - Payout
  */
 
-import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
-import { Hono } from 'hono';
-import { parseEther, formatEther } from 'viem';
+import { describe, test, expect, beforeAll } from 'bun:test';
+import { parseEther } from 'viem';
 import {
   getBugBountyService,
   assessSubmission,
   resetBugBountyService,
 } from '../src/bug-bounty-service';
 import {
-  validatePoCInSandbox,
   createSandboxConfig,
   getSandboxStats,
 } from '../src/sandbox-executor';
@@ -500,7 +498,7 @@ contract Exploit {
       service.guardianVote(submission.submissionId, GUARDIAN_3, 42n, true, reward, 'Valid submission - approve');
 
       // MEDIUM doesn't go to CEO
-      let status = service.get(submission.submissionId);
+      const status = service.get(submission.submissionId);
       expect(status!.status).toBe(BountySubmissionStatus.APPROVED);
 
       // Record fix - must be a valid 40-char hex git commit hash

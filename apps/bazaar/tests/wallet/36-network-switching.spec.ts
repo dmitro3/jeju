@@ -113,7 +113,7 @@ test.describe('Network Switching', () => {
     console.log(`Button on Testnet: ${buttonOnTestnet}`)
     
     // Should show warning or disabled state
-    const hasNetworkWarning = buttonOnTestnet?.includes('Switch') || 
+    const _hasNetworkWarning = buttonOnTestnet?.includes('Switch') || 
                              buttonOnTestnet?.includes('Contracts Not Deployed')
     
     // Switch back
@@ -132,7 +132,7 @@ test.describe('Network Switching', () => {
     await expect(page.getByText(/0xf39F/i)).toBeVisible({ timeout: 15000 })
     
     // Verify connected
-    const addressBefore = await page.getByText(/0xf39F/i).textContent()
+    const _addressBefore = await page.getByText(/0xf39F/i).textContent()
     
     // Switch network
     await metamask.addNetwork({

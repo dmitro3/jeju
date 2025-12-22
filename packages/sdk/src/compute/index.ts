@@ -187,15 +187,24 @@ export function createComputeModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): ComputeModule {
-  const registryAddress = safeGetContract("compute", "registry", network);
-  const rentalAddress = safeGetContract("compute", "rental", network);
-  const inferenceAddress = safeGetContract("compute", "inference", network);
+  const maybeRegistryAddress = safeGetContract("compute", "registry", network);
+  const maybeRentalAddress = safeGetContract("compute", "rental", network);
+  const maybeInferenceAddress = safeGetContract(
+    "compute",
+    "inference",
+    network,
+  );
   const triggerAddress = safeGetContract("compute", "triggerRegistry", network);
 
   // If core contracts aren't available, return stub module
-  if (!registryAddress || !rentalAddress || !inferenceAddress) {
+  if (!maybeRegistryAddress || !maybeRentalAddress || !maybeInferenceAddress) {
     return createStubComputeModule();
   }
+
+  // Type narrowing: after the guard above, these are guaranteed to be defined
+  const registryAddress: Address = maybeRegistryAddress;
+  const rentalAddress: Address = maybeRentalAddress;
+  const inferenceAddress: Address = maybeInferenceAddress;
 
   const registry = getContract({
     address: registryAddress,
@@ -268,7 +277,9 @@ export function createComputeModule(
 
       const gpuType = GPU_TYPES[resources.resources.gpuType];
       if (!gpuType) {
-        throw new Error(`Invalid GPU type index: ${resources.resources.gpuType}`);
+        throw new Error(
+          `Invalid GPU type index: ${resources.resources.gpuType}`,
+        );
       }
 
       // Apply filters
@@ -380,7 +391,11 @@ export function createComputeModule(
       rentalId: r.rentalId,
       user: r.user,
       provider: r.provider,
-      status: RENTAL_STATUS[r.status] ?? (() => { throw new Error(`Invalid rental status: ${r.status}`); })(),
+      status:
+        RENTAL_STATUS[r.status] ??
+        (() => {
+          throw new Error(`Invalid rental status: ${r.status}`);
+        })(),
       startTime: Number(r.startTime),
       endTime: Number(r.endTime),
       totalCost: r.totalCost,
@@ -549,7 +564,11 @@ export function createComputeModule(
     return {
       triggerId,
       owner: t[0],
-      type: typeMap[t[1]] ?? (() => { throw new Error(`Invalid trigger type: ${t[1]}`); })(),
+      type:
+        typeMap[t[1]] ??
+        (() => {
+          throw new Error(`Invalid trigger type: ${t[1]}`);
+        })(),
       name: t[2],
       endpoint: t[3],
       active: t[4],
@@ -636,7 +655,8 @@ function createStubComputeModule(): ComputeModule {
   };
 
   const emptyRentalInfo: RentalInfo = {
-    rentalId: "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
+    rentalId:
+      "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
     user: "0x0000000000000000000000000000000000000000" as Address,
     provider: "0x0000000000000000000000000000000000000000" as Address,
     status: "PENDING",
@@ -648,7 +668,8 @@ function createStubComputeModule(): ComputeModule {
   };
 
   const emptyTriggerInfo: TriggerInfo = {
-    triggerId: "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
+    triggerId:
+      "0x0000000000000000000000000000000000000000000000000000000000000000" as Hex,
     owner: "0x0000000000000000000000000000000000000000" as Address,
     type: "cron",
     name: "",
@@ -658,7 +679,7 @@ function createStubComputeModule(): ComputeModule {
     lastExecutedAt: 0,
     agentId: 0n,
   };
-  
+
   return {
     listProviders: async () => [],
     getProvider: async () => emptyProviderInfo,

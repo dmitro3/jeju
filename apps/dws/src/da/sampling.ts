@@ -96,7 +96,10 @@ export function mapIndicesToOperators(
         if (!operatorIndices.has(operatorAddr)) {
           operatorIndices.set(operatorAddr, []);
         }
-        operatorIndices.get(operatorAddr)!.push(index);
+        const indices = operatorIndices.get(operatorAddr);
+        if (indices) {
+          indices.push(index);
+        }
         break;
       }
     }
@@ -370,7 +373,10 @@ export class SampleVerifier {
     if (!this.chunks.has(blobId)) {
       this.chunks.set(blobId, new Map());
     }
-    this.chunks.get(blobId)!.set(chunk.index, chunk);
+    const chunkMap = this.chunks.get(blobId);
+    if (chunkMap) {
+      chunkMap.set(chunk.index, chunk);
+    }
   }
 
   /**

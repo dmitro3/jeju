@@ -86,7 +86,7 @@ test.describe('Critical Fixes Validation', () => {
     console.log('✅ VERIFIED: Item sorting dropdown works');
   });
 
-  test('✅ COMPREHENSIVE: All pages load without critical errors', async ({ page }) => {
+  test('✅ COMPREHENSIVE: All pages load without critical errors', async ({ page: _page }) => {
     const pages = [
       { url: '/', name: 'Homepage' },
       { url: '/tokens', name: 'Tokens' },
@@ -101,10 +101,10 @@ test.describe('Critical Fixes Validation', () => {
     ];
     
     for (const pageDef of pages) {
-      await page.goto(pageDef.url);
-      await page.waitForTimeout(500);
+      await _page.goto(pageDef.url);
+      await _page.waitForTimeout(500);
       
-      const body = await page.textContent('body');
+      const body = await _page.textContent('body');
       
       // Check for critical errors
       const hasCriticalError = body?.includes('Switch to the network (Chain ID: 420691)') ||
@@ -121,7 +121,7 @@ test.describe('Critical Fixes Validation', () => {
     console.log('✅ VERIFIED: All pages load without critical warnings');
   });
 
-  test('📊 FINAL SUMMARY: All fixes validated', async ({ page }) => {
+  test('📊 FINAL SUMMARY: All fixes validated', async ({ page: _page }) => {
     console.log('');
     console.log('═══════════════════════════════════════════════════════════');
     console.log('              CRITICAL FIXES - VALIDATION REPORT');

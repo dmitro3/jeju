@@ -12,7 +12,6 @@ import {
 import { verifyPayment } from '../services/verifier';
 import { parseJsonBody, handleSettleRequest } from '../lib/route-helpers';
 import { buildSettleErrorResponse, buildSettleSuccessResponse } from '../lib/response-builders';
-import { expect } from '../../lib/validation';
 
 const app = new Hono();
 

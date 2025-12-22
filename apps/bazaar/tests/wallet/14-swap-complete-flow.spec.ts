@@ -125,7 +125,7 @@ test.describe('Complete Swap Flow with Wallet', () => {
     await page.waitForTimeout(500);
     
     let body = await page.textContent('body');
-    const initialBody = body;
+    const _initialBody = body;
     
     // Enter larger amount
     await inputAmount.fill('10');

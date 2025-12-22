@@ -200,7 +200,7 @@ test.describe('Storage Funding Flow', () => {
     console.log('✅ Funding options displayed');
   });
 
-  test.skip('should fund storage balance with elizaOS', async ({ page, metamask }) => {
+  test.skip('should fund storage balance with elizaOS', async ({ page, metamask: _metamask }) => {
     // TODO: Implement when funding contract ready
     
     await page.getByText('Funding & Payments').click();

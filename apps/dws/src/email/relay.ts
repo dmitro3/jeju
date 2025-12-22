@@ -114,6 +114,7 @@ interface RelayConfig {
 
 const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const DELIVERY_STATUS_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_DELIVERY_QUEUE_SIZE = 10000; // Prevent memory exhaustion
 
 interface DeliveryStatusEntry {
   status: Record<string, DeliveryStatus>;
@@ -319,8 +320,12 @@ export class EmailRelayService {
       throw new Error(`Recipient not found: ${recipient.full}`);
     }
 
+    if (!identity.address.owner) {
+      throw new Error(`Recipient has no owner address: ${recipient.full}`);
+    }
+
     const storage = getMailboxStorage();
-    await storage.storeInbound(identity.address.owner!, envelope);
+    await storage.storeInbound(identity.address.owner, envelope);
   }
 
   private async deliverExternal(
@@ -660,7 +665,7 @@ export class EmailRelayService {
 
   private computeChecksum(base64Content: string): Hex {
     const buffer = Buffer.from(base64Content, 'base64');
-    const hash = require('crypto').createHash('sha256').update(buffer).digest('hex');
+    const hash = createHash('sha256').update(buffer).digest('hex');
     return `0x${hash}` as Hex;
   }
 
@@ -701,6 +706,10 @@ export class EmailRelayService {
   }
 
   private queueDelivery(envelope: EmailEnvelope): void {
+    // Prevent memory exhaustion by limiting queue size
+    if (this.deliveryQueue.length >= MAX_DELIVERY_QUEUE_SIZE) {
+      throw new Error('Email delivery queue is full. Please try again later.');
+    }
     this.deliveryQueue.push(envelope);
   }
 

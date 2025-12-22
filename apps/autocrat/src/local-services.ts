@@ -12,6 +12,24 @@ import {
 } from './state.js';
 import type { AutocratVote, StoredObject } from './types.js';
 import { getDWSComputeUrl, getCurrentNetwork } from '@jejunetwork/config';
+import { z } from 'zod';
+
+// Schemas for validating external API responses - prevents insecure deserialization
+const DWSResponseSchema = z.object({
+  choices: z.array(z.object({
+    message: z.object({
+      content: z.string(),
+    }).optional(),
+  })).optional(),
+  content: z.string().optional(),
+});
+
+const OllamaResponseSchema = z.object({
+  message: z.object({
+    content: z.string().optional(),
+  }).optional(),
+  content: z.string().optional(),
+});
 
 // DWS endpoint is automatically resolved from network config, but env var overrides
 function getDWSEndpoint(): string {
@@ -78,7 +96,12 @@ async function dwsGenerate(prompt: string, system: string): Promise<string> {
     const errorText = await r.text();
     throw new Error(`DWS compute error (network: ${network}): ${r.status} - ${errorText}`);
   }
-  const data = await r.json() as { choices?: Array<{ message?: { content: string } }>; content?: string };
+  const rawData: unknown = await r.json();
+  const parseResult = DWSResponseSchema.safeParse(rawData);
+  if (!parseResult.success) {
+    throw new Error(`Invalid DWS response format: ${parseResult.error.message}`);
+  }
+  const data = parseResult.data;
   return data.choices?.[0]?.message?.content ?? data.content ?? '';
 }
 
@@ -211,6 +234,11 @@ export async function ollamaGenerate(prompt: string, systemPrompt?: string): Pro
     throw new Error(`Ollama error: ${r.status}`);
   }
 
-  const data = await r.json() as { message?: { content?: string }; content?: string };
+  const rawData: unknown = await r.json();
+  const parseResult = OllamaResponseSchema.safeParse(rawData);
+  if (!parseResult.success) {
+    throw new Error(`Invalid Ollama response format: ${parseResult.error.message}`);
+  }
+  const data = parseResult.data;
   return data.message?.content ?? data.content ?? '';
 }

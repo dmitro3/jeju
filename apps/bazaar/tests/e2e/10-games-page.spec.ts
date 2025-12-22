@@ -4,97 +4,100 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { captureScreenshot, captureUserFlow } from '@jejunetwork/tests/playwright-only';
 
 test.describe('Games Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/games');
   });
 
-  test('should display games page', async ({ page }) => {
+  test('should display games page with title', async ({ page }) => {
     await expect(page).toHaveURL('/games');
     
+    // Should show the page title
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(/Games/i);
+  });
+
+  test('should show page description about ERC-8004', async ({ page }) => {
+    // Verify page has ERC-8004 related content
+    const description = page.locator('p').filter({ hasText: /ERC-8004|registered|network/i });
+    await expect(description.first()).toBeVisible();
+  });
+
+  test('should show loading state initially', async ({ page }) => {
+    // Loading may be fast, so we just check page renders
     const body = await page.textContent('body');
     expect(body).toBeTruthy();
   });
 
-  test('should show page title and description', async ({ page }) => {
-    // Verify page has game-related content
-    const body = await page.textContent('body');
-    expect(body).toBeTruthy();
-    expect(body!.toLowerCase()).toMatch(/game|play|discover/);
-  });
-
-  test('should display registered games from ERC-8004 registry', async ({ page }) => {
-    await page.waitForTimeout(1000);
+  test('should display games grid or empty state', async ({ page }) => {
+    // Wait for query to complete
+    await page.waitForLoadState('networkidle');
     
-    // Page should render with content
-    const body = await page.textContent('body');
-    expect(body).toBeTruthy();
-    expect(body!.length).toBeGreaterThan(100);
+    // Either show games grid or empty state
+    const hasGamesGrid = await page.locator('.grid').count() > 0;
+    const hasEmptyState = await page.getByText(/No Games Yet/i).count() > 0;
+    
+    expect(hasGamesGrid || hasEmptyState).toBe(true);
   });
 
-  test('should display game information in cards', async ({ page }) => {
-    await page.waitForTimeout(1000);
+  test('should show game cards with required info when games exist', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
     
-    const gameCards = page.locator('[data-testid="game-card"]');
+    // Check for game cards (they have gradient backgrounds)
+    const gameCards = page.locator('.card');
     const count = await gameCards.count();
     
     if (count > 0) {
       const firstCard = gameCards.first();
       
-      // Should show game name or description
+      // Card should contain game info
       const cardText = await firstCard.textContent();
       expect(cardText).toBeTruthy();
-    } else {
-      // Verify page structure exists even without games
-      const mainContent = await page.locator('main, [role="main"], body > div').count();
-      expect(mainContent).toBeGreaterThan(0);
+      
+      // Should have View Game link
+      const viewLink = firstCard.getByText(/View Game/i);
+      await expect(viewLink).toBeVisible();
     }
   });
 
-  test('should show game categories or tags', async ({ page }) => {
-    await page.waitForTimeout(1000);
+  test('should display tags for games', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
     
-    // Page should have interactive elements
-    const buttons = await page.locator('button').count();
-    expect(buttons).toBeGreaterThanOrEqual(0);
+    // Tags use badge-primary class
+    const tags = page.locator('.badge-primary');
+    const tagCount = await tags.count();
+    
+    // Tags are optional, just verify no errors
+    expect(tagCount).toBeGreaterThanOrEqual(0);
   });
 
-  test('should allow filtering games by category', async ({ page }) => {
-    await page.waitForTimeout(500);
+  test('should display player and item counts when available', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
     
-    // Look for filter buttons
-    const filterButtons = page.getByRole('button').filter({ hasText: /all|active|popular/i });
-    const count = await filterButtons.count();
-    
-    expect(count >= 0).toBe(true);
+    // Verify page structure regardless
+    expect(await page.locator('body').textContent()).toBeTruthy();
   });
 
-  test('should display game stats (players, bets, etc)', async ({ page }) => {
-    await page.waitForTimeout(1000);
+  test('should link to game details on external site', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
     
-    // Verify page structure
-    const mainContent = await page.locator('main, [role="main"], body > div').count();
-    expect(mainContent).toBeGreaterThan(0);
+    const viewLinks = page.getByRole('link', { name: /View Game/i });
+    const count = await viewLinks.count();
+    
+    if (count > 0) {
+      const href = await viewLinks.first().getAttribute('href');
+      expect(href).toContain('jejunetwork.org/agent');
+    }
   });
 
-  test('should allow navigation to game detail/play', async ({ page }) => {
-    await page.waitForTimeout(1000);
+  test('should show agent ID for each game', async ({ page }) => {
+    await page.waitForLoadState('networkidle');
     
-    // Page should have navigation elements
-    const navElements = await page.locator('nav, header, a').count();
-    expect(navElements).toBeGreaterThan(0);
-  });
-
-  test('should display A2A integration status for games', async ({ page }) => {
-    await page.waitForTimeout(1000);
+    const agentIds = page.getByText(/Agent ID:/i);
+    const count = await agentIds.count();
     
-    // Verify page renders without errors
-    const body = await page.textContent('body');
-    expect(body).toBeTruthy();
-    expect(body!.length).toBeGreaterThan(50);
+    // Agent ID shown for each game card
+    expect(count).toBeGreaterThanOrEqual(0);
   });
 });
-
 

@@ -20,8 +20,8 @@ interface InfraStatus {
 }
 
 // Try to load global setup, gracefully skip if not available
-let setup: () => Promise<void> = async () => {};
-let teardown: () => Promise<void> = async () => {};
+let setup: () => Promise<void> = async (): Promise<void> => { /* no-op default */ };
+let teardown: () => Promise<void> = async (): Promise<void> => { /* no-op default */ };
 let isReady: () => boolean = () => true;
 let getStatus: () => Promise<InfraStatus> = async () => ({
   rpc: false,

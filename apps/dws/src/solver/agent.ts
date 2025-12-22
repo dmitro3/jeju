@@ -165,7 +165,12 @@ export class SolverAgent {
 
     console.log(`   🔄 Filling ${opp.type} opportunity: ${opp.id.slice(0, 20)}...`);
     
-    const result = await this.externalAggregator!.fill(opp);
+    if (!this.externalAggregator) {
+      console.log(`   ❌ External aggregator not initialized`);
+      return;
+    }
+    
+    const result = await this.externalAggregator.fill(opp);
     
     if (result.success) {
       console.log(`   ✅ ${opp.type} fill success: ${result.txHash}`);
@@ -269,9 +274,12 @@ export class SolverAgent {
     }
 
     const chain = getChain(settlement.sourceChain);
+    const account = client.wallet.account;
+    if (!account) return { settled: false, retry: false, reason: 'No account configured' };
+    
     const settleTx = await client.wallet.writeContract({
       chain,
-      account: client.wallet.account!,
+      account,
       address: inputSettler,
       abi: INPUT_SETTLER_ABI,
       functionName: 'settle',
@@ -356,7 +364,7 @@ export class SolverAgent {
     const fill = await this.fill(e);
     const fillDurationMs = Date.now() - fillStart;
 
-    if (fill.success) {
+    if (fill.success && fill.txHash) {
       recordIntentFilled(e.sourceChain, e.destinationChain, fillDurationMs, fill.gasUsed || 0n);
       console.log(`   ✅ Filled: ${fill.txHash}`);
       const now = Date.now();
@@ -365,7 +373,7 @@ export class SolverAgent {
         sourceChain: e.sourceChain,
         destChain: e.destinationChain,
         inputAmount: BigInt(e.inputAmount),
-        fillTxHash: fill.txHash!,
+        fillTxHash: fill.txHash,
         filledAt: now,
         retryCount: 0,
         nextRetryAt: now + BASE_RETRY_DELAY_MS, // First retry after 30s
@@ -391,10 +399,13 @@ export class SolverAgent {
     const chain = getChain(e.destinationChain);
     const native = isNativeToken(e.outputToken);
 
+    const account = client.wallet.account;
+    if (!account) return { success: false, error: 'No account configured' };
+
     if (!native) {
       const approveTx = await client.wallet.writeContract({
         chain,
-        account: client.wallet.account!,
+        account,
         address: e.outputToken as `0x${string}`,
         abi: ERC20_APPROVE_ABI,
         functionName: 'approve',
@@ -405,7 +416,7 @@ export class SolverAgent {
 
     const fillTx = await client.wallet.writeContract({
       chain,
-      account: client.wallet.account!,
+      account,
       address: settler,
       abi: OUTPUT_SETTLER_ABI,
       functionName: 'fillDirect',

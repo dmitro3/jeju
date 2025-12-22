@@ -4,7 +4,7 @@
  * Type definitions for encrypted direct messages between Farcaster users.
  */
 
-import type { Address, Hex } from 'viem';
+import type { Hex } from 'viem';
 
 // ============ Message Types ============
 

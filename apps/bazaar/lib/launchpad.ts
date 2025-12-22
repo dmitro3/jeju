@@ -207,7 +207,7 @@ export function parseBondingCurveStats(
     ethCollected: data[2],
     tokensRemaining: data[3],
     graduated: data[4],
-    marketCap: 0n,
+    marketCap: BigInt(0),
   }
 }
 
@@ -258,7 +258,7 @@ export function canClaimTokens(
   return (
     status.isFinalized &&
     !status.isFailed &&
-    contribution.claimable > 0n &&
+    contribution.claimable > BigInt(0) &&
     currentTimestamp >= buyerClaimStart
   )
 }
@@ -273,7 +273,7 @@ export function canClaimRefund(
   return (
     status.isFinalized &&
     status.isFailed &&
-    contribution.ethAmount > 0n &&
+    contribution.ethAmount > BigInt(0) &&
     !contribution.isRefunded
   )
 }

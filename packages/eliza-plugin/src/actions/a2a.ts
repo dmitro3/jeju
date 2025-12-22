@@ -10,7 +10,12 @@ import {
   type State,
 } from "@elizaos/core";
 import { JEJU_SERVICE_NAME, type JejuService } from "../service";
-import { getMessageText, validateServiceExists } from "../validation";
+import {
+  getMessageText,
+  validateServiceExists,
+  sanitizeAgentResponse,
+  truncateOutput,
+} from "../validation";
 
 export const callAgentAction: Action = {
   name: "CALL_AGENT",
@@ -64,10 +69,16 @@ export const callAgentAction: Action = {
       message: text,
     });
 
+    // Sanitize agent response to prevent context poisoning
+    const sanitizedMessage = sanitizeAgentResponse(response.message ?? "");
+
     callback?.({
       text: `Agent response from ${agentEndpoint}:
-${response.message}`,
-      content: response,
+${sanitizedMessage}`,
+      content: {
+        ...response,
+        message: sanitizedMessage,
+      },
     });
   },
 
@@ -123,18 +134,21 @@ export const discoverAgentsAction: Action = {
       return;
     }
 
-    const agentList = agents
-      .slice(0, 10)
-      .map(
-        (a: { name: string; endpoint: string; skills: string[] }) =>
-          `• ${a.name} (${a.endpoint}) - ${a.skills.length} skills`,
-      )
+    // Sanitize agent names and endpoints to prevent injection
+    const sanitizedAgents = agents.slice(0, 10).map((a: { name: string; endpoint: string; skills: unknown[] }) => ({
+      name: truncateOutput(a.name, 100),
+      endpoint: truncateOutput(a.endpoint, 200),
+      skillCount: a.skills.length,
+    }));
+
+    const agentList = sanitizedAgents
+      .map((a) => `• ${a.name} (${a.endpoint}) - ${a.skillCount} skills`)
       .join("\n");
 
     callback?.({
       text: `Found ${agents.length} agents:
 ${agentList}`,
-      content: { agents },
+      content: { agents: sanitizedAgents },
     });
   },
 

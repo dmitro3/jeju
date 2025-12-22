@@ -2,7 +2,7 @@
  * Email SDK Types
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 
 export interface EmailClientConfig {
   /** Email API endpoint */
@@ -62,7 +62,7 @@ export interface SendEmailParams {
   }[];
   replyTo?: string;
   inReplyTo?: Hex;
-  priority?: 'low' | 'normal' | 'high';
+  priority?: "low" | "normal" | "high";
 }
 
 export interface Mailbox {
@@ -113,23 +113,23 @@ export interface FilterRule {
 }
 
 export interface FilterCondition {
-  field: 'from' | 'to' | 'subject' | 'body';
-  operator: 'contains' | 'equals' | 'startsWith' | 'endsWith' | 'regex';
+  field: "from" | "to" | "subject" | "body";
+  operator: "contains" | "equals" | "startsWith" | "endsWith" | "regex";
   value: string;
 }
 
 export interface FilterAction {
-  type: 'move' | 'label' | 'star' | 'markRead' | 'delete';
+  type: "move" | "label" | "star" | "markRead" | "delete";
   value?: string;
 }
 
-export type EmailEventType = 
-  | 'email:new'
-  | 'email:updated'
-  | 'email:deleted'
-  | 'connection:open'
-  | 'connection:close'
-  | 'connection:error';
+export type EmailEventType =
+  | "email:new"
+  | "email:updated"
+  | "email:deleted"
+  | "connection:open"
+  | "connection:close"
+  | "connection:error";
 
 export interface EmailEvent {
   type: EmailEventType;
@@ -143,7 +143,7 @@ export interface IMAPConfig {
   port: number;
   secure: boolean;
   auth: {
-    type: 'XOAUTH2';
+    type: "XOAUTH2";
     user: string;
     accessToken: string;
   };
@@ -154,7 +154,7 @@ export interface SMTPConfig {
   port: number;
   secure: boolean;
   auth: {
-    type: 'XOAUTH2';
+    type: "XOAUTH2";
     user: string;
     accessToken: string;
   };

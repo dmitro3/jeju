@@ -113,10 +113,10 @@ test.describe('Swap - Deep Interaction Testing', () => {
     const hasSwapContent = body?.includes('Swap') || body?.includes('swap');
     
     // If periphery deployed, should show rate/fee/price impact
-    const hasPeriphery = body?.includes('Rate') || body?.includes('Fee') || body?.includes('Price Impact');
+    const _hasPeriphery = body?.includes('Rate') || body?.includes('Fee') || body?.includes('Price Impact');
     
     // If no periphery, should show warning
-    const hasWarning = body?.includes('Contracts Not Deployed') || body?.includes('unavailable');
+    const _hasWarning = body?.includes('Contracts Not Deployed') || body?.includes('unavailable');
     
     // Should have swap content OR show appropriate warning
     expect(hasSwapContent).toBe(true);

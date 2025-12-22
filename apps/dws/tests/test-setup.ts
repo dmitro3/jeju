@@ -12,7 +12,7 @@ import { spawn, type Subprocess } from 'bun';
 import { existsSync } from 'fs';
 import { join } from 'path';
 
-let anvilProcess: Subprocess | null = null;
+let _anvilProcess: Subprocess | null = null;
 let dwsProcess: Subprocess | null = null;
 let inferenceProcess: Subprocess | null = null;
 let isSetup = false;
@@ -84,7 +84,7 @@ async function startAnvil(): Promise<boolean> {
     return false;
   }
   
-  anvilProcess = spawn([anvil, '--port', String(ANVIL_PORT), '--chain-id', '1337', '--silent'], {
+  _anvilProcess = spawn([anvil, '--port', String(ANVIL_PORT), '--chain-id', '1337', '--silent'], {
     stdout: 'pipe',
     stderr: 'pipe',
   });

@@ -184,10 +184,10 @@ export default function BuildDetailPage() {
                   <span className="text-neutral-500">Started</span>
                   <span className="text-neutral-300">{formatDistanceToNow(build.startedAt, { addSuffix: true })}</span>
                 </div>
-                {(build.duration || build.completedAt) && (
+                {(build.duration !== undefined || build.completedAt !== undefined) && (
                   <div className="flex justify-between">
                     <span className="text-neutral-500">Duration</span>
-                    <span className="text-neutral-300">{formatDuration(build.duration || (build.completedAt! - build.startedAt))}</span>
+                    <span className="text-neutral-300">{formatDuration(build.duration ?? (build.completedAt ? build.completedAt - build.startedAt : 0))}</span>
                   </div>
                 )}
                 <div className="flex justify-between">

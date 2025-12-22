@@ -11,6 +11,7 @@ import type {
   FeeDistributionConfig,
   WeightVote,
 } from '../types/funding';
+import { bigIntToNumber, bigIntEpochToNumber } from '../lib/validation/bigint-utils';
 
 // ============ Contract ABI ============
 
@@ -191,10 +192,11 @@ export function useEpochVotes(daoId: string | undefined, epochId: number | undef
     ? (data as Array<[Address, string, bigint, string, bigint, bigint]>).map(v => ({
         voter: v[0],
         targetId: v[1],
-        weightAdjustment: Number(v[2]),
+        // Use safe conversion with validation for values that should fit in Number
+        weightAdjustment: bigIntToNumber(v[2], 'weightAdjustment'),
         reason: v[3],
-        reputation: Number(v[4]),
-        votedAt: Number(v[5]),
+        reputation: bigIntToNumber(v[4], 'reputation'),
+        votedAt: bigIntEpochToNumber(v[5]),
       }))
     : [];
 

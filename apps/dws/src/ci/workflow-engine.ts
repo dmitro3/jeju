@@ -633,7 +633,7 @@ export class WorkflowEngine {
     stepRun.completedAt = Date.now();
     stepRun.status = 'completed';
 
-    const duration = stepRun.completedAt - stepRun.startedAt!;
+    const duration = stepRun.completedAt - (stepRun.startedAt ?? stepRun.completedAt);
     logs.push(`Step completed in ${duration}ms with ${stepRun.conclusion}`);
   }
 
@@ -646,7 +646,12 @@ export class WorkflowEngine {
     context: WorkflowContext,
     logs: string[]
   ): Promise<void> {
-    const actionRef = stepConfig.uses!;
+    const actionRef = stepConfig.uses;
+    if (!actionRef) {
+      logs.push('No action specified');
+      stepRun.conclusion = 'skipped';
+      return;
+    }
 
     // Check for built-in actions
     const action = (BUILTIN_ACTIONS as Record<string, unknown>)[actionRef];

@@ -17,6 +17,7 @@ import { createRESTRouter } from './rest';
 import { createX402Middleware } from './x402';
 import type { VPNServerConfig, VPNServiceContext } from './types';
 import { VPNServerConfigSchema, expectValid } from './schemas';
+import { checkRateLimit } from './utils/rate-limit';
 
 export function createVPNServer(config: VPNServerConfig): Hono {
   // Validate config on startup
@@ -24,14 +25,87 @@ export function createVPNServer(config: VPNServerConfig): Hono {
 
   const app = new Hono();
 
-  // Base middleware
-  app.use('*', cors());
+  // Base middleware with restrictive CORS
+  app.use('*', cors({
+    origin: [
+      config.publicUrl,
+      'https://vpn.jejunetwork.org',
+      'https://app.jejunetwork.org',
+      // Allow localhost in development
+      ...(process.env.NODE_ENV === 'development' ? ['http://localhost:1421', 'http://127.0.0.1:1421'] : []),
+    ],
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'x-jeju-address', 'x-jeju-timestamp', 'x-jeju-signature', 'x-payment'],
+    exposeHeaders: ['Content-Length', 'Content-Type', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
+    maxAge: 600,
+    credentials: true,
+  }));
   app.use('*', logger());
 
-  // Global error handler
+  // SECURITY: Apply rate limiting to all endpoints
+  app.use('*', async (c, next) => {
+    // Get identifier from request
+    const forwardedFor = c.req.header('x-forwarded-for');
+    const realIp = c.req.header('x-real-ip');
+    const jejuAddress = c.req.header('x-jeju-address');
+    const identifier = jejuAddress ?? forwardedFor?.split(',')[0]?.trim() ?? realIp ?? 'unknown';
+    
+    // Determine endpoint type for rate limiting
+    const path = c.req.path;
+    let type = 'default';
+    if (path.includes('/connect') || path.includes('/disconnect')) {
+      type = 'session';
+    } else if (path.includes('/proxy')) {
+      type = 'proxy';
+    } else if (path.includes('/auth') || path.includes('/login')) {
+      type = 'auth';
+    }
+    
+    const result = checkRateLimit(type, identifier);
+    
+    // Add rate limit headers
+    c.header('X-RateLimit-Remaining', result.remaining.toString());
+    c.header('X-RateLimit-Reset', result.resetAt.toString());
+    
+    if (!result.allowed) {
+      return c.json({
+        error: 'Too many requests. Please try again later.',
+        retryAfter: Math.ceil((result.resetAt - Date.now()) / 1000),
+      }, 429);
+    }
+    
+    return next();
+  });
+
+  // Global error handler - sanitize error messages
   app.onError((err, c) => {
     console.error('VPN Server error:', err);
-    return c.json({ error: err.message || 'Internal server error' }, 500);
+    
+    // SECURITY: Don't expose internal error details to clients
+    // Only expose safe validation/auth errors
+    const safeErrors = [
+      'Authentication required',
+      'Invalid authentication',
+      'Invalid signature',
+      'Session expired',
+      'Session not found',
+      'Node not found',
+      'No available nodes',
+      'Payment required',
+      'Invalid payment',
+      'Validation failed',
+    ];
+    
+    const message = err.message || '';
+    const isSafeError = safeErrors.some(safe => message.includes(safe)) ||
+                        message.startsWith('Validation failed');
+    
+    if (isSafeError) {
+      return c.json({ error: message }, 400);
+    }
+    
+    // Generic error for unexpected issues
+    return c.json({ error: 'Internal server error' }, 500);
   });
 
   // Service context available to all routes

@@ -7,6 +7,7 @@
 
 import type { CQLClient } from './client.js';
 import type { Migration, MigrationResult } from './types.js';
+import { validateSQLIdentifier, validateSQLIdentifiers, validateSQLDefault } from './utils.js';
 
 // ============================================================================
 // Migration Manager
@@ -20,7 +21,8 @@ export class MigrationManager {
   constructor(client: CQLClient, databaseId: string, tableName: string = '_migrations') {
     this.client = client;
     this.databaseId = databaseId;
-    this.tableName = tableName;
+    // Validate table name to prevent SQL injection
+    this.tableName = validateSQLIdentifier(tableName, 'table');
   }
 
   /**
@@ -75,25 +77,36 @@ export class MigrationManager {
 
   /**
    * Run pending migrations
+   * Uses pessimistic locking to prevent TOCTOU race conditions
    */
   async migrate(migrations: Migration[]): Promise<MigrationResult> {
     await this.initialize();
 
-    const currentVersion = await this.getCurrentVersion();
-    const pending = migrations
-      .filter((m) => m.version > currentVersion)
-      .sort((a, b) => a.version - b.version);
-
+    // Sort migrations by version for sequential application
+    const sortedMigrations = [...migrations].sort((a, b) => a.version - b.version);
     const applied: string[] = [];
 
-    for (const migration of pending) {
-      console.log(`[CQL] Applying migration: ${migration.version} - ${migration.name}`);
-
-      // Execute migration in transaction
+    for (const migration of sortedMigrations) {
+      // Execute migration in transaction with version check INSIDE the transaction
+      // This prevents TOCTOU race conditions where two processes check version simultaneously
       const conn = await this.client.connect(this.databaseId);
       const tx = await conn.beginTransaction();
 
       try {
+        // Check version INSIDE transaction to prevent race conditions
+        const versionResult = await tx.query<{ version: number | null }>(
+          `SELECT MAX(version) as version FROM ${this.tableName}`
+        );
+        const currentVersion = versionResult.rows[0]?.version ?? 0;
+        
+        // Skip if migration already applied
+        if (migration.version <= currentVersion) {
+          await tx.rollback();
+          continue;
+        }
+
+        console.log(`[CQL] Applying migration: ${migration.version} - ${migration.name}`);
+        
         await tx.exec(migration.up, []);
         await tx.exec(
           `INSERT INTO ${this.tableName} (version, name) VALUES (?, ?)`,
@@ -110,7 +123,7 @@ export class MigrationManager {
     }
 
     const newVersion = await this.getCurrentVersion();
-    const stillPending = migrations
+    const stillPending = sortedMigrations
       .filter((m) => m.version > newVersion)
       .map((m) => `${m.version}: ${m.name}`);
 
@@ -215,22 +228,30 @@ export function createTable(
     references?: { table: string; column: string };
   }>
 ): { up: string; down: string } {
+  // Validate table name to prevent SQL injection
+  const safeTableName = validateSQLIdentifier(tableName, 'table');
+  
   const columnDefs = columns.map((col) => {
-    let def = `${col.name} ${col.type}`;
+    // Validate column name
+    const safeColName = validateSQLIdentifier(col.name, 'column');
+    let def = `${safeColName} ${col.type}`;
     if (col.primaryKey) def += ' PRIMARY KEY';
     if (col.autoIncrement) def += ' AUTOINCREMENT';
     if (col.notNull) def += ' NOT NULL';
     if (col.unique) def += ' UNIQUE';
     if (col.default !== undefined) def += ` DEFAULT ${col.default}`;
     if (col.references) {
-      def += ` REFERENCES ${col.references.table}(${col.references.column})`;
+      // Validate foreign key references
+      const safeRefTable = validateSQLIdentifier(col.references.table, 'table');
+      const safeRefCol = validateSQLIdentifier(col.references.column, 'column');
+      def += ` REFERENCES ${safeRefTable}(${safeRefCol})`;
     }
     return def;
   });
 
   return {
-    up: `CREATE TABLE ${tableName} (\n  ${columnDefs.join(',\n  ')}\n)`,
-    down: `DROP TABLE IF EXISTS ${tableName}`,
+    up: `CREATE TABLE ${safeTableName} (\n  ${columnDefs.join(',\n  ')}\n)`,
+    down: `DROP TABLE IF EXISTS ${safeTableName}`,
   };
 }
 
@@ -243,13 +264,21 @@ export function addColumn(
   columnType: string,
   options?: { notNull?: boolean; default?: string }
 ): { up: string; down: string } {
-  let up = `ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`;
+  // Validate identifiers to prevent SQL injection
+  const safeTableName = validateSQLIdentifier(tableName, 'table');
+  const safeColumnName = validateSQLIdentifier(columnName, 'column');
+  
+  let up = `ALTER TABLE ${safeTableName} ADD COLUMN ${safeColumnName} ${columnType}`;
   if (options?.notNull) up += ' NOT NULL';
-  if (options?.default !== undefined) up += ` DEFAULT ${options.default}`;
+  if (options?.default !== undefined) {
+    // Validate DEFAULT value to prevent SQL injection
+    const safeDefault = validateSQLDefault(options.default);
+    up += ` DEFAULT ${safeDefault}`;
+  }
 
   return {
     up,
-    down: `ALTER TABLE ${tableName} DROP COLUMN ${columnName}`,
+    down: `ALTER TABLE ${safeTableName} DROP COLUMN ${safeColumnName}`,
   };
 }
 
@@ -262,10 +291,15 @@ export function createIndex(
   columns: string[],
   unique?: boolean
 ): { up: string; down: string } {
+  // Validate all identifiers to prevent SQL injection
+  const safeIndexName = validateSQLIdentifier(indexName, 'index');
+  const safeTableName = validateSQLIdentifier(tableName, 'table');
+  const safeColumns = validateSQLIdentifiers(columns, 'column');
+  
   const uniqueClause = unique ? 'UNIQUE ' : '';
   return {
-    up: `CREATE ${uniqueClause}INDEX ${indexName} ON ${tableName} (${columns.join(', ')})`,
-    down: `DROP INDEX IF EXISTS ${indexName}`,
+    up: `CREATE ${uniqueClause}INDEX ${safeIndexName} ON ${safeTableName} (${safeColumns.join(', ')})`,
+    down: `DROP INDEX IF EXISTS ${safeIndexName}`,
   };
 }
 

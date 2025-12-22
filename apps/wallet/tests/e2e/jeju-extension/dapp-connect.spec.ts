@@ -19,7 +19,7 @@ test.describe('dApp Connection via the network Extension', () => {
     expect(hasProvider).toBeTruthy();
   });
 
-  test('should handle eth_requestAccounts', async ({ testDappPage, extensionPage }) => {
+  test('should handle eth_requestAccounts', async ({ testDappPage, extensionPage: _extensionPage }) => {
     // Click connect on test dApp
     await testDappPage.click('#connect');
     

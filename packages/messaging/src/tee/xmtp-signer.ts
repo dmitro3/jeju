@@ -6,7 +6,8 @@
  */
 
 import type { Address, Hex } from 'viem';
-import { TEEXMTPKeyManager, type TEEIdentityKey, type TEEPreKey } from './key-manager';
+import { TEEXMTPKeyManager } from './key-manager';
+import type { TEEIdentityKey, TEEPreKey, EncryptedBackup } from './types';
 
 // ============ Types ============
 
@@ -116,15 +117,13 @@ export class TEEXMTPSigner implements XMTPSigner {
   /**
    * Perform ECDH with another party's public key
    */
-  async sharedSecret(theirPreKeyId: string, theirPublicKey: Hex): Promise<Uint8Array> {
+  async sharedSecret(_theirPreKeyId: string, theirPublicKey: Hex): Promise<Uint8Array> {
     // Get our pre-key for this exchange
     const preKeys = await this.keyManager.getPreKeys(this.identityKey.keyId);
-    if (preKeys.length === 0) {
+    const ourPreKey = preKeys[preKeys.length - 1];
+    if (!ourPreKey) {
       throw new Error('No pre-keys available');
     }
-    
-    // Use the most recent pre-key
-    const ourPreKey = preKeys[preKeys.length - 1]!;
     
     return this.keyManager.sharedSecret(ourPreKey.keyId, theirPublicKey);
   }
@@ -182,10 +181,43 @@ export async function importTEEXMTPSigner(
   password: string,
   newKeyId?: string,
 ): Promise<TEEXMTPSigner> {
-  const backup = JSON.parse(encryptedBackup);
+  // Validate backup string length to prevent DoS
+  if (encryptedBackup.length > 1024 * 1024) {
+    throw new Error('Backup data too large');
+  }
+  
+  let backup: unknown;
+  try {
+    backup = JSON.parse(encryptedBackup);
+  } catch {
+    throw new Error('Invalid backup format: not valid JSON');
+  }
+  
+  // Validate backup structure
+  if (!backup || typeof backup !== 'object') {
+    throw new Error('Invalid backup format: expected object');
+  }
+  
+  // Type assertion after validation
+  const backupData = backup as Record<string, unknown>;
+  if (
+    typeof backupData.ciphertext !== 'string' ||
+    typeof backupData.createdAt !== 'number' ||
+    !backupData.metadata ||
+    typeof backupData.metadata !== 'object'
+  ) {
+    throw new Error('Invalid backup format: missing or invalid required fields');
+  }
+  
+  const validatedBackup: EncryptedBackup = {
+    ciphertext: backupData.ciphertext as Hex,
+    metadata: backupData.metadata as EncryptedBackup['metadata'],
+    createdAt: backupData.createdAt as number,
+  };
+  
   const keyId = newKeyId ?? `imported-${Date.now()}`;
   
-  const identityKey = await keyManager.importFromBackup(backup, password, keyId);
+  const identityKey = await keyManager.importFromBackup(validatedBackup, password, keyId);
   
   return new TEEXMTPSigner(keyManager, identityKey);
 }
@@ -200,17 +232,11 @@ function hexToBytes(hex: Hex): Uint8Array {
 }
 
 /**
- * Convert bytes to hex string
- */
-function bytesToHex(bytes: Uint8Array): Hex {
-  return `0x${Buffer.from(bytes).toString('hex')}` as Hex;
-}
-
-/**
  * Derive address from public key (simplified)
  */
 export function deriveAddressFromPublicKey(publicKey: Hex): Address {
-  const { keccak256 } = require('viem');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { keccak256 } = require('viem') as { keccak256: (input: Hex) => Hex };
   
   // For Ed25519, we use a simplified derivation
   // In production, would handle this properly per XMTP spec

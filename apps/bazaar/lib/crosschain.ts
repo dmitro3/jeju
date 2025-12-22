@@ -5,6 +5,7 @@
 
 import type { Address } from 'viem';
 import { expect, expectTrue } from '@/lib/validation';
+import { AddressSchema } from '@jejunetwork/types';
 
 // ============ Types ============
 
@@ -147,16 +148,16 @@ export async function getBestQuote(params: CreateIntentParams): Promise<CrossCha
  * Get available routes between chains
  */
 export async function getRoutes(sourceChainId?: number, destChainId?: number): Promise<CrossChainRoute[]> {
+  const validatedAggregatorUrl = expect(AGGREGATOR_URL, 'OIF aggregator URL not configured');
+  
   const params = new URLSearchParams();
   if (sourceChainId) params.set('sourceChain', sourceChainId.toString());
   if (destChainId) params.set('destinationChain', destChainId.toString());
   params.set('active', 'true');
 
-  const response = await fetch(`${AGGREGATOR_URL}/api/routes?${params}`);
+  const response = await fetch(`${validatedAggregatorUrl}/api/routes?${params}`);
   
-  if (!response.ok) {
-    throw new Error('Failed to fetch routes');
-  }
+  expectTrue(response.ok, 'Failed to fetch routes');
 
   return response.json();
 }
@@ -173,11 +174,12 @@ export async function hasRoute(sourceChainId: number, destChainId: number): Prom
  * Get intent status
  */
 export async function getIntentStatus(intentId: string): Promise<IntentResult> {
-  const response = await fetch(`${AGGREGATOR_URL}/api/intents/${intentId}`);
+  const validatedAggregatorUrl = expect(AGGREGATOR_URL, 'OIF aggregator URL not configured');
+  expect(intentId, 'Intent ID is required');
   
-  if (!response.ok) {
-    throw new Error('Failed to fetch intent status');
-  }
+  const response = await fetch(`${validatedAggregatorUrl}/api/intents/${encodeURIComponent(intentId)}`);
+  
+  expectTrue(response.ok, 'Failed to fetch intent status');
 
   return response.json();
 }
@@ -186,7 +188,14 @@ export async function getIntentStatus(intentId: string): Promise<IntentResult> {
  * Create a cross-chain swap intent via A2A
  */
 export async function createIntent(params: CreateIntentParams): Promise<{ intentId: string }> {
-  const response = await fetch(`${AGGREGATOR_URL}/api/intents`, {
+  const validatedAggregatorUrl = expect(AGGREGATOR_URL, 'OIF aggregator URL not configured');
+  expect(params.sourceChainId, 'Source chain ID is required');
+  expect(params.destinationChainId, 'Destination chain ID is required');
+  expect(params.sourceToken, 'Source token is required');
+  expect(params.destinationToken, 'Destination token is required');
+  expect(params.amount, 'Amount is required');
+  
+  const response = await fetch(`${validatedAggregatorUrl}/api/intents`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -200,9 +209,7 @@ export async function createIntent(params: CreateIntentParams): Promise<{ intent
     }),
   });
 
-  if (!response.ok) {
-    throw new Error('Failed to create intent');
-  }
+  expectTrue(response.ok, 'Failed to create intent');
 
   return response.json();
 }

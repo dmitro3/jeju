@@ -9,6 +9,7 @@ import { FarcasterSignerManager, type SignerInfo } from './manager';
 import { SignerRegistration, generateDeadline } from './registration';
 import { FarcasterPoster } from '../hub/poster';
 import type { WalletClient, Address, Hex } from 'viem';
+import { optimism } from 'viem/chains';
 
 // ============ Types ============
 
@@ -163,7 +164,13 @@ export class FarcasterSignerService {
     // Build and send revoke transaction
     const tx = this.registration.buildRemoveSignerTx(signer.publicKey);
     
+    if (!wallet.account) {
+      throw new Error('Wallet client must have an account');
+    }
+    
     const hash = await wallet.sendTransaction({
+      account: wallet.account,
+      chain: optimism,
       to: tx.to,
       data: tx.data,
     });

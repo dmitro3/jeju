@@ -18,10 +18,25 @@
  * ```
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { TestnetKeyFileSchema, type KeyRole, type KeyPair, type NetworkType, type SolanaKeyPair, type TestnetKeyFile } from './schemas';
+import { z } from 'zod';
+import { TestnetKeyFileSchema, SolanaKeyPairSchema, type KeyRole, type KeyPair, type NetworkType, type SolanaKeyPair, type TestnetKeyFile } from './schemas';
+
+/** Maximum key file size (1MB) - key files should be small */
+const MAX_KEY_FILE_SIZE = 1 * 1024 * 1024;
+
+/**
+ * Safely read a key file with size limit protection
+ */
+function safeReadKeyFile(path: string): string {
+  const stats = statSync(path);
+  if (stats.size > MAX_KEY_FILE_SIZE) {
+    throw new Error(`Key file exceeds maximum size limit (${MAX_KEY_FILE_SIZE} bytes): ${path}`);
+  }
+  return readFileSync(path, 'utf-8');
+}
 
 export type { KeyRole, KeyPair, SolanaKeyPair };
 
@@ -55,7 +70,12 @@ export interface TestKeySet {
 // ============================================================================
 
 /**
- * Standard test mnemonic - NEVER use on mainnet
+ * Standard test mnemonic from Anvil/Foundry tooling.
+ * 
+ * @security WARNING: These are publicly known test keys. NEVER use on mainnet or with real funds.
+ * These keys are intentionally hardcoded for local development with Anvil.
+ * The codebase enforces that these keys can ONLY be used on localnet.
+ * @see https://book.getfoundry.sh/reference/anvil/
  */
 export const TEST_MNEMONIC = 'test test test test test test test test test test test junk';
 
@@ -80,7 +100,11 @@ export const ROLE_CONFIGS: RoleConfig[] = [
 
 /**
  * Pre-computed Anvil test keys (derived from TEST_MNEMONIC)
- * These are the standard Foundry/Anvil test accounts
+ * These are the standard Foundry/Anvil test accounts.
+ * 
+ * @security WARNING: These private keys are publicly known and used only for local testing.
+ * NEVER send real funds to these addresses. They are included in every Anvil instance.
+ * All functions in this module enforce localnet-only restrictions for these keys.
  */
 export const ANVIL_KEYS: Record<KeyRole, KeyPair> = {
   deployer: {
@@ -212,7 +236,7 @@ function loadTestnetKeys(): TestKeySet {
     );
   }
   
-  const data = TestnetKeyFileSchema.parse(JSON.parse(readFileSync(path, 'utf-8')));
+  const data = TestnetKeyFileSchema.parse(JSON.parse(safeReadKeyFile(path)));
   
   // Ensure all required keys are present
   const multisig1 = data.keys.multisig1;
@@ -290,7 +314,12 @@ export function solanaKeysExist(network: NetworkType): boolean {
 }
 
 /**
- * Load Solana keys
+ * Schema for validating Solana keys file structure
+ */
+const SolanaKeysFileSchema = z.record(z.string(), SolanaKeyPairSchema);
+
+/**
+ * Load Solana keys with schema validation
  */
 export function loadSolanaKeys(network: NetworkType): Record<string, SolanaKeyPair> {
   const path = getSolanaKeysPath(network);
@@ -302,7 +331,8 @@ export function loadSolanaKeys(network: NetworkType): Record<string, SolanaKeyPa
     );
   }
   
-  return JSON.parse(readFileSync(path, 'utf-8'));
+  const raw: unknown = JSON.parse(safeReadKeyFile(path));
+  return SolanaKeysFileSchema.parse(raw);
 }
 
 /**
@@ -338,11 +368,47 @@ export function getRoleDescription(role: KeyRole): string {
 
 /**
  * Print all keys for a network (with truncated private keys)
+ * 
+ * @security WARNING: This function logs key material to console.
+ * Should only be used in development environments. Throws in production
+ * and CI/CD environments to prevent accidental key leakage.
+ * 
+ * Security measures:
+ * - Disabled in production (NODE_ENV=production)
+ * - Disabled in CI environments (CI=true, GITHUB_ACTIONS, GITLAB_CI, etc.)
+ * - Only allows localnet keys to be printed (testnet/mainnet always blocked)
  */
 export function printKeys(network: NetworkType): void {
+  // Never allow printing non-localnet keys - these could be real keys
+  if (network !== 'localnet') {
+    throw new Error(
+      'printKeys() only supports localnet. Testnet/mainnet keys should never be logged.'
+    );
+  }
+  
+  // Detect production environment
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Detect CI/CD environments where logs might be captured
+  const isCI = Boolean(
+    process.env.CI ||
+    process.env.GITHUB_ACTIONS ||
+    process.env.GITLAB_CI ||
+    process.env.CIRCLECI ||
+    process.env.JENKINS_HOME ||
+    process.env.BUILDKITE
+  );
+  
+  if (isProduction || isCI) {
+    throw new Error(
+      'printKeys() is disabled in production and CI environments to prevent key leakage.'
+    );
+  }
+  
   const keys = getTestKeys(network);
   
   console.log(`\n🔑 ${network.toUpperCase()} Keys\n`);
+  console.log('⚠️  WARNING: These are test keys. Never use with real funds.');
   console.log('─'.repeat(80));
   
   for (const config of ROLE_CONFIGS) {

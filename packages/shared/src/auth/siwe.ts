@@ -93,20 +93,52 @@ export function parseSIWEMessage(messageString: string): SIWEMessage {
   };
 }
 
+// Maximum age for message issuedAt timestamp (5 minutes)
+const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+// Maximum future tolerance for clock skew (30 seconds)
+const MAX_FUTURE_TOLERANCE_MS = 30 * 1000;
+
 /**
  * Verify a SIWE signature using the official siwe library
+ * 
+ * SECURITY: Validates issuedAt timestamp to prevent replay attacks with
+ * old or pre-dated messages.
  */
 export async function verifySIWESignature(params: {
   message: SIWEMessage | string;
   signature: Hex;
+  /** Maximum age of message in milliseconds (default: 5 minutes) */
+  maxMessageAgeMs?: number;
 }): Promise<{ valid: boolean; address: Address; error?: string }> {
   const messageString = typeof params.message === 'string' 
     ? params.message 
     : formatSIWEMessage(params.message);
   
   const siweMessage = new SiweMessage(messageString);
+  const now = new Date();
+  const maxAge = params.maxMessageAgeMs ?? MAX_MESSAGE_AGE_MS;
   
   try {
+    // SECURITY: Validate issuedAt is not in the future (with tolerance for clock skew)
+    if (siweMessage.issuedAt) {
+      const issuedAtDate = new Date(siweMessage.issuedAt);
+      const futureThreshold = new Date(now.getTime() + MAX_FUTURE_TOLERANCE_MS);
+      
+      if (issuedAtDate > futureThreshold) {
+        return { valid: false, address: siweMessage.address as Address, error: 'Message issuedAt is in the future' };
+      }
+      
+      // SECURITY: Validate issuedAt is not too old (replay attack prevention)
+      const oldestAllowed = new Date(now.getTime() - maxAge);
+      if (issuedAtDate < oldestAllowed) {
+        return { 
+          valid: false, 
+          address: siweMessage.address as Address, 
+          error: `Message is too old (issued more than ${Math.round(maxAge / 60000)} minutes ago)` 
+        };
+      }
+    }
+
     // Manual verification for compatibility with viem (siwe library expects ethers)
     const valid = await verifyMessage({
       address: siweMessage.address as Address,
@@ -121,7 +153,7 @@ export async function verifySIWESignature(params: {
     // Check expiration using siwe's validation
     if (siweMessage.expirationTime) {
       const expirationDate = new Date(siweMessage.expirationTime);
-      if (expirationDate < new Date()) {
+      if (expirationDate < now) {
         return { valid: false, address: siweMessage.address as Address, error: 'Message expired' };
       }
     }
@@ -129,7 +161,7 @@ export async function verifySIWESignature(params: {
     // Check not before
     if (siweMessage.notBefore) {
       const notBeforeDate = new Date(siweMessage.notBefore);
-      if (notBeforeDate > new Date()) {
+      if (notBeforeDate > now) {
         return { valid: false, address: siweMessage.address as Address, error: 'Message not yet valid' };
       }
     }

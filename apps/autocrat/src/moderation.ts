@@ -74,18 +74,32 @@ const WEIGHT: Record<FlagType, number> = { DUPLICATE: 30, SPAM: 50, HARMFUL: 100
 const storageDir = join(process.cwd(), '.autocrat-storage');
 const FILES = { flags: 'moderation-flags.json', stats: 'moderation-stats.json', trust: 'moderation-trust.json' };
 let dirty = false;
+let saveLock = false;  // Mutex for save() to prevent race conditions
 
 async function ensureDir() { if (!existsSync(storageDir)) await mkdir(storageDir, { recursive: true }); }
 
 async function save(): Promise<void> {
   if (!dirty) return;
+  // Prevent concurrent saves - if already saving, skip this call
+  if (saveLock) return;
+  saveLock = true;
+  
+  // Capture dirty state before async operations
+  const wasDirty = dirty;
+  dirty = false;  // Reset early to capture new changes during save
+  
   await ensureDir();
   await Promise.all([
     writeFile(join(storageDir, FILES.flags), JSON.stringify([...flags.entries()])),
     writeFile(join(storageDir, FILES.stats), JSON.stringify([...stats.entries()])),
     writeFile(join(storageDir, FILES.trust), JSON.stringify([...trust.entries()].map(([k, v]) => [k, [...v.entries()]]))),
-  ]);
-  dirty = false;
+  ]).catch((err) => {
+    // Restore dirty state on error so we retry next time
+    if (wasDirty) dirty = true;
+    throw err;
+  }).finally(() => {
+    saveLock = false;
+  });
 }
 
 async function load(): Promise<void> {
@@ -110,8 +124,24 @@ async function load(): Promise<void> {
   }
 }
 
-// Auto-save every 30s if dirty
-setInterval(() => { save().catch(console.error); }, 30000);
+// Auto-save every 30s if dirty - store interval ID for cleanup
+let saveIntervalId: ReturnType<typeof setInterval> | null = null;
+
+function startSaveInterval(): void {
+  if (saveIntervalId === null) {
+    saveIntervalId = setInterval(() => { save().catch(console.error); }, 30000);
+  }
+}
+
+export function stopSaveInterval(): void {
+  if (saveIntervalId !== null) {
+    clearInterval(saveIntervalId);
+    saveIntervalId = null;
+  }
+}
+
+// Auto-start on module load
+startSaveInterval();
 
 export class ModerationSystem {
   async init(): Promise<void> { await load(); }
@@ -137,7 +167,11 @@ export class ModerationSystem {
     if (!f || f.resolved) return;
 
     const weight = Math.max(1, Math.floor(this.getModeratorStats(voter).reputation / 10));
-    upvote ? (f.upvotes += weight) : (f.downvotes += weight);
+    if (upvote) {
+      f.upvotes += weight;
+    } else {
+      f.downvotes += weight;
+    }
     flags.set(flagId, f);
     this.updateScore(f.proposalId);
     dirty = true;

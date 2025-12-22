@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NetworkSchema, type NetworkType } from './chain';
+import { MAX_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_STRING_LENGTH, MAX_RECORD_KEYS, MAX_RECURSION_DEPTH } from './validation';
 
 // Re-export NetworkSchema as Environment for backward compatibility
 export { NetworkSchema as EnvironmentSchema };
@@ -73,17 +74,23 @@ export const AWSConfigSchema = z.object({
 export type AWSConfig = z.infer<typeof AWSConfigSchema>;
 
 export const KubernetesNamespaceSchema = z.object({
-  name: z.string(),
-  labels: z.record(z.string(), z.string()).optional(),
-  annotations: z.record(z.string(), z.string()).optional(),
+  name: z.string().max(MAX_SHORT_STRING_LENGTH),
+  labels: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.string().max(MAX_SHORT_STRING_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} labels` }
+  ).optional(),
+  annotations: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.string().max(MAX_STRING_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} annotations` }
+  ).optional(),
   resourceQuota: z.object({
     requests: z.object({
-      cpu: z.string(),
-      memory: z.string(),
+      cpu: z.string().max(MAX_SHORT_STRING_LENGTH),
+      memory: z.string().max(MAX_SHORT_STRING_LENGTH),
     }).optional(),
     limits: z.object({
-      cpu: z.string(),
-      memory: z.string(),
+      cpu: z.string().max(MAX_SHORT_STRING_LENGTH),
+      memory: z.string().max(MAX_SHORT_STRING_LENGTH),
     }).optional(),
   }).optional(),
 });
@@ -92,9 +99,11 @@ export type KubernetesNamespace = z.infer<typeof KubernetesNamespaceSchema>;
 /**
  * Helm chart value types - JSON-serializable values only
  * Supports nested objects but with strongly typed leaves
+ * 
+ * Security: Depth-limited to prevent stack overflow DoS
  */
 const HelmValuePrimitiveSchema = z.union([
-  z.string(),
+  z.string().max(MAX_STRING_LENGTH),
   z.number(),
   z.boolean(),
   z.null(),
@@ -103,23 +112,38 @@ const HelmValuePrimitiveSchema = z.union([
 // Define a recursive type for Helm values
 type HelmValue = string | number | boolean | null | HelmValue[] | { [key: string]: HelmValue };
 
-const HelmValueSchema: z.ZodType<HelmValue> = z.lazy(() =>
-  z.union([
+// Create depth-limited recursive schema to prevent DoS
+function createHelmValueSchema(depth: number): z.ZodType<HelmValue> {
+  if (depth <= 0) {
+    return HelmValuePrimitiveSchema;
+  }
+  
+  const innerSchema = z.lazy(() => createHelmValueSchema(depth - 1));
+  
+  return z.union([
     HelmValuePrimitiveSchema,
-    z.array(HelmValueSchema),
-    z.record(z.string(), HelmValueSchema),
-  ])
-);
+    z.array(innerSchema).max(MAX_ARRAY_LENGTH),
+    z.record(z.string().max(MAX_SHORT_STRING_LENGTH), innerSchema).refine(
+      (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+      { message: `Cannot have more than ${MAX_RECORD_KEYS} keys` }
+    ),
+  ]);
+}
+
+const HelmValueSchema: z.ZodType<HelmValue> = createHelmValueSchema(MAX_RECURSION_DEPTH);
 
 export const HelmReleaseSchema = z.object({
-  name: z.string(),
-  namespace: z.string(),
-  chart: z.string(),
-  version: z.string(),
-  repository: z.string().optional(),
+  name: z.string().max(MAX_SHORT_STRING_LENGTH),
+  namespace: z.string().max(MAX_SHORT_STRING_LENGTH),
+  chart: z.string().max(MAX_SHORT_STRING_LENGTH),
+  version: z.string().max(MAX_SHORT_STRING_LENGTH),
+  repository: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
   /** Helm chart values - supports nested objects/arrays with JSON-serializable leaves */
-  values: z.record(z.string(), HelmValueSchema),
-  dependencies: z.array(z.string()).optional(),
+  values: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), HelmValueSchema).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} values` }
+  ),
+  dependencies: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH).optional(),
 });
 export type HelmRelease = z.infer<typeof HelmReleaseSchema>;
 
@@ -143,17 +167,17 @@ export const PrometheusConfigSchema = z.object({
 export type PrometheusConfig = z.infer<typeof PrometheusConfigSchema>;
 
 export const GrafanaConfigSchema = z.object({
-  adminPassword: z.string(),
+  adminPassword: z.string().max(MAX_SHORT_STRING_LENGTH),
   replicas: z.number(),
   persistence: z.boolean(),
-  storageSize: z.string(),
+  storageSize: z.string().max(MAX_SHORT_STRING_LENGTH),
   datasources: z.array(z.object({
-    name: z.string(),
-    type: z.string(),
-    url: z.string(),
-    access: z.string(),
+    name: z.string().max(MAX_SHORT_STRING_LENGTH),
+    type: z.string().max(MAX_SHORT_STRING_LENGTH),
+    url: z.string().max(MAX_SHORT_STRING_LENGTH),
+    access: z.string().max(MAX_SHORT_STRING_LENGTH),
     isDefault: z.boolean(),
-  })),
+  })).max(MAX_ARRAY_LENGTH),
 });
 export type GrafanaConfig = z.infer<typeof GrafanaConfigSchema>;
 
@@ -176,14 +200,14 @@ export type LokiConfig = z.infer<typeof LokiConfigSchema>;
 
 export const VaultConfigSchema = z.object({
   replicas: z.number(),
-  storage: z.string(),
+  storage: z.string().max(MAX_SHORT_STRING_LENGTH),
   transitEnabled: z.boolean(),
   kmsSealEnabled: z.boolean(),
   policies: z.array(z.object({
-    name: z.string(),
-    path: z.string(),
-    capabilities: z.array(z.string()),
-  })),
+    name: z.string().max(MAX_SHORT_STRING_LENGTH),
+    path: z.string().max(MAX_SHORT_STRING_LENGTH),
+    capabilities: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
+  })).max(MAX_ARRAY_LENGTH),
 });
 export type VaultConfig = z.infer<typeof VaultConfigSchema>;
 
@@ -230,33 +254,33 @@ export type SubsquidConfig = z.infer<typeof SubsquidConfigSchema>;
 export const MonitoringAlertsSchema = z.object({
   sequencerDown: z.object({
     enabled: z.boolean(),
-    threshold: z.string(),
+    threshold: z.string().max(MAX_SHORT_STRING_LENGTH),
     severity: z.enum(['critical', 'warning', 'info']),
-    channels: z.array(z.string()),
+    channels: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   }),
   batcherLag: z.object({
     enabled: z.boolean(),
     thresholdSeconds: z.number(),
     severity: z.enum(['critical', 'warning', 'info']),
-    channels: z.array(z.string()),
+    channels: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   }),
   proposerGap: z.object({
     enabled: z.boolean(),
     thresholdEpochs: z.number(),
     severity: z.enum(['critical', 'warning', 'info']),
-    channels: z.array(z.string()),
+    channels: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   }),
   rpcLatency: z.object({
     enabled: z.boolean(),
     p95ThresholdMs: z.number(),
     severity: z.enum(['critical', 'warning', 'info']),
-    channels: z.array(z.string()),
+    channels: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   }),
   chainlinkStaleness: z.object({
     enabled: z.boolean(),
     thresholdMultiplier: z.number(),
     severity: z.enum(['critical', 'warning', 'info']),
-    channels: z.array(z.string()),
+    channels: z.array(z.string().max(MAX_SHORT_STRING_LENGTH)).max(MAX_ARRAY_LENGTH),
   }),
 });
 export type MonitoringAlerts = z.infer<typeof MonitoringAlertsSchema>;

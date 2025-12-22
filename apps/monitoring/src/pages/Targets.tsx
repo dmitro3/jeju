@@ -161,8 +161,24 @@ interface Target {
   scrapeUrl: string
 }
 
+// Validate URL to prevent XSS via javascript:, data:, or other dangerous protocols
+function getSafeHref(url: string): string | null {
+  // Only allow http and https protocols
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return null
+  }
+  // Basic URL validation
+  try {
+    new URL(url)
+    return url
+  } catch {
+    return null
+  }
+}
+
 function TargetRow({ target }: { target: Target }) {
   const isUp = target.health === 'up'
+  const safeHref = getSafeHref(target.scrapeUrl)
   
   return (
     <div className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -176,16 +192,25 @@ function TargetRow({ target }: { target: Target }) {
         <p className="font-medium truncate" style={{ color: 'var(--text-primary)' }}>
           {target.labels.instance || target.scrapeUrl}
         </p>
-        <a 
-          href={target.scrapeUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="text-xs font-mono truncate block hover:underline flex items-center gap-1"
-          style={{ color: 'var(--text-tertiary)' }}
-        >
-          {target.scrapeUrl}
-          <ExternalLink className="w-3 h-3 flex-shrink-0" />
-        </a>
+        {safeHref ? (
+          <a 
+            href={safeHref} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-xs font-mono truncate block hover:underline flex items-center gap-1"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            {target.scrapeUrl}
+            <ExternalLink className="w-3 h-3 flex-shrink-0" />
+          </a>
+        ) : (
+          <span
+            className="text-xs font-mono truncate block"
+            style={{ color: 'var(--text-tertiary)' }}
+          >
+            {target.scrapeUrl}
+          </span>
+        )}
       </div>
       
       <div className="flex items-center gap-4 text-sm">

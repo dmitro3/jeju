@@ -12,9 +12,6 @@ import {
   GrafanaHealthSchema,
   PrometheusTargetsResponseSchema,
   GrafanaDataSourceSchema,
-  type GrafanaHealth,
-  type PrometheusTargetsResponse,
-  type GrafanaDataSource,
 } from '../src/types';
 import { z } from 'zod';
 

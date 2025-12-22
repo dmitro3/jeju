@@ -68,7 +68,7 @@ export default function StorageManagerPage() {
     address: FILE_STORAGE_MANAGER_ADDRESS,
     abi: FILE_STORAGE_ABI,
     functionName: 'getOwnerFiles',
-    args: [address!],
+    args: address ? [address] : undefined,
     query: { enabled: !!address },
   });
 

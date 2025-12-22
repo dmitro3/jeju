@@ -30,9 +30,6 @@ export function TokenSelector({
   onSelect, 
   exclude, 
   tokens: propTokens,
-  label,
-  placeholder = 'Select token',
-  disabled = false,
 }: TokenSelectorProps) {
   const [isOpen, setIsOpen] = useState(false)
   

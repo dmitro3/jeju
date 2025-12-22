@@ -9,7 +9,7 @@
  * - CQL_BLOCK_PRODUCER_ENDPOINT (state)
  */
 
-import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, setDefaultTimeout } from 'bun:test';
 import { app } from '../src/server';
 
 setDefaultTimeout(30000);

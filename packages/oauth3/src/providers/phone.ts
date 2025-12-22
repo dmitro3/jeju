@@ -60,12 +60,15 @@ const DEFAULT_OTP_LENGTH = 6;
 const MAX_OTP_ATTEMPTS = 3;
 const DEFAULT_MAX_DAILY_ATTEMPTS = 5;
 const RATE_LIMIT_WINDOW = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_PENDING_OTPS = 10000; // Maximum pending OTPs before cleanup
+const CLEANUP_INTERVAL = 60000; // Run cleanup every minute
 
 export class PhoneProvider {
   private config: PhoneAuthConfig;
   private pendingOTPs = new Map<string, PhoneOTP>();
   private users = new Map<string, PhoneUser>();
   private rateLimits = new Map<string, PhoneRateLimit>();
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: PhoneAuthConfig = {}) {
     this.config = {
@@ -75,6 +78,63 @@ export class PhoneProvider {
       maxDailyAttempts: config.maxDailyAttempts ?? DEFAULT_MAX_DAILY_ATTEMPTS,
       smsProvider: config.smsProvider ?? 'twilio',
     };
+    
+    // SECURITY: Start periodic cleanup to prevent unbounded memory growth (DoS)
+    this.startCleanup();
+  }
+
+  /**
+   * Start periodic cleanup of expired tokens
+   * SECURITY: Prevents unbounded memory growth from abandoned auth flows
+   */
+  private startCleanup(): void {
+    if (this.cleanupInterval) return;
+    
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredTokens();
+    }, CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Clean up expired tokens and enforce size limits
+   * SECURITY: Prevents DoS via memory exhaustion
+   */
+  private cleanupExpiredTokens(): void {
+    const now = Date.now();
+    
+    // Clean expired OTPs
+    for (const [phone, data] of this.pendingOTPs.entries()) {
+      if (now > data.expiresAt) {
+        this.pendingOTPs.delete(phone);
+      }
+    }
+    
+    // Clean expired rate limits (older than window)
+    for (const [phone, data] of this.rateLimits.entries()) {
+      if (now - data.lastAttempt > RATE_LIMIT_WINDOW) {
+        this.rateLimits.delete(phone);
+      }
+    }
+    
+    // Enforce size limits - remove oldest entries if over limit
+    if (this.pendingOTPs.size > MAX_PENDING_OTPS) {
+      const entries = Array.from(this.pendingOTPs.entries())
+        .sort((a, b) => a[1].createdAt - b[1].createdAt);
+      const toRemove = entries.slice(0, entries.length - MAX_PENDING_OTPS);
+      for (const [phone] of toRemove) {
+        this.pendingOTPs.delete(phone);
+      }
+    }
+  }
+
+  /**
+   * Stop cleanup interval (for testing/cleanup)
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   /**
@@ -113,7 +173,22 @@ export class PhoneProvider {
   }
 
   /**
+   * Timing-safe comparison of two strings
+   * SECURITY: Prevents timing attacks by always comparing all characters
+   */
+  private timingSafeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
+  }
+
+  /**
    * Verify OTP and authenticate user
+   * SECURITY: Uses timing-safe comparison to prevent timing attacks
    */
   async verifyOTP(phone: string, code: string): Promise<PhoneAuthResult> {
     const normalizedPhone = this.normalizePhone(phone);
@@ -135,7 +210,8 @@ export class PhoneProvider {
       return { success: false, error: 'Too many attempts. Please request a new code.' };
     }
 
-    if (otp.code !== code) {
+    // SECURITY: Use timing-safe comparison to prevent timing attacks
+    if (!this.timingSafeCompare(otp.code, code)) {
       return { success: false, error: 'Invalid verification code' };
     }
 

@@ -793,7 +793,11 @@ export function createModerationModule(
     "ReputationLabelManager",
     network,
   );
-  const banManagerAddress = requireContract("moderation", "BanManager", network);
+  const banManagerAddress = requireContract(
+    "moderation",
+    "BanManager",
+    network,
+  );
   const reportingSystemAddress = requireContract(
     "moderation",
     "ReportingSystem",

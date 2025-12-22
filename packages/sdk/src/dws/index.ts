@@ -637,7 +637,9 @@ export function createDWSModule(
         { headers },
       );
       if (!response.ok) {
-        throw new Error(`Failed to get workflow metrics: ${response.statusText}`);
+        throw new Error(
+          `Failed to get workflow metrics: ${response.statusText}`,
+        );
       }
       const rawData: unknown = await response.json();
       return WorkflowMetricsSchema.parse(rawData);

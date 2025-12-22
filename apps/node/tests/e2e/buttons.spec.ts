@@ -5,12 +5,12 @@
  * Verifies each button is clickable and performs its expected action
  */
 
-import { test, expect, type Page, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 
 const BASE_URL = 'http://localhost:1420';
 
 // Helper to check button state
-async function checkButton(button: Locator, description: string): Promise<{ exists: boolean; enabled: boolean; clicked: boolean }> {
+async function checkButton(button: Locator): Promise<{ exists: boolean; enabled: boolean; clicked: boolean }> {
   const exists = await button.isVisible().catch(() => false);
   if (!exists) {
     return { exists: false, enabled: false, clicked: false };
@@ -39,7 +39,7 @@ test.describe('Navigation Buttons', () => {
 
   test('Dashboard navigation button', async ({ page }) => {
     const button = page.locator('text=Dashboard').first();
-    const result = await checkButton(button, 'Dashboard');
+    const result = await checkButton(button);
     if (result.exists) {
       expect(result.clicked).toBe(true);
       console.log('✓ Dashboard button works');
@@ -58,7 +58,7 @@ test.describe('Navigation Buttons', () => {
 
   test('Bots navigation button', async ({ page }) => {
     const button = page.locator('text=Bots').first();
-    const result = await checkButton(button, 'Bots');
+    const result = await checkButton(button);
     if (result.exists) {
       expect(result.clicked).toBe(true);
       console.log('✓ Bots button works');
@@ -67,7 +67,7 @@ test.describe('Navigation Buttons', () => {
 
   test('Earnings navigation button', async ({ page }) => {
     const button = page.locator('text=Earnings').first();
-    const result = await checkButton(button, 'Earnings');
+    const result = await checkButton(button);
     if (result.exists) {
       expect(result.clicked).toBe(true);
       console.log('✓ Earnings button works');
@@ -85,7 +85,7 @@ test.describe('Navigation Buttons', () => {
 
   test('Settings navigation button', async ({ page }) => {
     const button = page.locator('text=Settings').first();
-    const result = await checkButton(button, 'Settings');
+    const result = await checkButton(button);
     if (result.exists) {
       expect(result.clicked).toBe(true);
       await expect(page.locator('body')).toContainText(/Setting|Config|Network/i);
@@ -159,10 +159,6 @@ test.describe('Service Control Buttons', () => {
   });
 
   test('Docker toggle switch works', async ({ page }) => {
-    const dockerToggle = page.locator('input[type="checkbox"]').filter({ hasText: /docker/i }).or(
-      page.locator('text=Docker').locator('xpath=..').locator('input[type="checkbox"]')
-    );
-    
     // Try to find any toggle near Docker text
     const toggles = page.locator('label:has(:text("Docker")) input[type="checkbox"], :text("Docker") + * input[type="checkbox"], :text("Docker") ~ * input[type="checkbox"]');
     

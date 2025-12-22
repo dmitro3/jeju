@@ -18,7 +18,18 @@ import { AuthProvider } from '../types.js';
 
 const app = new Hono();
 
-app.use('*', cors());
+// SECURITY: Demo server only allows local development origins
+app.use('*', cors({
+  origin: (origin) => {
+    if (!origin) return null;
+    // Only allow localhost for demo
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return origin;
+    }
+    return null;
+  },
+  credentials: true,
+}));
 
 const CHAIN_ID = 420691;
 
@@ -296,8 +307,20 @@ app.get('/', (c) => {
   `);
 });
 
+// SECURITY: Define allowed callback origins for demo server
+const DEMO_ALLOWED_ORIGINS = [
+  'http://localhost:4300',
+  'http://127.0.0.1:4300',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+];
+
 app.get('/callback', (c) => {
-  const origin = c.req.query('origin') || 'http://localhost:4300';
+  const requestedOrigin = c.req.query('origin');
+  // SECURITY: Validate origin against allowlist
+  const origin = requestedOrigin && DEMO_ALLOWED_ORIGINS.includes(requestedOrigin)
+    ? requestedOrigin
+    : DEMO_ALLOWED_ORIGINS[0];
   return c.html(generateCallbackHtml(origin));
 });
 

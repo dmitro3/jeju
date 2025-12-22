@@ -13,7 +13,7 @@
  */
 
 import { spawn, type Subprocess } from 'bun';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // ============================================================================
@@ -23,7 +23,6 @@ import { join } from 'path';
 const JEJU_L2_RPC = 'http://127.0.0.1:9545';
 const JEJU_L1_RPC = 'http://127.0.0.1:8545';
 const DWS_PORT = 4030;
-const IPFS_PORT = 4100;
 
 const TEST_ACCOUNTS = [
   { name: 'Deployer', key: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' },
@@ -60,19 +59,6 @@ async function checkJejuLocalnet(): Promise<boolean> {
   }
 }
 
-async function waitForChain(maxWaitMs = 60000): Promise<void> {
-  const start = Date.now();
-  console.log('[E2E Setup] Waiting for Jeju localnet...');
-  
-  while (Date.now() - start < maxWaitMs) {
-    if (await checkJejuLocalnet()) {
-      return;
-    }
-    await Bun.sleep(1000);
-  }
-  
-  throw new Error('Jeju localnet not available. Start with: bun run localnet:start');
-}
 
 // ============================================================================
 // Contract Deployment Check
@@ -113,7 +99,7 @@ async function ensureContractsDeployed(): Promise<DeployedContracts> {
   console.log('[E2E Setup] Deploying contracts via bootstrap...');
   
   const proc = spawn({
-    cmd: ['bun', 'run', 'scripts/bootstrap/bootstrap-localnet-complete.ts'],
+    cmd: ['bun', 'run', 'packages/deployment/scripts/bootstrap-localnet-complete.ts'],
     cwd: join(process.cwd(), '..', '..'),
     env: {
       ...process.env,

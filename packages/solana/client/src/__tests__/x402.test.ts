@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import { Connection, PublicKey, Keypair } from '@solana/web3.js';
 import { sha512 } from '@noble/hashes/sha512';
 import * as ed25519 from '@noble/ed25519';

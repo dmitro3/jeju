@@ -36,14 +36,17 @@ describe('A2A Server Structure', () => {
     expect(serverCode).toContain('/api/a2a');
   });
 
-  test('has proper CORS configuration', async () => {
+  test('has proper CORS configuration with origin validation', async () => {
     const serverCode = await Bun.file(SERVER_PATH).text();
-    expect(serverCode).toContain('cors()');
+    expect(serverCode).toContain('cors({');
+    expect(serverCode).toContain('ALLOWED_ORIGINS');
+    expect(serverCode).toContain('origin');
   });
 
-  test('has JSON body parser', async () => {
+  test('has JSON body parser with size limit', async () => {
     const serverCode = await Bun.file(SERVER_PATH).text();
-    expect(serverCode).toContain('express.json()');
+    expect(serverCode).toContain('express.json({ limit:');
+    expect(serverCode).toContain('MAX_JSON_BODY_SIZE');
   });
 });
 
@@ -260,5 +263,76 @@ describe('Configuration', () => {
     expect(EXCLUDED_DIRS.has('node_modules')).toBe(true);
     expect(EXCLUDED_DIRS.has('.vitepress')).toBe(true);
     expect(EXCLUDED_DIRS.has('public')).toBe(true);
+  });
+});
+
+describe('Security Protections', () => {
+  test('path traversal is blocked in server code', async () => {
+    const serverCode = await Bun.file(SERVER_PATH).text();
+    expect(serverCode).toContain('validateDocPath');
+    expect(serverCode).toContain('path traversal not allowed');
+    expect(serverCode).toContain('only .md files are allowed');
+    expect(serverCode).toContain('access denied');
+  });
+
+  test('symlink escape is blocked in server code', async () => {
+    const serverCode = await Bun.file(SERVER_PATH).text();
+    expect(serverCode).toContain('symlink escape not allowed');
+    expect(serverCode).toContain('realpath');
+  });
+
+  test('file size limit is enforced in server code', async () => {
+    const serverCode = await Bun.file(SERVER_PATH).text();
+    expect(serverCode).toContain('MAX_FILE_SIZE_BYTES');
+    expect(serverCode).toContain('File too large');
+  });
+
+  test('rate limiting is implemented', async () => {
+    const serverCode = await Bun.file(SERVER_PATH).text();
+    expect(serverCode).toContain('checkRateLimit');
+    expect(serverCode).toContain('RATE_LIMIT_MAX_REQUESTS');
+    expect(serverCode).toContain('429');
+    expect(serverCode).toContain('Too many requests');
+  });
+
+  test('regex escaping is present for search', async () => {
+    const libCode = await Bun.file(join(__dirname, '../../lib/a2a.ts')).text();
+    expect(libCode).toContain('escapeRegex');
+    expect(libCode).toContain('safeQuery');
+  });
+
+  test('directory depth limit is enforced', async () => {
+    const libCode = await Bun.file(join(__dirname, '../../lib/a2a.ts')).text();
+    expect(libCode).toContain('MAX_DIRECTORY_DEPTH');
+    expect(libCode).toContain('depth > MAX_DIRECTORY_DEPTH');
+  });
+
+  test('file count limit is enforced', async () => {
+    const libCode = await Bun.file(join(__dirname, '../../lib/a2a.ts')).text();
+    expect(libCode).toContain('MAX_FILES_PER_SEARCH');
+    expect(libCode).toContain('filesProcessed >= MAX_FILES_PER_SEARCH');
+  });
+
+  test('search with regex attack patterns returns safely', async () => {
+    const patterns = [
+      '(a+)+$',
+      '([a-zA-Z]+)*X',
+      '(.*a){25}',
+      '^(a?){25}(a){25}$',
+    ];
+    
+    for (const pattern of patterns) {
+      const start = performance.now();
+      const results = await searchDocumentation(pattern);
+      const elapsed = performance.now() - start;
+      expect(elapsed).toBeLessThan(5000);
+      expect(Array.isArray(results)).toBe(true);
+    }
+  });
+
+  test('query length limit is enforced in server', async () => {
+    const serverCode = await Bun.file(SERVER_PATH).text();
+    expect(serverCode).toContain('Query too long');
+    expect(serverCode).toContain('200');
   });
 });

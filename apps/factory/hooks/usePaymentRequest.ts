@@ -6,7 +6,6 @@ import type { Address } from 'viem';
 import type { 
   PaymentRequest, 
   PaymentCategory, 
-  PaymentRequestStatus,
   VoteType,
   CouncilVote,
   CEODecision,
@@ -41,16 +40,6 @@ const PAYMENT_REQUEST_REGISTRY_ABI = parseAbi([
 ]);
 
 // ============ Config ============
-
-interface PaymentRequestHooksConfig {
-  registryAddress: Address;
-}
-
-let config: PaymentRequestHooksConfig | null = null;
-
-export function configurePaymentRequestHooks(cfg: PaymentRequestHooksConfig) {
-  config = cfg;
-}
 
 import { addresses } from '../config/contracts';
 

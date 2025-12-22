@@ -1,13 +1,13 @@
 /**
  * Validation utilities and schemas for bridge package
- * 
+ *
  * Use these to validate external data at entry points instead of
  * hiding bugs with ?? or || fallbacks.
  */
 
-import { z } from 'zod';
-import type { Hash32 } from '../types/index.js';
-import { toHash32 } from '../types/index.js';
+import { z } from "zod";
+import type { Hash32 } from "../types/index.js";
+import { toHash32 } from "../types/index.js";
 
 // =============================================================================
 // ENVIRONMENT VALIDATION
@@ -17,22 +17,22 @@ import { toHash32 } from '../types/index.js';
  * Get required environment variable or throw
  */
 export function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Required environment variable ${name} is not set`);
-  }
-  return value;
+	const value = process.env[name];
+	if (!value) {
+		throw new Error(`Required environment variable ${name} is not set`);
+	}
+	return value;
 }
 
 /**
  * Get HOME directory with validation
  */
 export function getHomeDir(): string {
-  const home = process.env.HOME;
-  if (!home) {
-    throw new Error('HOME environment variable is not set');
-  }
-  return home;
+	const home = process.env.HOME;
+	if (!home) {
+		throw new Error("HOME environment variable is not set");
+	}
+	return home;
 }
 
 // =============================================================================
@@ -43,24 +43,26 @@ export function getHomeDir(): string {
  * Convert Hash32 to hex string
  */
 export function hashToHex(hash: Hash32): string {
-  return Array.from(hash)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+	return Array.from(hash)
+		.map((b) => b.toString(16).padStart(2, "0"))
+		.join("");
 }
 
 /**
  * Convert hex string to Hash32
  */
 export function hexToHash32(hex: string): Hash32 {
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
-  if (cleanHex.length !== 64) {
-    throw new Error(`Invalid hex length for Hash32: expected 64, got ${cleanHex.length}`);
-  }
-  const bytes = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return toHash32(bytes);
+	const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+	if (cleanHex.length !== 64) {
+		throw new Error(
+			`Invalid hex length for Hash32: expected 64, got ${cleanHex.length}`,
+		);
+	}
+	const bytes = new Uint8Array(32);
+	for (let i = 0; i < 32; i++) {
+		bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
+	}
+	return toHash32(bytes);
 }
 
 // =============================================================================
@@ -72,38 +74,38 @@ export function hexToHash32(hex: string): Hash32 {
  * Standard Merkle tree: duplicate last element for odd-length levels
  */
 export function computeMerkleRoot(
-  leaves: Hash32[],
-  hashFn: (data: Uint8Array) => Uint8Array
+	leaves: Hash32[],
+	hashFn: (data: Uint8Array) => Uint8Array,
 ): Hash32 {
-  if (leaves.length === 0) {
-    return toHash32(new Uint8Array(32));
-  }
+	if (leaves.length === 0) {
+		return toHash32(new Uint8Array(32));
+	}
 
-  if (leaves.length === 1) {
-    return leaves[0];
-  }
+	if (leaves.length === 1) {
+		return leaves[0];
+	}
 
-  let currentLevel: Uint8Array[] = leaves.map((h) => new Uint8Array(h));
+	let currentLevel: Uint8Array[] = leaves.map((h) => new Uint8Array(h));
 
-  while (currentLevel.length > 1) {
-    const nextLevel: Uint8Array[] = [];
+	while (currentLevel.length > 1) {
+		const nextLevel: Uint8Array[] = [];
 
-    for (let i = 0; i < currentLevel.length; i += 2) {
-      const left = currentLevel[i];
-      // Standard Merkle tree behavior: duplicate last element if odd number of nodes
-      const right = currentLevel[i + 1] ?? left;
+		for (let i = 0; i < currentLevel.length; i += 2) {
+			const left = currentLevel[i];
+			// Standard Merkle tree behavior: duplicate last element if odd number of nodes
+			const right = currentLevel[i + 1] ?? left;
 
-      const combined = new Uint8Array(64);
-      combined.set(left, 0);
-      combined.set(right, 32);
+			const combined = new Uint8Array(64);
+			combined.set(left, 0);
+			combined.set(right, 32);
 
-      nextLevel.push(hashFn(combined));
-    }
+			nextLevel.push(hashFn(combined));
+		}
 
-    currentLevel = nextLevel;
-  }
+		currentLevel = nextLevel;
+	}
 
-  return toHash32(currentLevel[0]);
+	return toHash32(currentLevel[0]);
 }
 
 // =============================================================================
@@ -111,18 +113,18 @@ export function computeMerkleRoot(
 // =============================================================================
 
 export const ProofDataSchema = z.object({
-  proof: z.string().min(1),
-  public_inputs: z.string(),
-  vkey_hash: z.string().length(64),
+	proof: z.string().min(1),
+	public_inputs: z.string(),
+	vkey_hash: z.string().length(64),
 });
 
 export const Groth16DataSchema = z.object({
-  a: z.tuple([z.string(), z.string()]),
-  b: z.tuple([
-    z.tuple([z.string(), z.string()]),
-    z.tuple([z.string(), z.string()]),
-  ]),
-  c: z.tuple([z.string(), z.string()]),
+	a: z.tuple([z.string(), z.string()]),
+	b: z.tuple([
+		z.tuple([z.string(), z.string()]),
+		z.tuple([z.string(), z.string()]),
+	]),
+	c: z.tuple([z.string(), z.string()]),
 });
 
 // =============================================================================
@@ -130,44 +132,44 @@ export const Groth16DataSchema = z.object({
 // =============================================================================
 
 export const PhalaHealthResponseSchema = z.object({
-  enclave_id: z.string(),
-  public_key: z.string().optional(),
+	enclave_id: z.string(),
+	public_key: z.string().optional(),
 });
 
 export const PhalaAttestationResponseSchema = z.object({
-  quote: z.string(),
-  mr_enclave: z.string(),
-  report_data: z.string(),
-  signature: z.string(),
-  timestamp: z.number(),
-  enclave_id: z.string(),
+	quote: z.string(),
+	mr_enclave: z.string(),
+	report_data: z.string(),
+	signature: z.string(),
+	timestamp: z.number(),
+	enclave_id: z.string(),
 });
 
 export const PhalaVerifyResponseSchema = z.object({
-  valid: z.boolean(),
-  error: z.string().optional(),
+	valid: z.boolean(),
+	error: z.string().optional(),
 });
 
 export const NitroDocumentSchema = z.object({
-  moduleId: z.string(),
-  timestamp: z.number(),
-  digest: z.string(),
-  pcrs: z.record(z.string(), z.string()),
-  certificate: z.string().optional(),
-  cabundle: z.array(z.string()).optional(),
-  userData: z.string().optional(),
-  nonce: z.string().optional(),
-  publicKey: z.string().optional(),
+	moduleId: z.string(),
+	timestamp: z.number(),
+	digest: z.string(),
+	pcrs: z.record(z.string(), z.string()),
+	certificate: z.string().optional(),
+	cabundle: z.array(z.string()).optional(),
+	userData: z.string().optional(),
+	nonce: z.string().optional(),
+	publicKey: z.string().optional(),
 });
 
 export const GCPTokenResponseSchema = z.object({
-  token: z.string(),
-  claims: z.object({
-    iss: z.string(),
-    sub: z.string(),
-    aud: z.string(),
-    exp: z.number().optional(),
-  }),
+	token: z.string(),
+	claims: z.object({
+		iss: z.string(),
+		sub: z.string(),
+		aud: z.string(),
+		exp: z.number().optional(),
+	}),
 });
 
 // =============================================================================
@@ -175,32 +177,32 @@ export const GCPTokenResponseSchema = z.object({
 // =============================================================================
 
 export const SP1ConfigSchema = z.object({
-  programsDir: z.string().min(1),
-  useMock: z.boolean().default(false),
-  timeoutMs: z.number().positive().default(600000),
-  useSuccinctNetwork: z.boolean().default(false),
-  succinctApiKey: z.string().optional(),
-  workers: z.number().positive().default(2),
+	programsDir: z.string().min(1),
+	useMock: z.boolean().default(false),
+	timeoutMs: z.number().positive().default(600000),
+	useSuccinctNetwork: z.boolean().default(false),
+	succinctApiKey: z.string().optional(),
+	workers: z.number().positive().default(2),
 });
 
 export const PhalaConfigSchema = z.object({
-  endpoint: z.string().url(),
-  apiKey: z.string().optional(),
-  timeoutMs: z.number().positive().default(30000),
-  useMock: z.boolean().default(false),
+	endpoint: z.string().url(),
+	apiKey: z.string().optional(),
+	timeoutMs: z.number().positive().default(30000),
+	useMock: z.boolean().default(false),
 });
 
 export const AWSNitroConfigSchema = z.object({
-  region: z.string().min(1),
-  instanceType: z.string().default('c5.xlarge'),
-  enclaveMemory: z.number().positive().default(512),
-  enclaveCpus: z.number().positive().default(2),
+	region: z.string().min(1),
+	instanceType: z.string().default("c5.xlarge"),
+	enclaveMemory: z.number().positive().default(512),
+	enclaveCpus: z.number().positive().default(2),
 });
 
 export const GCPConfidentialConfigSchema = z.object({
-  project: z.string().min(1),
-  zone: z.string().default('us-central1-a'),
-  instanceType: z.string().default('n2d-standard-4'),
+	project: z.string().min(1),
+	zone: z.string().default("us-central1-a"),
+	instanceType: z.string().default("n2d-standard-4"),
 });
 
 // =============================================================================
@@ -208,25 +210,25 @@ export const GCPConfidentialConfigSchema = z.object({
 // =============================================================================
 
 export const EVMChainConfigSchema = z.object({
-  chainId: z.number(),
-  rpcUrl: z.string().url(),
-  beaconUrl: z.string().url().optional(),
-  bridgeAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  lightClientAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+	chainId: z.number(),
+	rpcUrl: z.string().url(),
+	beaconUrl: z.string().url().optional(),
+	bridgeAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+	lightClientAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
 });
 
 export const SolanaConfigSchema = z.object({
-  rpcUrl: z.string().url(),
-  bridgeProgramId: z.string().min(32),
-  evmLightClientProgramId: z.string().min(32),
+	rpcUrl: z.string().url(),
+	bridgeProgramId: z.string().min(32),
+	evmLightClientProgramId: z.string().min(32),
 });
 
 export const OrchestratorConfigSchema = z.object({
-  mode: z.enum(['local', 'testnet', 'mainnet']),
-  chains: z.object({
-    evm: z.array(EVMChainConfigSchema).min(1),
-    solana: SolanaConfigSchema.optional(),
-  }),
+	mode: z.enum(["local", "testnet", "mainnet"]),
+	chains: z.object({
+		evm: z.array(EVMChainConfigSchema).min(1),
+		solana: SolanaConfigSchema.optional(),
+	}),
 });
 
 // =============================================================================
@@ -234,32 +236,34 @@ export const OrchestratorConfigSchema = z.object({
 // =============================================================================
 
 export const JupiterQuoteResponseSchema = z.object({
-  inputMint: z.string(),
-  outputMint: z.string(),
-  inAmount: z.string(),
-  outAmount: z.string(),
-  priceImpactPct: z.string(),
-  routePlan: z.array(z.object({
-    swapInfo: z.object({
-      ammKey: z.string(),
-      label: z.string().optional(),
-    }),
-    percent: z.number(),
-  })),
+	inputMint: z.string(),
+	outputMint: z.string(),
+	inAmount: z.string(),
+	outAmount: z.string(),
+	priceImpactPct: z.string(),
+	routePlan: z.array(
+		z.object({
+			swapInfo: z.object({
+				ammKey: z.string(),
+				label: z.string().optional(),
+			}),
+			percent: z.number(),
+		}),
+	),
 });
 
 export const OrderbookLevelSchema = z.object({
-  px: z.string(),
-  sz: z.string(),
-  n: z.number().optional(),
+	px: z.string(),
+	sz: z.string(),
+	n: z.number().optional(),
 });
 
 export const OrderbookResponseSchema = z.object({
-  coin: z.string(),
-  levels: z.tuple([
-    z.array(OrderbookLevelSchema),
-    z.array(OrderbookLevelSchema),
-  ]),
+	coin: z.string(),
+	levels: z.tuple([
+		z.array(OrderbookLevelSchema),
+		z.array(OrderbookLevelSchema),
+	]),
 });
 
 // =============================================================================
@@ -267,11 +271,14 @@ export const OrderbookResponseSchema = z.object({
 // =============================================================================
 
 export const RelayerEnvSchema = z.object({
-  NODE_ENV: z.string().optional(),
-  RELAYER_PORT: z.string().regex(/^\d+$/).default('8081'),
-  EVM_CHAIN_ID: z.string().regex(/^\d+$/).default('31337'),
-  PRIVATE_KEY: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
-  SOLANA_KEYPAIR: z.string().optional(),
+	NODE_ENV: z.string().optional(),
+	RELAYER_PORT: z.string().regex(/^\d+$/).default("8081"),
+	EVM_CHAIN_ID: z.string().regex(/^\d+$/).default("31337"),
+	PRIVATE_KEY: z
+		.string()
+		.regex(/^0x[a-fA-F0-9]{64}$/)
+		.optional(),
+	SOLANA_KEYPAIR: z.string().optional(),
 });
 
 // =============================================================================
@@ -283,9 +290,11 @@ export const RelayerEnvSchema = z.object({
 // =============================================================================
 
 export const WormholeVAAResponseSchema = z.object({
-  data: z.object({
-    vaa: z.string().optional(),
-  }).optional(),
+	data: z
+		.object({
+			vaa: z.string().optional(),
+		})
+		.optional(),
 });
 
 // =============================================================================
@@ -293,54 +302,61 @@ export const WormholeVAAResponseSchema = z.object({
 // =============================================================================
 
 export const HyperCoreMarketSchema = z.object({
-  name: z.string(),
-  szDecimals: z.number(),
-  maxLeverage: z.number(),
-  onlyIsolated: z.boolean(),
+	name: z.string(),
+	szDecimals: z.number(),
+	maxLeverage: z.number(),
+	onlyIsolated: z.boolean(),
 });
 
 export const HyperCoreMarketsResponseSchema = z.object({
-  universe: z.array(HyperCoreMarketSchema),
+	universe: z.array(HyperCoreMarketSchema),
 });
 
 export const HyperCorePositionSchema = z.object({
-  coin: z.string(),
-  szi: z.string(),
-  entryPx: z.string(),
-  positionValue: z.string(),
-  unrealizedPnl: z.string(),
-  leverage: z.string(),
+	coin: z.string(),
+	szi: z.string(),
+	entryPx: z.string(),
+	positionValue: z.string(),
+	unrealizedPnl: z.string(),
+	leverage: z.string(),
 });
 
 export const HyperCoreClearinghouseResponseSchema = z.object({
-  assetPositions: z.array(z.object({
-    position: HyperCorePositionSchema,
-  })),
+	assetPositions: z.array(
+		z.object({
+			position: HyperCorePositionSchema,
+		}),
+	),
 });
 
 // HyperCore order response - the response field contains various API-specific data
 // Using passthrough for the nested response since HyperCore returns different
 // structures for different order types/scenarios
 export const HyperCoreOrderResponseSchema = z.object({
-  status: z.string(),
-  response: z.record(z.string(), z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(z.union([z.string(), z.number()])),
-  ])).optional(),
+	status: z.string(),
+	response: z
+		.record(
+			z.string(),
+			z.union([
+				z.string(),
+				z.number(),
+				z.boolean(),
+				z.null(),
+				z.array(z.union([z.string(), z.number()])),
+			]),
+		)
+		.optional(),
 });
 
 export const HyperCoreOrderbookLevelSchema = z.object({
-  px: z.string(),
-  sz: z.string(),
-  n: z.number(),
+	px: z.string(),
+	sz: z.string(),
+	n: z.number(),
 });
 
 export const HyperCoreL2BookResponseSchema = z.object({
-  coin: z.string(),
-  levels: z.array(z.array(HyperCoreOrderbookLevelSchema)),
+	coin: z.string(),
+	levels: z.array(z.array(HyperCoreOrderbookLevelSchema)),
 });
 
 // =============================================================================
@@ -348,23 +364,27 @@ export const HyperCoreL2BookResponseSchema = z.object({
 // =============================================================================
 
 export const EVMRPCResponseSchema = z.object({
-  jsonrpc: z.string(),
-  id: z.number(),
-  result: z.string().optional(),
-  error: z.object({
-    code: z.number(),
-    message: z.string(),
-  }).optional(),
+	jsonrpc: z.string(),
+	id: z.number(),
+	result: z.string().optional(),
+	error: z
+		.object({
+			code: z.number(),
+			message: z.string(),
+		})
+		.optional(),
 });
 
 export const SolanaHealthResponseSchema = z.object({
-  jsonrpc: z.string(),
-  id: z.number(),
-  result: z.string().optional(),
-  error: z.object({
-    code: z.number(),
-    message: z.string(),
-  }).optional(),
+	jsonrpc: z.string(),
+	id: z.number(),
+	result: z.string().optional(),
+	error: z
+		.object({
+			code: z.number(),
+			message: z.string(),
+		})
+		.optional(),
 });
 
 // =============================================================================
@@ -372,12 +392,12 @@ export const SolanaHealthResponseSchema = z.object({
 // =============================================================================
 
 export const SuccinctProveResponseSchema = z.object({
-  proof: z.string(),
-  groth16: z.object({
-    a: z.array(z.string()).length(2),
-    b: z.array(z.array(z.string()).length(2)).length(2),
-    c: z.array(z.string()).length(2),
-  }),
+	proof: z.string(),
+	groth16: z.object({
+		a: z.array(z.string()).length(2),
+		b: z.array(z.array(z.string()).length(2)).length(2),
+		c: z.array(z.string()).length(2),
+	}),
 });
 
 // =============================================================================
@@ -385,49 +405,49 @@ export const SuccinctProveResponseSchema = z.object({
 // =============================================================================
 
 export const ValidatorVoteSchema = z.object({
-  validator: z.instanceof(Uint8Array).or(z.array(z.number())),
-  voteAccount: z.instanceof(Uint8Array).or(z.array(z.number())),
-  slot: z.bigint().or(z.string().transform(s => BigInt(s))),
-  hash: z.instanceof(Uint8Array).or(z.array(z.number())),
-  signature: z.instanceof(Uint8Array).or(z.array(z.number())),
-  timestamp: z.number(),
+	validator: z.instanceof(Uint8Array).or(z.array(z.number())),
+	voteAccount: z.instanceof(Uint8Array).or(z.array(z.number())),
+	slot: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	hash: z.instanceof(Uint8Array).or(z.array(z.number())),
+	signature: z.instanceof(Uint8Array).or(z.array(z.number())),
+	timestamp: z.number(),
 });
 
 export const ConsensusSnapshotSchema = z.object({
-  slot: z.bigint().or(z.string().transform(s => BigInt(s))),
-  bankHash: z.instanceof(Uint8Array).or(z.array(z.number())),
-  parentHash: z.instanceof(Uint8Array).or(z.array(z.number())),
-  blockTime: z.number(),
-  votes: z.array(ValidatorVoteSchema),
-  transactionsRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
-  epoch: z.bigint().or(z.string().transform(s => BigInt(s))),
-  epochStakesRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
+	slot: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	bankHash: z.instanceof(Uint8Array).or(z.array(z.number())),
+	parentHash: z.instanceof(Uint8Array).or(z.array(z.number())),
+	blockTime: z.number(),
+	votes: z.array(ValidatorVoteSchema),
+	transactionsRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
+	epoch: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	epochStakesRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
 });
 
 export const CrossChainTransferSchema = z.object({
-  transferId: z.instanceof(Uint8Array).or(z.array(z.number())),
-  sourceChain: z.number(),
-  destChain: z.number(),
-  token: z.instanceof(Uint8Array).or(z.array(z.number())),
-  sender: z.instanceof(Uint8Array).or(z.array(z.number())),
-  recipient: z.instanceof(Uint8Array).or(z.array(z.number())),
-  amount: z.bigint().or(z.string().transform(s => BigInt(s))),
-  nonce: z.bigint().or(z.string().transform(s => BigInt(s))),
-  timestamp: z.bigint().or(z.string().transform(s => BigInt(s))),
-  payload: z.instanceof(Uint8Array).or(z.array(z.number())),
+	transferId: z.instanceof(Uint8Array).or(z.array(z.number())),
+	sourceChain: z.number(),
+	destChain: z.number(),
+	token: z.instanceof(Uint8Array).or(z.array(z.number())),
+	sender: z.instanceof(Uint8Array).or(z.array(z.number())),
+	recipient: z.instanceof(Uint8Array).or(z.array(z.number())),
+	amount: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	nonce: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	timestamp: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	payload: z.instanceof(Uint8Array).or(z.array(z.number())),
 });
 
 export const EthereumUpdateSchema = z.object({
-  slot: z.bigint().or(z.string().transform(s => BigInt(s))),
-  blockRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
-  stateRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
-  executionStateRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
-  executionBlockNumber: z.bigint().or(z.string().transform(s => BigInt(s))),
-  executionBlockHash: z.instanceof(Uint8Array).or(z.array(z.number())),
+	slot: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	blockRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
+	stateRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
+	executionStateRoot: z.instanceof(Uint8Array).or(z.array(z.number())),
+	executionBlockNumber: z.bigint().or(z.string().transform((s) => BigInt(s))),
+	executionBlockHash: z.instanceof(Uint8Array).or(z.array(z.number())),
 });
 
 export const TransferSubmissionSchema = CrossChainTransferSchema.extend({
-  source: z.enum(['evm', 'solana']),
+	source: z.enum(["evm", "solana"]),
 });
 
 // =============================================================================
@@ -437,7 +457,9 @@ export const TransferSubmissionSchema = CrossChainTransferSchema.extend({
 export type ProofData = z.infer<typeof ProofDataSchema>;
 export type Groth16Data = z.infer<typeof Groth16DataSchema>;
 export type PhalaHealthResponse = z.infer<typeof PhalaHealthResponseSchema>;
-export type PhalaAttestationResponse = z.infer<typeof PhalaAttestationResponseSchema>;
+export type PhalaAttestationResponse = z.infer<
+	typeof PhalaAttestationResponseSchema
+>;
 export type NitroDocument = z.infer<typeof NitroDocumentSchema>;
 export type SP1Config = z.infer<typeof SP1ConfigSchema>;
 export type PhalaConfig = z.infer<typeof PhalaConfigSchema>;

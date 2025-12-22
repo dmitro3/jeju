@@ -433,8 +433,11 @@ export function createOTCModule(
         args: [],
       });
 
+      // Limit to prevent DoS from large arrays
+      const MAX_CONSIGNMENTS = 100;
       const consignments: Consignment[] = [];
-      for (const id of ids) {
+      const limitedIds = ids.slice(0, MAX_CONSIGNMENTS);
+      for (const id of limitedIds) {
         const c = await readConsignment(id);
         if (c) consignments.push(c);
       }
@@ -449,8 +452,11 @@ export function createOTCModule(
         args: [wallet.address],
       });
 
+      // Limit to prevent DoS from large arrays
+      const MAX_CONSIGNMENTS = 100;
       const consignments: Consignment[] = [];
-      for (const id of ids) {
+      const limitedIds = ids.slice(0, MAX_CONSIGNMENTS);
+      for (const id of limitedIds) {
         const c = await readConsignment(id);
         if (c) consignments.push(c);
       }

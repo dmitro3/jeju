@@ -124,12 +124,12 @@ test.describe('Network Statistics Display', () => {
 });
 
 test.describe('Network Stats Real-Time Updates', () => {
-  test.skip('should update stats after node registration', async ({ page }) => {
+  test.skip('should update stats after node registration', async ({ page: _page }) => {
     // TODO: Register node and verify network stats increase
     console.log('⚠️  Stats update verification - needs before/after comparison');
   });
 
-  test.skip('should update stats after rewards claimed', async ({ page }) => {
+  test.skip('should update stats after rewards claimed', async ({ page: _page }) => {
     // TODO: Claim rewards and verify total rewards increases
     console.log('⚠️  Rewards stat update - needs before/after comparison');
   });

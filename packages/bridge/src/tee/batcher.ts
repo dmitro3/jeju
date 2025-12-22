@@ -3,297 +3,334 @@
  */
 
 import type {
-  CrossChainTransfer,
-  Hash32,
-  ProofBatch,
-  SP1Proof,
-  TEEAttestation,
-  TEEBatchingConfig,
-  TEECacheEntry,
-} from '../types/index.js';
-import { toHash32 } from '../types/index.js';
-import { createLogger, hashToHex } from '../utils/index.js';
+	CrossChainTransfer,
+	Hash32,
+	ProofBatch,
+	SP1Proof,
+	TEEAttestation,
+	TEEBatchingConfig,
+	TEECacheEntry,
+} from "../types/index.js";
+import { toHash32 } from "../types/index.js";
+import { createLogger, hashToHex } from "../utils/index.js";
 
-const log = createLogger('tee-batcher');
+const log = createLogger("tee-batcher");
 
 interface BatchState {
-  id: Hash32;
-  transfers: TEECacheEntry[];
-  createdAt: bigint;
-  estimatedTotalCost: bigint;
-  status: 'accumulating' | 'ready' | 'proving' | 'proven';
+	id: Hash32;
+	transfers: TEECacheEntry[];
+	createdAt: bigint;
+	estimatedTotalCost: bigint;
+	status: "accumulating" | "ready" | "proving" | "proven";
 }
 
 export class TEEBatcher {
-  private config: TEEBatchingConfig;
-  private pendingBatches: Map<string, BatchState> = new Map();
-  private currentBatch: BatchState | null = null;
-  private attestation: TEEAttestation | null = null;
-  private batchTimer: ReturnType<typeof setTimeout> | null = null;
+	private config: TEEBatchingConfig;
+	private pendingBatches: Map<string, BatchState> = new Map();
+	private currentBatch: BatchState | null = null;
+	private attestation: TEEAttestation | null = null;
+	private batchTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(config: TEEBatchingConfig) {
-    this.config = config;
-  }
+	// SECURITY: Mutex to prevent race conditions in batch operations
+	private batchMutex: Promise<void> = Promise.resolve();
+	// SECURITY: Track processed transfer IDs to prevent double-inclusion
+	private processedTransferIds: Set<string> = new Set();
 
-  async initialize(): Promise<void> {
-    this.attestation = await this.generateAttestation();
-    log.info('Batcher initialized with attestation');
-  }
+	constructor(config: TEEBatchingConfig) {
+		this.config = config;
+	}
 
-  async addTransfer(transfer: CrossChainTransfer): Promise<{
-    batchId: string;
-    position: number;
-    estimatedCost: bigint;
-  }> {
-    // Validate transfer
-    this.validateTransfer(transfer);
+	/**
+	 * Acquire mutex lock for batch operations
+	 */
+	private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+		// Chain the mutex to ensure sequential execution
+		const release = this.batchMutex;
+		let resolver: () => void = () => { /* initialized below */ };
+		this.batchMutex = new Promise((resolve) => {
+			resolver = resolve;
+		});
+		await release;
+		try {
+			return await fn();
+		} finally {
+			resolver();
+		}
+	}
 
-    // Estimate cost contribution
-    const estimatedCost = this.estimateCostContribution(transfer);
+	async initialize(): Promise<void> {
+		this.attestation = await this.generateAttestation();
+		log.info("Batcher initialized with attestation");
+	}
 
-    // Create cache entry
-    const entry: TEECacheEntry = {
-      transfer,
-      partialState: await this.computePartialState(transfer),
-      estimatedCost,
-      priority: this.computePriority(transfer),
-      expiresAt: BigInt(Date.now()) + BigInt(60000), // 1 minute TTL
-    };
+	async addTransfer(transfer: CrossChainTransfer): Promise<{
+		batchId: string;
+		position: number;
+		estimatedCost: bigint;
+	}> {
+		// Use mutex to prevent race conditions
+		return this.withLock(async () => {
+			// Validate transfer
+			this.validateTransfer(transfer);
 
-    // Get or create current batch
-    if (!this.currentBatch) {
-      this.currentBatch = this.createNewBatch();
-      this.startBatchTimer();
-    }
+			// SECURITY: Check for double-inclusion attack
+			const transferIdHex = hashToHex(transfer.transferId);
+			if (this.processedTransferIds.has(transferIdHex)) {
+				throw new Error(
+					`Transfer ${transferIdHex} already included in a batch - potential double-spend`,
+				);
+			}
 
-    // Add to batch
-    const position = this.currentBatch.transfers.length;
-    this.currentBatch.transfers.push(entry);
-    this.currentBatch.estimatedTotalCost += estimatedCost;
+			// Estimate cost contribution
+			const estimatedCost = this.estimateCostContribution(transfer);
 
-    // Save batch info before potential finalization
-    const batchId = hashToHex(this.currentBatch.id);
+			// Create cache entry
+			const entry: TEECacheEntry = {
+				transfer,
+				partialState: await this.computePartialState(transfer),
+				estimatedCost,
+				priority: this.computePriority(transfer),
+				expiresAt: BigInt(Date.now()) + BigInt(60000), // 1 minute TTL
+			};
 
-    // Check if batch is ready
-    if (this.currentBatch.transfers.length >= this.config.maxBatchSize) {
-      await this.finalizeBatch();
-    }
+			// Get or create current batch
+			if (!this.currentBatch) {
+				this.currentBatch = this.createNewBatch();
+				this.startBatchTimer();
+			}
 
-    return {
-      batchId,
-      position,
-      estimatedCost,
-    };
-  }
+			// SECURITY: Mark transfer as processed before adding to batch
+			this.processedTransferIds.add(transferIdHex);
 
-  getBatchStatus(batchId: string): BatchState | null {
-    if (
-      this.currentBatch &&
-      hashToHex(this.currentBatch.id) === batchId
-    ) {
-      return this.currentBatch;
-    }
-    return this.pendingBatches.get(batchId) ?? null;
-  }
+			// Add to batch
+			const position = this.currentBatch.transfers.length;
+			this.currentBatch.transfers.push(entry);
+			this.currentBatch.estimatedTotalCost += estimatedCost;
 
-  getNextBatchForProving(): BatchState | null {
-    for (const [, batch] of this.pendingBatches) {
-      if (batch.status === 'ready') {
-        batch.status = 'proving';
-        return batch;
-      }
-    }
-    return null;
-  }
+			// Save batch info before potential finalization
+			const batchId = hashToHex(this.currentBatch.id);
 
-  markBatchProven(batchId: string, proof: SP1Proof): ProofBatch {
-    const batch = this.pendingBatches.get(batchId);
-    if (!batch) {
-      throw new Error(`Batch ${batchId} not found`);
-    }
+			// Check if batch is ready
+			if (this.currentBatch.transfers.length >= this.config.maxBatchSize) {
+				await this.finalizeBatch();
+			}
 
-    batch.status = 'proven';
+			return {
+				batchId,
+				position,
+				estimatedCost,
+			};
+		});
+	}
 
-    const proofBatch: ProofBatch = {
-      batchId: batch.id,
-      items: batch.transfers.map((e) => e.transfer),
-      aggregatedProof: proof,
-      teeAttestation: this.attestation,
-      totalFees: batch.transfers.reduce(
-        (sum, e) => sum + e.estimatedCost,
-        BigInt(0),
-      ),
-      proofCost: batch.estimatedTotalCost,
-      createdAt: batch.createdAt,
-      provenAt: BigInt(Date.now()),
-    };
+	getBatchStatus(batchId: string): BatchState | null {
+		if (this.currentBatch && hashToHex(this.currentBatch.id) === batchId) {
+			return this.currentBatch;
+		}
+		return this.pendingBatches.get(batchId) ?? null;
+	}
 
-    // Remove from pending
-    this.pendingBatches.delete(batchId);
+	getNextBatchForProving(): BatchState | null {
+		for (const [, batch] of this.pendingBatches) {
+			if (batch.status === "ready") {
+				batch.status = "proving";
+				return batch;
+			}
+		}
+		return null;
+	}
 
-    return proofBatch;
-  }
+	markBatchProven(batchId: string, proof: SP1Proof): ProofBatch {
+		const batch = this.pendingBatches.get(batchId);
+		if (!batch) {
+			throw new Error(`Batch ${batchId} not found`);
+		}
 
-  getAttestation(): TEEAttestation | null {
-    return this.attestation;
-  }
+		batch.status = "proven";
 
-  private createNewBatch(): BatchState {
-    const id = this.generateBatchId();
-    return {
-      id,
-      transfers: [],
-      createdAt: BigInt(Date.now()),
-      estimatedTotalCost: BigInt(0),
-      status: 'accumulating',
-    };
-  }
+		const proofBatch: ProofBatch = {
+			batchId: batch.id,
+			items: batch.transfers.map((e) => e.transfer),
+			aggregatedProof: proof,
+			teeAttestation: this.attestation,
+			totalFees: batch.transfers.reduce(
+				(sum, e) => sum + e.estimatedCost,
+				BigInt(0),
+			),
+			proofCost: batch.estimatedTotalCost,
+			createdAt: batch.createdAt,
+			provenAt: BigInt(Date.now()),
+		};
 
-  private generateBatchId(): Hash32 {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return toHash32(bytes);
-  }
+		// Remove from pending
+		this.pendingBatches.delete(batchId);
 
-  private startBatchTimer(): void {
-    if (this.batchTimer) {
-      clearTimeout(this.batchTimer);
-    }
+		return proofBatch;
+	}
 
-    this.batchTimer = setTimeout(async () => {
-      if (
-        this.currentBatch &&
-        this.currentBatch.transfers.length >= this.config.minBatchSize
-      ) {
-        await this.finalizeBatch();
-      }
-    }, this.config.maxBatchWaitMs);
-  }
+	getAttestation(): TEEAttestation | null {
+		return this.attestation;
+	}
 
-  private async finalizeBatch(): Promise<void> {
-    if (!this.currentBatch) return;
+	private createNewBatch(): BatchState {
+		const id = this.generateBatchId();
+		return {
+			id,
+			transfers: [],
+			createdAt: BigInt(Date.now()),
+			estimatedTotalCost: BigInt(0),
+			status: "accumulating",
+		};
+	}
 
-    if (this.batchTimer) {
-      clearTimeout(this.batchTimer);
-      this.batchTimer = null;
-    }
+	private generateBatchId(): Hash32 {
+		const bytes = new Uint8Array(32);
+		crypto.getRandomValues(bytes);
+		return toHash32(bytes);
+	}
 
-    // Sort by priority
-    this.currentBatch.transfers.sort((a, b) => b.priority - a.priority);
+	private startBatchTimer(): void {
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer);
+		}
 
-    // Mark as ready
-    this.currentBatch.status = 'ready';
+		this.batchTimer = setTimeout(async () => {
+			if (
+				this.currentBatch &&
+				this.currentBatch.transfers.length >= this.config.minBatchSize
+			) {
+				await this.finalizeBatch();
+			}
+		}, this.config.maxBatchWaitMs);
+	}
 
-    // Move to pending
-    const batchId = hashToHex(this.currentBatch.id);
-    this.pendingBatches.set(batchId, this.currentBatch);
+	private async finalizeBatch(): Promise<void> {
+		if (!this.currentBatch) return;
 
-    log.info('Batch ready', { batchId: batchId.slice(0, 8), transferCount: this.currentBatch.transfers.length });
+		if (this.batchTimer) {
+			clearTimeout(this.batchTimer);
+			this.batchTimer = null;
+		}
 
-    // Clear current
-    this.currentBatch = null;
-  }
+		// Sort by priority
+		this.currentBatch.transfers.sort((a, b) => b.priority - a.priority);
 
-  private validateTransfer(transfer: CrossChainTransfer): void {
-    if (transfer.amount <= BigInt(0)) {
-      throw new Error('Transfer amount must be positive');
-    }
-    if (transfer.sender.length === 0) {
-      throw new Error('Sender address required');
-    }
-    if (transfer.recipient.length === 0) {
-      throw new Error('Recipient address required');
-    }
-  }
+		// Mark as ready
+		this.currentBatch.status = "ready";
 
-  private estimateCostContribution(transfer: CrossChainTransfer): bigint {
-    // Base cost per transfer
-    let cost = this.config.targetCostPerItem;
+		// Move to pending
+		const batchId = hashToHex(this.currentBatch.id);
+		this.pendingBatches.set(batchId, this.currentBatch);
 
-    // Add cost for payload
-    if (transfer.payload.length > 0) {
-      cost += BigInt(transfer.payload.length) * BigInt(100); // 100 wei per byte
-    }
+		log.info("Batch ready", {
+			batchId: batchId.slice(0, 8),
+			transferCount: this.currentBatch.transfers.length,
+		});
 
-    return cost;
-  }
+		// Clear current
+		this.currentBatch = null;
+	}
 
-  private computePriority(transfer: CrossChainTransfer): number {
-    // Higher amount = higher priority
-    const amountScore = Number(transfer.amount / BigInt(10 ** 18));
+	private validateTransfer(transfer: CrossChainTransfer): void {
+		if (transfer.amount <= BigInt(0)) {
+			throw new Error("Transfer amount must be positive");
+		}
+		if (transfer.sender.length === 0) {
+			throw new Error("Sender address required");
+		}
+		if (transfer.recipient.length === 0) {
+			throw new Error("Recipient address required");
+		}
+	}
 
-    // Older transfers = higher priority
-    const ageScore = (Date.now() - Number(transfer.timestamp)) / 1000;
+	private estimateCostContribution(transfer: CrossChainTransfer): bigint {
+		// Base cost per transfer
+		let cost = this.config.targetCostPerItem;
 
-    return amountScore + ageScore;
-  }
+		// Add cost for payload
+		if (transfer.payload.length > 0) {
+			cost += BigInt(transfer.payload.length) * BigInt(100); // 100 wei per byte
+		}
 
-  private async computePartialState(
-    transfer: CrossChainTransfer,
-  ): Promise<Uint8Array> {
-    const encoder = new TextEncoder();
-    const data = JSON.stringify({
-      transferId: Array.from(transfer.transferId),
-      amount: transfer.amount.toString(),
-      sender: Array.from(transfer.sender),
-      recipient: Array.from(transfer.recipient),
-    });
-    return encoder.encode(data);
-  }
+		return cost;
+	}
 
-  private async generateAttestation(): Promise<TEEAttestation> {
-    // Check environment mode
-    const isProduction = process.env.NODE_ENV === 'production';
-    const requireRealTEE = process.env.REQUIRE_REAL_TEE === 'true';
-    
-    // Check if Phala is available
-    const phalaEndpoint = process.env.PHALA_ENDPOINT;
+	private computePriority(transfer: CrossChainTransfer): number {
+		// Higher amount = higher priority
+		const amountScore = Number(transfer.amount / BigInt(10 ** 18));
 
-    if (phalaEndpoint) {
-      // Use real Phala TEE attestation
-      const { createPhalaClient } = await import('./phala-client.js');
-      const phalaClient = createPhalaClient({ endpoint: phalaEndpoint });
-      await phalaClient.initialize();
+		// Older transfers = higher priority
+		const ageScore = (Date.now() - Number(transfer.timestamp)) / 1000;
 
-      const attestation = await phalaClient.requestAttestation({
-        data: `0x${'00'.repeat(32)}` as `0x${string}`,
-        operatorAddress: `0x${'00'.repeat(20)}` as `0x${string}`,
-      });
+		return amountScore + ageScore;
+	}
 
-      return phalaClient.toTEEAttestation(attestation);
-    }
+	private async computePartialState(
+		transfer: CrossChainTransfer,
+	): Promise<Uint8Array> {
+		const encoder = new TextEncoder();
+		const data = JSON.stringify({
+			transferId: Array.from(transfer.transferId),
+			amount: transfer.amount.toString(),
+			sender: Array.from(transfer.sender),
+			recipient: Array.from(transfer.recipient),
+		});
+		return encoder.encode(data);
+	}
 
-    // Production mode without TEE configured is a critical error
-    if (isProduction || requireRealTEE) {
-      throw new Error(
-        '[TEE] CRITICAL: Production requires real TEE attestation. ' +
-        'Configure PHALA_ENDPOINT, AWS_ENCLAVE_ID, or run in a GCP Confidential VM. ' +
-        'Mock attestations are only allowed in development mode (NODE_ENV !== production).'
-      );
-    }
+	private async generateAttestation(): Promise<TEEAttestation> {
+		// Check environment mode
+		const isProduction = process.env.NODE_ENV === "production";
+		const requireRealTEE = process.env.REQUIRE_REAL_TEE === "true";
 
-    // Development-only mock attestation
-    log.warn('Using mock attestation - DEVELOPMENT ONLY');
-    
-    const measurement = new Uint8Array(32);
-    crypto.getRandomValues(measurement);
+		// Check if Phala is available
+		const phalaEndpoint = process.env.PHALA_ENDPOINT;
 
-    const publicKey = new Uint8Array(33);
-    crypto.getRandomValues(publicKey);
-    publicKey[0] = 0x02; // Compressed public key prefix
+		if (phalaEndpoint) {
+			// Use real Phala TEE attestation
+			const { createPhalaClient } = await import("./phala-client.js");
+			const phalaClient = createPhalaClient({ endpoint: phalaEndpoint });
+			await phalaClient.initialize();
 
-    const quote = new Uint8Array(256);
-    crypto.getRandomValues(quote);
+			const attestation = await phalaClient.requestAttestation({
+				data: `0x${"00".repeat(32)}` as `0x${string}`,
+				operatorAddress: `0x${"00".repeat(20)}` as `0x${string}`,
+			});
 
-    return {
-      measurement: toHash32(measurement),
-      quote,
-      publicKey,
-      timestamp: BigInt(Date.now()),
-    };
-  }
+			return phalaClient.toTEEAttestation(attestation);
+		}
+
+		// Production mode without TEE configured is a critical error
+		if (isProduction || requireRealTEE) {
+			throw new Error(
+				"[TEE] CRITICAL: Production requires real TEE attestation. " +
+					"Configure PHALA_ENDPOINT, AWS_ENCLAVE_ID, or run in a GCP Confidential VM. " +
+					"Mock attestations are only allowed in development mode (NODE_ENV !== production).",
+			);
+		}
+
+		// Development-only mock attestation
+		log.warn("Using mock attestation - DEVELOPMENT ONLY");
+
+		const measurement = new Uint8Array(32);
+		crypto.getRandomValues(measurement);
+
+		const publicKey = new Uint8Array(33);
+		crypto.getRandomValues(publicKey);
+		publicKey[0] = 0x02; // Compressed public key prefix
+
+		const quote = new Uint8Array(256);
+		crypto.getRandomValues(quote);
+
+		return {
+			measurement: toHash32(measurement),
+			quote,
+			publicKey,
+			timestamp: BigInt(Date.now()),
+		};
+	}
 }
 
 export function createTEEBatcher(config: TEEBatchingConfig): TEEBatcher {
-  return new TEEBatcher(config);
+	return new TEEBatcher(config);
 }

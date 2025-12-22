@@ -55,14 +55,14 @@ test.describe('Bridge - Network State Edge Cases', () => {
 });
 
 test.describe('Bridge - Concurrent Operations', () => {
-  test.skip('should handle multiple pending approvals', async ({ page, metamask }) => {
+  test.skip('should handle multiple pending approvals', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Test approving multiple tokens concurrently
     // Edge case: User initiates multiple approvals quickly
 
     console.log('⚠️  Concurrent approvals - complex scenario');
   });
 
-  test.skip('should handle switching tokens mid-transaction', async ({ page }) => {
+  test.skip('should handle switching tokens mid-transaction', async ({ page: _page }) => {
     // TODO: What happens if user changes token while transaction pending?
 
     console.log('⚠️  Mid-transaction changes - edge case');
@@ -175,7 +175,7 @@ test.describe('Bridge - Input Sanitization', () => {
 });
 
 test.describe('Bridge - Approval Already Granted', () => {
-  test.skip('should skip approval if already approved', async ({ page, metamask }) => {
+  test.skip('should skip approval if already approved', async ({ page: _page, metamask: _metamask }) => {
     // TODO: If token already approved, should go straight to bridge
     // Would test:
     // 1. Check current allowance
@@ -185,7 +185,7 @@ test.describe('Bridge - Approval Already Granted', () => {
     console.log('⚠️  Approval skip optimization - check if implemented');
   });
 
-  test.skip('should show current allowance amount', async ({ page }) => {
+  test.skip('should show current allowance amount', async ({ page: _page }) => {
     // TODO: Display how much is currently approved
 
     console.log('⚠️  Allowance display - check if implemented');
@@ -193,13 +193,13 @@ test.describe('Bridge - Approval Already Granted', () => {
 });
 
 test.describe('Bridge - Transaction Timeout Handling', () => {
-  test.skip('should handle bridge transaction timeout', async ({ page, metamask }) => {
+  test.skip('should handle bridge transaction timeout', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Simulate timeout and verify graceful handling
 
     console.log('⚠️  Transaction timeout - needs timeout simulation');
   });
 
-  test.skip('should allow retry after failed bridge', async ({ page }) => {
+  test.skip('should allow retry after failed bridge', async ({ page: _page }) => {
     // TODO: If bridge fails, allow user to retry
 
     console.log('⚠️  Retry mechanism - check if implemented');
@@ -207,19 +207,19 @@ test.describe('Bridge - Transaction Timeout Handling', () => {
 });
 
 test.describe('Bridge - Gas Estimation', () => {
-  test.skip('should display estimated gas cost for approval', async ({ page }) => {
+  test.skip('should display estimated gas cost for approval', async ({ page: _page }) => {
     // TODO: If gas estimation UI exists, test it
 
     console.log('⚠️  Gas estimation display - check if implemented');
   });
 
-  test.skip('should display estimated gas cost for bridge', async ({ page }) => {
+  test.skip('should display estimated gas cost for bridge', async ({ page: _page }) => {
     // TODO: Test bridge gas estimation
 
     console.log('⚠️  Bridge gas estimation - check if implemented');
   });
 
-  test.skip('should warn about high gas prices', async ({ page }) => {
+  test.skip('should warn about high gas prices', async ({ page: _page }) => {
     // TODO: If gas price warning exists, test it
 
     console.log('⚠️  Gas price warnings - check if implemented');

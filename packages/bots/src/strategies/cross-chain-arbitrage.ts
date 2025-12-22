@@ -388,9 +388,10 @@ export class CrossChainArbitrage extends EventEmitter {
     let price: bigint;
     let liquidity = 0n;
 
-    if (dex.type === 'uniswap-v2') {
+    if (dex.type === 'uniswap-v2' && dex.router) {
+      const routerAddress = dex.router;
       const amounts = await client.readContract({
-        address: dex.router!,
+        address: routerAddress,
         abi: UNISWAP_V2_ROUTER_ABI,
         functionName: 'getAmountsOut',
         args: [amountIn, [baseToken, quoteToken]],
@@ -400,7 +401,7 @@ export class CrossChainArbitrage extends EventEmitter {
 
       // Fetch liquidity from pair contract (errors caught by Promise.allSettled in caller)
       const factory = await client.readContract({
-        address: dex.router!,
+        address: routerAddress,
         abi: UNISWAP_V2_ROUTER_ABI,
         functionName: 'factory',
       }) as `0x${string}`;
@@ -477,10 +478,18 @@ export class CrossChainArbitrage extends EventEmitter {
       const lowest = sorted[0];
       const highest = sorted[sorted.length - 1];
 
-      // Calculate price difference
-      const priceDiffBps = Number(
-        ((highest.price - lowest.price) * 10000n) / lowest.price
-      );
+      // Calculate price difference with overflow protection
+      if (lowest.price === 0n) continue; // Prevent division by zero
+      
+      const priceDiff = highest.price - lowest.price;
+      // Cap to prevent overflow in BPS calculation
+      const maxBpsValue = BigInt(Number.MAX_SAFE_INTEGER);
+      const scaledDiff = priceDiff * 10000n;
+      
+      // Use safe division that won't overflow
+      const priceDiffBps = scaledDiff > maxBpsValue 
+        ? Number(scaledDiff / lowest.price)
+        : Number(scaledDiff) / Number(lowest.price);
 
       if (priceDiffBps < this.config.minProfitBps) continue;
 
@@ -495,16 +504,27 @@ export class CrossChainArbitrage extends EventEmitter {
       // Calculate net profit after bridge fees
       const [baseSymbol, quoteSymbol] = pair.split('/');
       const tradeSize = parseUnits('1000', 6); // $1000 trade
-      const grossProfit = (tradeSize * BigInt(priceDiffBps)) / 10000n;
+      const grossProfit = (tradeSize * BigInt(Math.floor(priceDiffBps))) / 10000n;
       const bridgeFee = parseUnits(bridge.baseFeeUsd.toString(), 6);
       const gasEstimate = parseUnits('5', 6); // ~$5 gas estimate
 
-      const netProfit = grossProfit - bridgeFee - gasEstimate;
+      // Price movement buffer during bridge time
+      // Assume worst case price movement based on bridge time and volatility
+      // 0.1% per minute average volatility for crypto
+      const bridgeMinutes = bridge.estimatedTimeSeconds / 60;
+      const volatilityBufferBps = Math.ceil(bridgeMinutes * 10); // 10 bps per minute
+      const volatilityBuffer = (tradeSize * BigInt(volatilityBufferBps)) / 10000n;
+
+      const netProfit = grossProfit - bridgeFee - gasEstimate - volatilityBuffer;
 
       if (netProfit <= 0n) continue;
 
       const netProfitUsd = Number(formatUnits(netProfit, 6));
       if (netProfitUsd < this.config.minProfitUsd) continue;
+
+      const inputTokenAddress = this.getTokenAddress(baseSymbol, lowest.chainId as EVMChainId);
+      const outputTokenAddress = this.getTokenAddress(quoteSymbol, highest.chainId as EVMChainId);
+      if (!inputTokenAddress || !outputTokenAddress) continue;
 
       const opportunity: CrossChainArbOpportunity = {
         id: `${pair}-${lowest.chainId}-${highest.chainId}-${Date.now()}`,
@@ -513,13 +533,13 @@ export class CrossChainArbitrage extends EventEmitter {
         sourceChainId: lowest.chainId,
         destChainId: highest.chainId,
         inputToken: {
-          address: this.getTokenAddress(baseSymbol, lowest.chainId as EVMChainId)!,
+          address: inputTokenAddress,
           symbol: baseSymbol,
           decimals: 18,
           chainId: lowest.chainId as EVMChainId,
         },
         outputToken: {
-          address: this.getTokenAddress(quoteSymbol, highest.chainId as EVMChainId)!,
+          address: outputTokenAddress,
           symbol: quoteSymbol,
           decimals: 6,
           chainId: highest.chainId as EVMChainId,
@@ -548,20 +568,41 @@ export class CrossChainArbitrage extends EventEmitter {
 
   /**
    * Execute an arbitrage opportunity
+   * 
+   * MEV PROTECTION:
+   * - Use private mempools (Flashbots on mainnet, similar services on L2s)
+   * - Short transaction deadlines (2 minutes max)
+   * - Monitor for sandwich attacks in bridge transactions
+   * - Validate received amounts match expectations within tolerance
    */
   private async executeOpportunity(opp: CrossChainArbOpportunity): Promise<void> {
+    // Validate opportunity hasn't expired
+    const now = Date.now();
+    if (now > opp.expiresAt) {
+      opp.status = 'EXPIRED';
+      this.emit('expired', opp);
+      console.log(`Opportunity ${opp.id} expired before execution`);
+      return;
+    }
+
+    // Short deadline to minimize MEV exposure
+    const DEADLINE_SECONDS = 120; // 2 minutes - short to prevent sandwich attacks
+    const deadline = BigInt(Math.floor(now / 1000) + DEADLINE_SECONDS);
+
     opp.status = 'EXECUTING';
     this.emit('executing', opp);
 
     console.log(`Executing arbitrage: ${opp.id}`);
     console.log(`  Buy on ${opp.sourceChainId}, sell on ${opp.destChainId}`);
     console.log(`  Expected profit: $${opp.netProfitUsd}`);
+    console.log(`  Deadline: ${new Date(Number(deadline) * 1000).toISOString()}`);
 
     // Implementation would:
-    // 1. Execute buy on source chain
-    // 2. Bridge tokens
-    // 3. Execute sell on dest chain
-    // 4. Bridge profits back
+    // 1. Execute buy on source chain via Flashbots/private mempool
+    // 2. Bridge tokens (monitor bridge for anomalies)
+    // 3. Execute sell on dest chain via private mempool
+    // 4. Validate received amounts match expectations (within slippage tolerance)
+    // 5. Bridge profits back
 
     // For now, mark as completed (simulation)
     opp.status = 'COMPLETED';

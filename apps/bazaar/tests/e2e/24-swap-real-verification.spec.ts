@@ -58,7 +58,7 @@ test.describe('Swap - REAL Functionality Verification', () => {
     expect(hasRateOrFee).toBeTruthy();
     
     // Store initial body
-    const bodyBefore = body;
+    const _bodyBefore = body;
     
     // Change amount
     await inputAmount.fill('5');
@@ -105,16 +105,16 @@ test.describe('Swap - REAL Functionality Verification', () => {
     // VERIFY: Has multiple token options
     expect(inputOptions.length).toBeGreaterThanOrEqual(2);
     
-    // VERIFY: Options have valid values
-    expect(inputOptions).toContain('ETH');
-    expect(inputOptions).toContain('USDC');
+    // VERIFY: Options have valid token symbols (options include emoji prefix like '⟠ ETH')
+    expect(inputOptions.some(opt => opt.includes('ETH'))).toBe(true);
+    expect(inputOptions.some(opt => opt.includes('USDC'))).toBe(true);
     
     // Get options for output
     const outputOptions = await outputSelect.locator('option').allTextContents();
     
     // VERIFY: Output has same options
     expect(outputOptions.length).toBeGreaterThanOrEqual(2);
-    expect(outputOptions).toContain('ETH');
+    expect(outputOptions.some(opt => opt.includes('ETH'))).toBe(true);
     
     // TEST FAILS if dropdowns are empty or have wrong tokens
   });

@@ -9,7 +9,7 @@ import { Database as SQLiteDatabase } from 'bun:sqlite';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'path';
 import { z } from 'zod';
-import { parsePort, parseBoolean } from './utils.js';
+import { parsePort, parseBoolean, sanitizeRows } from './utils.js';
 
 // Request body schemas
 const CreateDatabaseRequestSchema = z.object({
@@ -18,6 +18,9 @@ const CreateDatabaseRequestSchema = z.object({
   owner: z.string().regex(/^0x[a-fA-F0-9]{40}$/).default('0x0000000000000000000000000000000000000000'),
   paymentToken: z.string().optional(),
 });
+
+// Maximum rows returned per query to prevent DoS via unbounded result sets
+const MAX_QUERY_ROWS = 10000;
 
 const QueryRequestSchema = z.object({
   database: z.string(),
@@ -132,12 +135,17 @@ export class CQLServer {
   }
 
   private addBlock(txCount: number = 1): number {
-    this.blockHeight++;
     const hash = '0x' + Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');
+    // Use atomic INSERT...SELECT to prevent race conditions
+    // This ensures we always get the correct next height even under concurrent load
     this.registry.run(
-      'INSERT INTO blocks (height, timestamp, tx_count, hash) VALUES (?, ?, ?, ?)',
-      [this.blockHeight, Date.now(), txCount, hash]
+      `INSERT INTO blocks (height, timestamp, tx_count, hash) 
+       SELECT COALESCE(MAX(height), 0) + 1, ?, ?, ? FROM blocks`,
+      [Date.now(), txCount, hash]
     );
+    // Update cached height from database to ensure consistency
+    const result = this.registry.query('SELECT MAX(height) as height FROM blocks').get() as { height: number | null } | null;
+    this.blockHeight = result?.height ?? 0;
     return this.blockHeight;
   }
 
@@ -193,7 +201,12 @@ export class CQLServer {
           
           if (type === 'query') {
             const stmt = db.query(sql);
-            const rows = params ? stmt.all(...params) : stmt.all();
+            const rawRows = params ? stmt.all(...params) : stmt.all();
+            // Enforce row limit to prevent DoS via unbounded result sets
+            const truncated = rawRows.length > MAX_QUERY_ROWS;
+            const limitedRows = truncated ? rawRows.slice(0, MAX_QUERY_ROWS) : rawRows;
+            // Sanitize rows to prevent prototype pollution attacks
+            const rows = sanitizeRows(limitedRows as Record<string, unknown>[]);
             const columns = rows.length > 0 ? Object.keys(rows[0] as object) : [];
             
             return Response.json({
@@ -202,6 +215,7 @@ export class CQLServer {
               columns,
               executionTime: Date.now() - startTime,
               blockHeight: this.blockHeight,
+              ...(truncated && { truncated: true, totalRows: rawRows.length }),
             });
           } else {
             const stmt = db.prepare(sql);
@@ -233,11 +247,43 @@ export class CQLServer {
           
           const db = this.openDatabase(id);
           
-          // Execute schema if provided
+          // Execute schema if provided - only allow safe DDL statements
           if (body.schema) {
             const statements = body.schema.split(';').filter((s: string) => s.trim());
+            // Allowed DDL patterns - only CREATE TABLE and CREATE INDEX
+            const ALLOWED_DDL_PATTERN = /^\s*(CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX))\s+/i;
+            // Dangerous patterns that should never be in schema
+            const DANGEROUS_PATTERNS = [
+              /\bDROP\b/i,
+              /\bDELETE\b/i,
+              /\bINSERT\b/i,
+              /\bUPDATE\b/i,
+              /\bTRUNCATE\b/i,
+              /\bALTER\b/i,
+              /\bEXEC\b/i,
+              /\bATTACH\b/i,
+              /\bDETACH\b/i,
+              /\bPRAGMA\b/i,
+              /\bVACUUM\b/i,
+            ];
+            
             for (const stmt of statements) {
-              db.exec(stmt);
+              const trimmed = stmt.trim();
+              if (!trimmed) continue;
+              
+              // Verify it's a safe DDL statement
+              if (!ALLOWED_DDL_PATTERN.test(trimmed)) {
+                throw new Error(`Schema must contain only CREATE TABLE or CREATE INDEX statements`);
+              }
+              
+              // Double-check for dangerous patterns that might be embedded
+              for (const pattern of DANGEROUS_PATTERNS) {
+                if (pattern.test(trimmed)) {
+                  throw new Error(`Schema contains prohibited SQL keyword`);
+                }
+              }
+              
+              db.exec(trimmed);
             }
           }
           

@@ -21,6 +21,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import type {
   AuthProvider,
   OAuth3Session,
+  OAuth3InternalSession,
   TEEAttestation,
   TEEProvider,
   VerifiableCredential,
@@ -40,6 +41,7 @@ import {
   HexSchema,
   AddressSchema,
   validateResponse,
+  VerifiableCredentialSchema,
 } from '../validation.js';
 
 const AuthInitSchema = z.object({
@@ -131,10 +133,15 @@ interface GoogleUserInfo {
 }
 
 interface SessionStore {
-  sessions: Map<string, OAuth3Session>;
+  /** Internal sessions with signing keys - NEVER expose to clients */
+  sessions: Map<string, OAuth3InternalSession>;
   pendingAuths: Map<string, PendingAuth>;
   credentials: Map<string, VerifiableCredential>;
 }
+
+const MAX_PENDING_AUTHS = 10000; // Maximum pending auth flows
+const MAX_SESSIONS = 100000; // Maximum concurrent sessions
+const CLEANUP_INTERVAL = 60000; // Run cleanup every minute
 
 interface DecentralizedSessionStore {
   storage: OAuth3StorageService;
@@ -162,6 +169,7 @@ export class DstackAuthAgent {
   private nodeAccount: ReturnType<typeof privateKeyToAccount>;
   private mpcCoordinator: FROSTCoordinator | null = null;
   private mpcInitialized = false;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: AuthAgentConfig) {
     this.config = config;
@@ -206,8 +214,98 @@ export class DstackAuthAgent {
     this.mpcInitialized = true;
   }
 
+  /**
+   * Start periodic cleanup of expired sessions and pending auths
+   * SECURITY: Prevents unbounded memory growth from abandoned auth flows
+   */
+  private startCleanup(): void {
+    if (this.cleanupInterval) return;
+    
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredData();
+    }, CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Clean up expired data and enforce size limits
+   * SECURITY: Prevents DoS via memory exhaustion
+   */
+  private cleanupExpiredData(): void {
+    const now = Date.now();
+    
+    // Clean expired pending auths
+    for (const [state, auth] of this.store.pendingAuths.entries()) {
+      if (now > auth.expiresAt) {
+        this.store.pendingAuths.delete(state);
+      }
+    }
+    
+    // Clean expired sessions
+    for (const [sessionId, session] of this.store.sessions.entries()) {
+      if (now > session.expiresAt) {
+        this.store.sessions.delete(sessionId);
+      }
+    }
+    
+    // Enforce pending auth size limit
+    if (this.store.pendingAuths.size > MAX_PENDING_AUTHS) {
+      const entries = Array.from(this.store.pendingAuths.entries())
+        .sort((a, b) => a[1].createdAt - b[1].createdAt);
+      const toRemove = entries.slice(0, entries.length - MAX_PENDING_AUTHS);
+      for (const [state] of toRemove) {
+        this.store.pendingAuths.delete(state);
+      }
+    }
+    
+    // Enforce session size limit
+    if (this.store.sessions.size > MAX_SESSIONS) {
+      const entries = Array.from(this.store.sessions.entries())
+        .sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+      const toRemove = entries.slice(0, entries.length - MAX_SESSIONS);
+      for (const [sessionId] of toRemove) {
+        this.store.sessions.delete(sessionId);
+      }
+    }
+  }
+
+  /**
+   * Stop cleanup interval (for graceful shutdown)
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
+  }
+
   private setupRoutes(): void {
-    this.app.use('*', cors());
+    // SECURITY: Configure CORS with allowed origins
+    // In production, origins should come from registered OAuth apps
+    const allowedOrigins = this.getAllowedOrigins();
+    
+    this.app.use('*', cors({
+      origin: (origin) => {
+        // Allow requests with no origin (same-origin, mobile apps, etc.)
+        if (!origin) return null;
+        
+        // In development, allow localhost
+        if (this.isDevelopment() && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+          return origin;
+        }
+        
+        // Check against allowed origins
+        if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+          return origin;
+        }
+        
+        // Reject unknown origins in production
+        return null;
+      },
+      credentials: true,
+      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+      allowHeaders: ['Content-Type', 'Authorization'],
+      maxAge: 86400,
+    }));
 
     this.app.get('/health', (c) => c.json({
       status: 'healthy',
@@ -252,46 +350,45 @@ export class DstackAuthAgent {
     this.app.get('/session/:sessionId', async (c) => {
       const sessionId = c.req.param('sessionId') as Hex;
       
-      // Try decentralized storage first
-      let session: OAuth3Session | null = null;
-      if (this.decentralizedStore) {
-        session = await this.decentralizedStore.storage.retrieveSession(sessionId);
-      }
+      // SECURITY: Get internal session but return only public data
+      const internalSession = this.store.sessions.get(sessionId);
       
-      // Fallback to local store
-      if (!session) {
-        session = this.store.sessions.get(sessionId) || null;
-      }
-      
-      if (!session) {
+      if (!internalSession) {
+        // Try decentralized storage for public session data
+        if (this.decentralizedStore) {
+          const publicSession = await this.decentralizedStore.storage.retrieveSession(sessionId);
+          if (publicSession) {
+            return c.json(publicSession);
+          }
+        }
         return c.json({ error: 'Session not found' }, 404);
       }
 
-      if (session.expiresAt < Date.now()) {
+      if (internalSession.expiresAt < Date.now()) {
         await this.deleteSession(sessionId);
         return c.json({ error: 'Session expired' }, 401);
       }
 
-      return c.json(session);
+      // SECURITY: Return public session only (no signing key)
+      return c.json(this.toPublicSession(internalSession));
     });
 
     this.app.post('/session/:sessionId/refresh', async (c) => {
       const sessionId = c.req.param('sessionId') as Hex;
       
-      // Try decentralized storage first
-      let session: OAuth3Session | null = null;
-      if (this.decentralizedStore) {
-        session = await this.decentralizedStore.storage.retrieveSession(sessionId);
-      }
-      if (!session) {
-        session = this.store.sessions.get(sessionId) || null;
-      }
+      // SECURITY: Only use internal sessions from local store (with signing keys)
+      const internalSession = this.store.sessions.get(sessionId);
 
-      if (!session) {
+      if (!internalSession) {
         return c.json({ error: 'Session not found' }, 404);
       }
 
-      const newSession = await this.refreshSession(session);
+      if (internalSession.expiresAt < Date.now()) {
+        await this.deleteSession(sessionId);
+        return c.json({ error: 'Session expired' }, 401);
+      }
+
+      const newSession = await this.refreshSession(internalSession);
       return c.json(newSession);
     });
 
@@ -330,8 +427,8 @@ export class DstackAuthAgent {
 
     this.app.post('/credential/verify', async (c) => {
       const rawBody = await c.req.json();
-      const body = z.object({ credential: z.record(z.string(), z.unknown()) }).parse(rawBody);
-      const valid = await this.verifyCredential(body.credential as unknown as VerifiableCredential);
+      const body = z.object({ credential: VerifiableCredentialSchema }).parse(rawBody);
+      const valid = await this.verifyCredential(body.credential);
       return c.json({ valid });
     });
   }
@@ -464,11 +561,54 @@ export class DstackAuthAgent {
     return keccak256(toBytes(quote));
   }
 
+  /**
+   * Validate that a redirect URI is allowed
+   * SECURITY: Prevents open redirect attacks
+   */
+  private validateRedirectUri(redirectUri: string): void {
+    // Parse the URI
+    let url: URL;
+    try {
+      url = new URL(redirectUri);
+    } catch {
+      throw new Error('Invalid redirect URI format');
+    }
+
+    // SECURITY: Must use HTTPS in production (allow localhost for dev)
+    if (url.protocol !== 'https:') {
+      const isLocalhost = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+      if (!isLocalhost || !this.isDevelopment()) {
+        throw new Error('Redirect URI must use HTTPS in production');
+      }
+    }
+
+    // SECURITY: Prevent fragments in redirect URI (potential XSS vector)
+    if (url.hash) {
+      throw new Error('Redirect URI cannot contain fragments');
+    }
+
+    // SECURITY: Block common open redirect patterns
+    const blockedPatterns = [
+      /^\/\//,           // Protocol-relative
+      /@/,               // Credential injection
+      /[\r\n]/,          // Header injection
+    ];
+    
+    for (const pattern of blockedPatterns) {
+      if (pattern.test(redirectUri)) {
+        throw new Error('Invalid redirect URI: suspicious pattern detected');
+      }
+    }
+  }
+
   async initAuth(
     provider: AuthProvider,
     appId: Hex,
     redirectUri: string
   ): Promise<{ authUrl: string; state: string; sessionId: Hex }> {
+    // SECURITY: Validate redirect URI before using
+    this.validateRedirectUri(redirectUri);
+
     const sessionId = keccak256(toBytes(`${appId}:${provider}:${Date.now()}:${Math.random()}`));
     const state = toHex(crypto.getRandomValues(new Uint8Array(32)));
     const codeVerifier = this.generateCodeVerifier();
@@ -792,6 +932,15 @@ export class DstackAuthAgent {
     );
   }
 
+  /**
+   * Convert internal session to public session (strips signing key)
+   * SECURITY: This ensures the signing key never leaves the TEE
+   */
+  private toPublicSession(internalSession: OAuth3InternalSession): OAuth3Session {
+    const { signingKey: _signingKey, ...publicSession } = internalSession;
+    return publicSession;
+  }
+
   private async createSession(
     sessionId: Hex,
     provider: AuthProvider,
@@ -809,25 +958,28 @@ export class DstackAuthAgent {
 
     const identityId = keccak256(toBytes(`identity:${provider}:${providerId}`));
 
-    const session: OAuth3Session = {
+    // SECURITY: Create internal session with signing key (stays in TEE only)
+    const internalSession: OAuth3InternalSession = {
       sessionId,
       identityId,
       smartAccount: '0x0000000000000000000000000000000000000000' as Address,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       capabilities: ['sign_message', 'sign_transaction'] as OAuth3Session['capabilities'],
       signingKey,
+      signingPublicKey: toHex(signingAccount.publicKey),
       attestation,
     };
 
-    // Store in decentralized storage
-    if (this.decentralizedStore) {
-      await this.decentralizedStore.storage.storeSession(session);
-    }
-    
-    // Also keep in local cache for fast access
-    this.store.sessions.set(sessionId, session);
+    // Store internal session in local cache only (signing key stays in TEE)
+    this.store.sessions.set(sessionId, internalSession);
 
-    return session;
+    // Store public session (without signing key) in decentralized storage
+    if (this.decentralizedStore) {
+      await this.decentralizedStore.storage.storeSession(this.toPublicSession(internalSession));
+    }
+
+    // Return public session (without signing key) to client
+    return this.toPublicSession(internalSession);
   }
 
   private async deleteSession(sessionId: Hex): Promise<void> {
@@ -840,25 +992,30 @@ export class DstackAuthAgent {
     this.store.sessions.delete(sessionId);
   }
 
-  private async refreshSession(session: OAuth3Session): Promise<OAuth3Session> {
+  private async refreshSession(internalSession: OAuth3InternalSession): Promise<OAuth3Session> {
     const newSigningKeyBytes = crypto.getRandomValues(new Uint8Array(32));
     const newSigningKey = toHex(newSigningKeyBytes);
+    const newSigningAccount = privateKeyToAccount(newSigningKey as Hex);
 
-    const newSession: OAuth3Session = {
-      ...session,
+    // SECURITY: Create new internal session with new signing key
+    const newInternalSession: OAuth3InternalSession = {
+      ...internalSession,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
       signingKey: newSigningKey,
+      signingPublicKey: toHex(newSigningAccount.publicKey),
       attestation: await this.getAttestation(),
     };
 
-    // Update in decentralized storage
+    // Update internal session in local cache
+    this.store.sessions.set(internalSession.sessionId, newInternalSession);
+
+    // Update public session in decentralized storage
     if (this.decentralizedStore) {
-      await this.decentralizedStore.storage.storeSession(newSession);
+      await this.decentralizedStore.storage.storeSession(this.toPublicSession(newInternalSession));
     }
     
-    // Update local cache
-    this.store.sessions.set(session.sessionId, newSession);
-    return newSession;
+    // Return public session (without signing key)
+    return this.toPublicSession(newInternalSession);
   }
 
   async sign(sessionId: Hex, message: Hex): Promise<{ signature: Hex; attestation: TEEAttestation }> {
@@ -991,12 +1148,69 @@ export class DstackAuthAgent {
       .replace(/=+$/, '');
   }
 
-  private async getAppClientId(_provider: string): Promise<string> {
-    return process.env[`OAUTH_${_provider.toUpperCase()}_CLIENT_ID`] ?? '';
+  /**
+   * Get OAuth client ID for a provider
+   * SECURITY: Fails fast if not configured - don't return empty strings
+   */
+  private async getAppClientId(provider: string): Promise<string> {
+    const envKey = `OAUTH_${provider.toUpperCase()}_CLIENT_ID`;
+    const clientId = process.env[envKey];
+    
+    if (!clientId) {
+      throw new Error(
+        `OAuth client ID not configured for ${provider}. ` +
+        `Set the ${envKey} environment variable.`
+      );
+    }
+    
+    return clientId;
   }
 
-  private async getAppClientSecret(_provider: string): Promise<string> {
-    return process.env[`OAUTH_${_provider.toUpperCase()}_CLIENT_SECRET`] ?? '';
+  /**
+   * Get OAuth client secret for a provider
+   * SECURITY: Fails fast if not configured - don't return empty strings
+   */
+  private async getAppClientSecret(provider: string): Promise<string> {
+    const envKey = `OAUTH_${provider.toUpperCase()}_CLIENT_SECRET`;
+    const clientSecret = process.env[envKey];
+    
+    if (!clientSecret) {
+      throw new Error(
+        `OAuth client secret not configured for ${provider}. ` +
+        `Set the ${envKey} environment variable.`
+      );
+    }
+    
+    return clientSecret;
+  }
+
+  /**
+   * Check if running in development mode
+   */
+  private isDevelopment(): boolean {
+    const chainId = this.config.chainId;
+    return chainId === 420691 || chainId === 1337;
+  }
+
+  /**
+   * Get allowed CORS origins
+   * SECURITY: In production, this should only return registered app origins
+   */
+  private getAllowedOrigins(): string[] {
+    // Check for explicit allowed origins in env
+    const envOrigins = process.env.OAUTH3_ALLOWED_ORIGINS;
+    if (envOrigins) {
+      return envOrigins.split(',').map(o => o.trim());
+    }
+
+    // Development mode: allow all
+    if (this.isDevelopment()) {
+      return ['*'];
+    }
+
+    // Production: no wildcard, origins must be registered
+    // Apps should register their origins in the app registry
+    return [];
   }
 
   getApp(): Hono {
@@ -1013,19 +1227,38 @@ export class DstackAuthAgent {
 
 export async function startAuthAgent(): Promise<DstackAuthAgent> {
   const mpcEnabled = process.env.MPC_ENABLED === 'true';
+  const chainId = parseInt(process.env.CHAIN_ID ?? '420691');
+  const isProduction = chainId === 420692; // Mainnet
+  const isTestnet = chainId === 420690;
+  const isDevelopment = !isProduction && !isTestnet;
+
+  // SECURITY: Private key MUST be explicitly set in production/testnet
+  // Only allow auto-generated keys in local development (chain 420691/1337)
+  let privateKey: Hex;
+  if (process.env.OAUTH3_NODE_PRIVATE_KEY) {
+    privateKey = process.env.OAUTH3_NODE_PRIVATE_KEY as Hex;
+  } else if (isDevelopment) {
+    // Only auto-generate in development mode
+    console.warn('[SECURITY WARNING] Auto-generating node private key. This is only acceptable in development.');
+    privateKey = `0x${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex')}` as Hex;
+  } else {
+    throw new Error(
+      'OAUTH3_NODE_PRIVATE_KEY environment variable is required in production and testnet. ' +
+      'For development, use chain ID 420691 (localnet) to enable auto-generated keys.'
+    );
+  }
   
   const config: AuthAgentConfig = {
     nodeId: process.env.OAUTH3_NODE_ID ?? `node-${crypto.randomUUID().slice(0, 8)}`,
     clusterId: process.env.OAUTH3_CLUSTER_ID ?? 'oauth3-cluster',
-    privateKey: (process.env.OAUTH3_NODE_PRIVATE_KEY ?? 
-      `0x${Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex')}`) as Hex,
+    privateKey,
     mpcEndpoint: process.env.MPC_ENDPOINT ?? 'http://localhost:4100',
     identityRegistryAddress: (process.env.IDENTITY_REGISTRY_ADDRESS ?? 
       '0x0000000000000000000000000000000000000000') as Address,
     appRegistryAddress: (process.env.APP_REGISTRY_ADDRESS ?? 
       '0x0000000000000000000000000000000000000000') as Address,
     chainRpcUrl: process.env.JEJU_RPC_URL ?? 'http://localhost:9545',
-    chainId: parseInt(process.env.CHAIN_ID ?? '420691'),
+    chainId,
     jnsGateway: process.env.JNS_GATEWAY ?? process.env.GATEWAY_API ?? 'http://localhost:4020',
     storageEndpoint: process.env.STORAGE_API_ENDPOINT ?? 'http://localhost:4010',
     mpcEnabled,

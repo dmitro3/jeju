@@ -113,8 +113,50 @@ export const FACTORY_AGENT_CARD = {
   skills: FACTORY_SKILLS,
 };
 
+// ============ ALLOWED SKILLS ============
+const ALLOWED_SKILL_IDS = new Set(FACTORY_SKILLS.map(s => s.id));
+
+/**
+ * Sanitize an object to prevent prototype pollution attacks.
+ * Removes dangerous keys like __proto__, constructor, and prototype.
+ */
+function sanitizeObject<T extends Record<string, unknown>>(obj: T): T {
+  const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+  
+  const sanitize = (value: unknown): unknown => {
+    if (value === null || typeof value !== 'object') {
+      return value;
+    }
+    
+    if (Array.isArray(value)) {
+      return value.map(sanitize);
+    }
+    
+    const sanitized: Record<string, unknown> = Object.create(null);
+    
+    for (const key of Object.keys(value)) {
+      if (DANGEROUS_KEYS.includes(key)) {
+        continue;
+      }
+      sanitized[key] = sanitize((value as Record<string, unknown>)[key]);
+    }
+    
+    return sanitized;
+  };
+  
+  return sanitize(obj) as T;
+}
+
 // ============ SKILL EXECUTION ============
 async function executeSkill(skillId: string, params: Record<string, unknown>): Promise<SkillResult> {
+  // Validate skillId against allowlist to prevent unauthorized skill execution
+  if (!ALLOWED_SKILL_IDS.has(skillId)) {
+    return {
+      message: 'Unknown skill',
+      data: { error: 'Skill not found', availableSkills: FACTORY_SKILLS.map(s => s.id) },
+    };
+  }
+  
   switch (skillId) {
     // Git Skills
     case 'list-repos': {
@@ -436,7 +478,9 @@ export async function handleA2ARequest(request: NextRequest): Promise<NextRespon
     }
 
     const skillId = expect(dataPart.data.skillId as string, 'skillId required in data part');
-    const result = await executeSkill(skillId, dataPart.data);
+    // Sanitize params to prevent prototype pollution attacks
+    const safeParams = sanitizeObject(dataPart.data as Record<string, unknown>);
+    const result = await executeSkill(skillId, safeParams);
 
     return NextResponse.json({
       jsonrpc: '2.0',

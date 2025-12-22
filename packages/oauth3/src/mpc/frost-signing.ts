@@ -249,7 +249,10 @@ export function generateSignatureShare(
   const groupCommitment = computeGroupCommitment(allCommitments, bindingFactors);
   const challenge = computeChallenge(groupCommitment, keyShare.groupPublicKey, message);
 
-  const bindingFactor = bindingFactors.get(keyShare.index)!;
+  const bindingFactor = bindingFactors.get(keyShare.index);
+  if (bindingFactor === undefined) {
+    throw new Error(`Missing binding factor for participant ${keyShare.index}`);
+  }
   const lambdaI = lagrangeCoefficient(participantIndices, 0, keyShare.index);
 
   const share = mod(
@@ -399,7 +402,8 @@ export class FROSTCoordinator {
 
     for (let i = 0; i < indices.length; i++) {
       const index = indices[i];
-      const keyShare = this.keyShares.get(index)!;
+      const keyShare = this.keyShares.get(index);
+      if (!keyShare) throw new Error(`Key share not found for party ${index}`);
       const commitment = commitments[i];
       
       shares.push(generateSignatureShare(
@@ -411,7 +415,9 @@ export class FROSTCoordinator {
       ));
     }
 
-    const groupPubKey = this.keyShares.get(indices[0])!.groupPublicKey;
+    const firstKeyShare = this.keyShares.get(indices[0]);
+    if (!firstKeyShare) throw new Error(`Key share not found for party ${indices[0]}`);
+    const groupPubKey = firstKeyShare.groupPublicKey;
     return aggregateSignatures(messageBytes, groupPubKey, commitments, shares);
   }
 

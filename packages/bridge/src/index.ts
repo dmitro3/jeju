@@ -3,7 +3,12 @@
  * @packageDocumentation
  */
 
-export * from "./types/index.js";
+export {
+	createHyperliquidClient,
+	HyperliquidClient,
+	type HyperliquidClientConfig,
+	hyperliquidChain,
+} from "./clients/hyperliquid-client.js";
 
 export {
 	createEVMClient,
@@ -13,50 +18,107 @@ export {
 	SolanaClient,
 	type SolanaClientConfig,
 } from "./clients/index.js";
-
 export {
-	createHyperliquidClient,
-	HyperliquidClient,
-	type HyperliquidClientConfig,
-	hyperliquidChain,
-} from "./clients/hyperliquid-client.js";
-
+	createSolanaNetworkRegistry,
+	establishSolanaTrust,
+	type NetworkContracts,
+	type NetworkRegistryConfig,
+	registerSolanaNetworks,
+	type SolanaNetworkConfig,
+	type SolanaNetworkInfo,
+	SolanaNetworkRegistry,
+	TrustTier,
+} from "./federation/index.js";
 export {
-	createRouter,
-	CrossChainRouter,
-	type RouterConfig,
-	type Route,
-	type RouteRequest,
-	type RouteStep,
-	type ChainInfo,
-	ChainType,
-	BridgeMechanism,
-	SUPPORTED_CHAINS,
-	ASTER_CONTRACTS,
-	createCCIPAdapter,
-	CCIPAdapter,
-	type CCIPTransferRequest,
-	type CCIPTransferResult,
-	CCIP_CHAIN_SELECTORS,
-	CCIP_ROUTERS,
-	createArbitrageDetector,
+	type CrossChainIdentityLink,
+	createFederatedIdentityBridge,
+	type FederatedAgent,
+	FederatedIdentityBridge,
+	type FederatedIdentityConfig,
+	type SolanaAgent,
+} from "./identity/index.js";
+export {
+	type GenesisState,
+	getLocalBridgeConfig,
+	getLocalGenesisState,
+	LOCAL_CHAIN_CONFIG,
+	LOCAL_PROVER_CONFIG,
+	LOCAL_TEE_CONFIG,
+	type LocalChainConfig,
+	type LocalDeployedContracts,
+	type LocalSolanaPrograms,
+	MOCK_VALIDATORS,
+	type MockValidator,
+	TEST_TOKENS,
+	type TestToken,
+} from "./local-dev/config.js";
+export {
+	type ComponentHealth,
+	createHealthChecker,
+	type HealthCheckConfig,
+	HealthChecker,
+	healthPlugin,
+	type Metrics,
+	type SystemHealth,
+} from "./monitoring/index.js";
+export {
+	type BridgeRequest as NFTBridgeRequest,
+	BridgeStatus as NFTBridgeStatus,
+	type CrossChainNFT,
+	createNFTBridgeService,
+	type NFTBridgeConfig,
+	NFTBridgeService,
+	type SolanaNFTMetadata,
+} from "./nft/index.js";
+export {
+	createSP1Client,
+	type ProofRequest,
+	type ProofResult,
+	SP1Client,
+	type SP1Config,
+} from "./prover/index.js";
+export {
+	createRelayerService,
+	type EVMChainConfig,
+	type RelayerConfig,
+	RelayerService,
+	type SolanaChainConfig,
+} from "./relayer/index.js";
+export {
 	ArbitrageDetector,
 	type ArbOpportunity,
 	type ArbRoute,
-	type PriceQuote,
+	ASTER_CONTRACTS,
+	BridgeMechanism,
+	type BridgeProvider,
+	type BridgeRoute,
+	CCIP_CHAIN_SELECTORS,
+	CCIP_ROUTERS,
+	CCIPAdapter,
+	type CCIPTransferRequest,
+	type CCIPTransferResult,
+	type ChainInfo,
+	ChainType,
+	CrossChainRouter,
+	createArbitrageDetector,
+	createCCIPAdapter,
+	createMultiBridgeRouter,
+	createRouter,
 	createWormholeAdapter,
+	type MultiBridgeConfig,
+	MultiBridgeRouter,
+	type PriceQuote,
+	type Route,
+	type RouteRequest,
+	type RouterConfig,
+	type RouteStep,
+	SUPPORTED_CHAINS,
 	WormholeAdapter,
 	type WormholeConfig,
 	type WormholeTransferParams,
 	type WormholeTransferResult,
 	type WormholeVAA,
-	createMultiBridgeRouter,
-	MultiBridgeRouter,
-	type MultiBridgeConfig,
-	type BridgeRoute,
-	type BridgeProvider,
 } from "./router/index.js";
-
 export {
 	type AttestationRequest,
 	type AttestationResponse,
@@ -87,91 +149,18 @@ export {
 	type TEEProvider,
 	type TEEProviderConfig,
 } from "./tee/index.js";
-
-export {
-	createSP1Client,
-	type ProofRequest,
-	type ProofResult,
-	SP1Client,
-	type SP1Config,
-} from "./prover/index.js";
-
-export {
-	createRelayerService,
-	type EVMChainConfig,
-	type RelayerConfig,
-	RelayerService,
-	type SolanaChainConfig,
-} from "./relayer/index.js";
-
+export * from "./types/index.js";
 export {
 	createXLPService,
-	XLPService,
-	type XLPConfig,
-	type LiquidityPosition,
 	type FillRequest,
-	type RouteStats,
-	type XLPStats,
-	isSolanaChain,
-	getSolanaTokenMint,
 	getEvmTokenAddress,
+	getSolanaTokenMint,
+	isSolanaChain,
+	type LiquidityPosition,
+	type RouteStats,
+	type XLPConfig,
+	XLPService,
+	type XLPStats,
 } from "./xlp/index.js";
-
-export {
-	FederatedIdentityBridge,
-	createFederatedIdentityBridge,
-	type FederatedIdentityConfig,
-	type SolanaAgent,
-	type FederatedAgent,
-	type CrossChainIdentityLink,
-} from "./identity/index.js";
-
-export {
-	NFTBridgeService,
-	createNFTBridgeService,
-	type NFTBridgeConfig,
-	type BridgeRequest as NFTBridgeRequest,
-	type SolanaNFTMetadata,
-	type CrossChainNFT,
-	BridgeStatus as NFTBridgeStatus,
-} from "./nft/index.js";
-
-export {
-	SolanaNetworkRegistry,
-	createSolanaNetworkRegistry,
-	registerSolanaNetworks,
-	establishSolanaTrust,
-	type NetworkRegistryConfig,
-	type SolanaNetworkConfig,
-	type NetworkContracts,
-	type SolanaNetworkInfo,
-	TrustTier,
-} from "./federation/index.js";
-
-export {
-	type ComponentHealth,
-	createHealthChecker,
-	type HealthCheckConfig,
-	HealthChecker,
-	healthPlugin,
-	type Metrics,
-	type SystemHealth,
-} from "./monitoring/index.js";
-
-export {
-	type GenesisState,
-	getLocalBridgeConfig,
-	getLocalGenesisState,
-	LOCAL_CHAIN_CONFIG,
-	LOCAL_PROVER_CONFIG,
-	LOCAL_TEE_CONFIG,
-	type LocalChainConfig,
-	type LocalDeployedContracts,
-	type LocalSolanaPrograms,
-	MOCK_VALIDATORS,
-	type MockValidator,
-	TEST_TOKENS,
-	type TestToken,
-} from "./local-dev/config.js";
 
 export const VERSION = "0.1.0";

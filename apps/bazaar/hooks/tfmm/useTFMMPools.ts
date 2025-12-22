@@ -1,9 +1,8 @@
 'use client'
 
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from 'wagmi'
-import { parseUnits, formatUnits, type Address } from 'viem'
+import { formatUnits, type Address } from 'viem'
 import { useState, useCallback } from 'react'
-import { JEJU_CHAIN_ID } from '@/config/chains'
 
 // TFMM Pool ABI (subset for UI)
 const TFMM_POOL_ABI = [
@@ -119,7 +118,7 @@ const DEFAULT_POOLS: Omit<TFMMPool, 'state' | 'userBalance'>[] = [
 ]
 
 export function useTFMMPools() {
-  const { address: userAddress } = useAccount()
+  useAccount()
   const [selectedPool, setSelectedPool] = useState<Address | null>(null)
 
   // In production, this would query a registry contract

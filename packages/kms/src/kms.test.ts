@@ -3,9 +3,13 @@
  * 
  * Tests FALLBACK MODE (local AES-256-GCM encryption).
  * TEE/MPC providers are stubs for unit testing.
+ * 
+ * SECURITY NOTE: The test secret below is intentionally weak and should NEVER
+ * be used in production. It is only used for deterministic test execution.
  */
 
 // Set required env before imports
+// SECURITY: Test-only secret - do not use in production
 process.env.KMS_FALLBACK_SECRET = 'test-secret-for-kms-unit-tests';
 
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';

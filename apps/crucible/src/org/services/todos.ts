@@ -82,21 +82,26 @@ export class TodoService {
     if (params.tags !== undefined) updates.tags = params.tags;
 
     const result = await this.storage.updateTodo(state, todoId, updates);
-    return { todo: result.state.todos.find(t => t.id === todoId)!, ...result };
+    const todo = result.state.todos.find(t => t.id === todoId);
+    if (!todo) throw new Error(`Todo not found after update: ${todoId}`);
+    return { todo, ...result };
   }
 
   async complete(state: OrgState, todoId: string): Promise<{ todo: Todo; state: OrgState; cid: string }> {
     const result = await this.storage.completeTodo(state, todoId);
-    return { todo: result.state.todos.find(t => t.id === todoId)!, ...result };
+    const todo = result.state.todos.find(t => t.id === todoId);
+    if (!todo) throw new Error(`Todo not found after complete: ${todoId}`);
+    return { todo, ...result };
   }
 
   list(state: OrgState, params: ListTodosParams = {}): { todos: Todo[]; total: number } {
     let todos = [...state.todos];
+    const filterTags = params.tags;
 
     if (params.status) todos = todos.filter(t => t.status === params.status);
     if (params.priority) todos = todos.filter(t => t.priority === params.priority);
     if (params.assigneeAgentId) todos = todos.filter(t => t.assigneeAgentId === params.assigneeAgentId);
-    if (params.tags?.length) todos = todos.filter(t => params.tags!.some(tag => t.tags.includes(tag)));
+    if (filterTags?.length) todos = todos.filter(t => filterTags.some(tag => t.tags.includes(tag)));
 
     todos.sort((a, b) => {
       const pd = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];

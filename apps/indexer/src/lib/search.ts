@@ -7,6 +7,7 @@ export type { AgentSearchResult, ProviderResult, SearchResult };
 
 const searchCache = new Map<string, { data: SearchResult; expiresAt: number }>();
 const CACHE_TTL = 30_000;
+const MAX_CACHE_ENTRIES = 1000; // Prevent unbounded cache growth
 
 function hashParams(params: SearchParams): string {
   return JSON.stringify(params);
@@ -183,6 +184,16 @@ export async function search(
     took: Date.now() - startTime,
   };
 
+  // Enforce cache size limit to prevent DoS via unbounded cache growth
+  if (searchCache.size >= MAX_CACHE_ENTRIES) {
+    // Evict oldest entries (first 10% of cache)
+    const entriesToEvict = Math.max(1, Math.floor(MAX_CACHE_ENTRIES * 0.1));
+    const iterator = searchCache.keys();
+    for (let i = 0; i < entriesToEvict; i++) {
+      const key = iterator.next().value;
+      if (key) searchCache.delete(key);
+    }
+  }
   searchCache.set(cacheKey, { data: result, expiresAt: Date.now() + CACHE_TTL });
   return result;
 }

@@ -100,12 +100,22 @@ export function parseSIWFMessage(messageString: string): SIWFMessage {
   return message as SIWFMessage;
 }
 
+// Maximum age for message issuedAt timestamp (5 minutes)
+const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+// Maximum future tolerance for clock skew (30 seconds)
+const MAX_FUTURE_TOLERANCE_MS = 30 * 1000;
+
 /**
  * Verify a SIWF signature
+ * 
+ * SECURITY: Validates both expiration and issuedAt timestamps to prevent
+ * replay attacks with old or pre-dated messages.
  */
 export async function verifySIWFSignature(params: {
   message: SIWFMessage | string;
   signature: Hex;
+  /** Maximum age of message in milliseconds (default: 5 minutes) */
+  maxMessageAgeMs?: number;
 }): Promise<{ valid: boolean; fid: number; custody: Address; error?: string }> {
   const messageString = typeof params.message === 'string' 
     ? params.message 
@@ -115,10 +125,39 @@ export async function verifySIWFSignature(params: {
     ? parseSIWFMessage(params.message)
     : params.message;
 
+  const now = new Date();
+  const maxAge = params.maxMessageAgeMs ?? MAX_MESSAGE_AGE_MS;
+
+  // SECURITY: Validate issuedAt is not in the future (with small tolerance for clock skew)
+  if (parsedMessage.issuedAt) {
+    const issuedAtDate = new Date(parsedMessage.issuedAt);
+    const futureThreshold = new Date(now.getTime() + MAX_FUTURE_TOLERANCE_MS);
+    
+    if (issuedAtDate > futureThreshold) {
+      return { 
+        valid: false, 
+        fid: parsedMessage.fid, 
+        custody: parsedMessage.custody, 
+        error: 'Message issuedAt is in the future' 
+      };
+    }
+    
+    // SECURITY: Validate issuedAt is not too old (replay attack prevention)
+    const oldestAllowed = new Date(now.getTime() - maxAge);
+    if (issuedAtDate < oldestAllowed) {
+      return { 
+        valid: false, 
+        fid: parsedMessage.fid, 
+        custody: parsedMessage.custody, 
+        error: `Message is too old (issued more than ${Math.round(maxAge / 60000)} minutes ago)` 
+      };
+    }
+  }
+
   // Check expiration
   if (parsedMessage.expirationTime) {
     const expirationDate = new Date(parsedMessage.expirationTime);
-    if (expirationDate < new Date()) {
+    if (expirationDate < now) {
       return { valid: false, fid: parsedMessage.fid, custody: parsedMessage.custody, error: 'Message expired' };
     }
   }

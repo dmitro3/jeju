@@ -529,11 +529,14 @@ export class MultiBackendManager {
   getRegionalPopularity(region: string): RegionalPopularity {
     const regionalContent = Array.from(this.contentRegistry.values())
       .filter(m => m.regionalStats?.[region])
-      .map(m => ({
-        cid: m.cid,
-        score: m.regionalStats![region].accessCount,
-        seederCount: this.popularityScores.get(m.cid)?.seederCount ?? 0,
-      }))
+      .map(m => {
+        const regionStats = m.regionalStats?.[region];
+        return {
+          cid: m.cid,
+          score: regionStats?.accessCount ?? 0,
+          seederCount: this.popularityScores.get(m.cid)?.seederCount ?? 0,
+        };
+      })
       .sort((a, b) => b.score - a.score);
     
     const underseeded = regionalContent.filter(c => c.seederCount < 3);

@@ -124,7 +124,7 @@ export class HubSubmitter {
         headers: {
           'Content-Type': 'application/octet-stream',
         },
-        body: encoded,
+        body: encoded.slice() as unknown as BodyInit,
       });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Network error';
@@ -201,7 +201,7 @@ export class HubSubmitter {
       headers: {
         'Content-Type': 'application/octet-stream',
       },
-      body: encoded,
+      body: encoded.slice() as unknown as BodyInit,
     });
     
     if (!response.ok) {

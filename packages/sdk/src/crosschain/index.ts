@@ -147,7 +147,11 @@ export function createCrossChainModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): CrossChainModule {
-  const xlpStakeManagerAddress = requireContract("eil", "l1StakeManager", network);
+  const xlpStakeManagerAddress = requireContract(
+    "eil",
+    "l1StakeManager",
+    network,
+  );
   const services = getServicesConfig(network);
 
   async function getQuote(params: TransferParams): Promise<CrossChainQuote> {
@@ -282,7 +286,20 @@ export function createCrossChainModule(
       `${services.oif.aggregator}/intents/${intentId}`,
     );
     if (!response.ok) throw new Error("Failed to get intent status");
-    return (await response.json()) as IntentStatus;
+
+    const rawData: unknown = await response.json();
+
+    // Validate response structure
+    if (
+      typeof rawData !== "object" ||
+      rawData === null ||
+      !("intentId" in rawData) ||
+      !("status" in rawData)
+    ) {
+      throw new Error("Invalid intent status response format");
+    }
+
+    return rawData as IntentStatus;
   }
 
   async function listMyIntents(): Promise<IntentStatus[]> {
@@ -293,7 +310,19 @@ export function createCrossChainModule(
       throw new Error(`Failed to list intents: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as { intents: IntentStatus[] };
+    const rawData: unknown = await response.json();
+
+    // Validate response structure
+    if (
+      typeof rawData !== "object" ||
+      rawData === null ||
+      !("intents" in rawData) ||
+      !Array.isArray((rawData as { intents: unknown }).intents)
+    ) {
+      throw new Error("Invalid intents list response format");
+    }
+
+    const data = rawData as { intents: IntentStatus[] };
     return data.intents;
   }
 

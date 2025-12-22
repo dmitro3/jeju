@@ -9,7 +9,7 @@
 
 import { verifyMessage, type Address, type Hex } from 'viem';
 import { Database } from 'bun:sqlite';
-import { createHash, randomBytes } from 'crypto';
+import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'crypto';
 
 // ============================================================================
 // Types
@@ -55,11 +55,39 @@ export class AuthService {
   private challenges = new Map<string, AuthChallenge>();
   private userVaults = new Map<string, UserVault>();
   private sessionDuration = 24 * 60 * 60 * 1000; // 24 hours
+  private challengeCleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private readonly MAX_CHALLENGES = 10000; // Prevent unbounded memory growth
 
   constructor() {
     this.db = new Database(':memory:');
     this.initDatabase();
     this.loadFromDatabase();
+    this.startChallengeCleanup();
+  }
+
+  /**
+   * Periodically clean up expired challenges to prevent memory leaks
+   */
+  private startChallengeCleanup(): void {
+    // Clean up every minute
+    this.challengeCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [address, challenge] of this.challenges) {
+        if (now > challenge.expiresAt) {
+          this.challenges.delete(address);
+        }
+      }
+    }, 60_000);
+  }
+
+  /**
+   * Stop cleanup interval (for testing/shutdown)
+   */
+  shutdown(): void {
+    if (this.challengeCleanupInterval) {
+      clearInterval(this.challengeCleanupInterval);
+      this.challengeCleanupInterval = null;
+    }
   }
 
   private initDatabase() {
@@ -161,6 +189,22 @@ export class AuthService {
   // ============================================================================
 
   generateChallenge(address: Address): { challenge: string; expiresAt: number } {
+    // Prevent memory exhaustion by limiting challenges
+    if (this.challenges.size >= this.MAX_CHALLENGES) {
+      // Evict oldest expired challenges first
+      const now = Date.now();
+      for (const [addr, challenge] of this.challenges) {
+        if (now > challenge.expiresAt) {
+          this.challenges.delete(addr);
+        }
+        if (this.challenges.size < this.MAX_CHALLENGES) break;
+      }
+      // If still at limit, reject new challenges
+      if (this.challenges.size >= this.MAX_CHALLENGES) {
+        throw new Error('Too many pending authentication challenges. Try again later.');
+      }
+    }
+
     const challenge = `Sign this message to authenticate with DWS:\n\nAddress: ${address}\nNonce: ${randomBytes(16).toString('hex')}\nTimestamp: ${Date.now()}`;
     const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
 
@@ -309,8 +353,9 @@ export class AuthService {
     const vault = this.getOrCreateVault(address);
     const now = Date.now();
     
-    // Derive encryption key from address (AES-256-GCM)
-    const key = createHash('sha256').update(address.toLowerCase()).digest();
+    // Derive encryption key from server secret + address
+    // The server secret ensures only this server can decrypt user secrets
+    const key = this.deriveEncryptionKey(address);
     const encrypted = this.encrypt(value, key);
 
     const existing = vault.secrets.get(name);
@@ -351,7 +396,7 @@ export class AuthService {
     const secret = vault.secrets.get(name);
     if (!secret) return null;
 
-    const key = createHash('sha256').update(address.toLowerCase()).digest();
+    const key = this.deriveEncryptionKey(address);
     return this.decrypt(secret.encryptedValue, key);
   }
 
@@ -387,14 +432,34 @@ export class AuthService {
   // Encryption Helpers (AES-256-GCM)
   // ============================================================================
 
+  /**
+   * Derive encryption key from server secret + user address
+   * SECURITY: The server secret (DWS_ENCRYPTION_SECRET) MUST be set in production.
+   * Without it, only the address is used which provides no security since addresses are public.
+   */
+  private deriveEncryptionKey(address: Address): Buffer {
+    const serverSecret = process.env.DWS_ENCRYPTION_SECRET;
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    if (!serverSecret) {
+      if (isProduction) {
+        throw new Error('CRITICAL: DWS_ENCRYPTION_SECRET must be set in production. User secrets cannot be secured without it.');
+      }
+      console.warn('[AuthService] WARNING: DWS_ENCRYPTION_SECRET not set. User secrets are NOT properly secured. Set this environment variable in production.');
+    }
+    // Combine server secret with address to create unique key per user
+    // Server secret ensures only this server can decrypt; address ensures unique key per user
+    const material = `${serverSecret ?? 'INSECURE_DEFAULT_SECRET'}:${address.toLowerCase()}`;
+    return createHash('sha256').update(material).digest();
+  }
+
   private encrypt(plaintext: string, key: Buffer): string {
-    const crypto = require('crypto');
     // Use first 32 bytes as key, generate random IV
     const aesKey = Buffer.alloc(32);
     key.copy(aesKey, 0, 0, Math.min(key.length, 32));
-    const iv = crypto.randomBytes(12);
+    const iv = randomBytes(12);
     
-    const cipher = crypto.createCipheriv('aes-256-gcm', aesKey, iv);
+    const cipher = createCipheriv('aes-256-gcm', aesKey, iv);
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
     
@@ -403,7 +468,6 @@ export class AuthService {
   }
 
   private decrypt(ciphertext: string, key: Buffer): string {
-    const crypto = require('crypto');
     const data = Buffer.from(ciphertext, 'base64');
     
     // Extract components
@@ -414,7 +478,7 @@ export class AuthService {
     const aesKey = Buffer.alloc(32);
     key.copy(aesKey, 0, 0, Math.min(key.length, 32));
     
-    const decipher = crypto.createDecipheriv('aes-256-gcm', aesKey, iv);
+    const decipher = createDecipheriv('aes-256-gcm', aesKey, iv);
     decipher.setAuthTag(authTag);
     
     return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString('utf8');

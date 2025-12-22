@@ -23,29 +23,39 @@ const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
     z.null(),
     z.array(JsonValueSchema),
     z.record(z.string(), JsonValueSchema),
-  ])
+  ]),
 );
 
 /**
  * Zod schema for JSON records (objects)
  */
-export const JsonRecordSchema: z.ZodType<JsonRecord> = z.record(z.string(), JsonValueSchema);
+export const JsonRecordSchema: z.ZodType<JsonRecord> = z.record(
+  z.string(),
+  JsonValueSchema,
+);
 
 // ============================================================================
 // Common Schemas
 // ============================================================================
 
 /** Ethereum address schema */
-export const AddressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address");
+export const AddressSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{40}$/, "Invalid address");
 
 /** Transaction hash schema */
-export const TxHashSchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/, "Invalid tx hash");
+export const TxHashSchema = z
+  .string()
+  .regex(/^0x[a-fA-F0-9]{64}$/, "Invalid tx hash");
 
 /** Bigint string schema (for JSON APIs that return bigints as strings) */
 export const BigIntStringSchema = z.string().transform((val) => BigInt(val));
 
 /** Optional bigint string */
-export const OptionalBigIntString = z.string().optional().transform((val) => val ? BigInt(val) : undefined);
+export const OptionalBigIntString = z
+  .string()
+  .optional()
+  .transform((val) => (val ? BigInt(val) : undefined));
 
 // ============================================================================
 // Storage API Schemas
@@ -80,7 +90,10 @@ export const EnhancedStorageStatsSchema = z.object({
     popular: z.object({ count: z.number(), size: z.number() }),
     private: z.object({ count: z.number(), size: z.number() }),
   }),
-  byBackend: z.record(z.string(), z.object({ count: z.number(), size: z.number() })),
+  byBackend: z.record(
+    z.string(),
+    z.object({ count: z.number(), size: z.number() }),
+  ),
 });
 
 export const ContentInfoSchema = z.object({
@@ -88,7 +101,13 @@ export const ContentInfoSchema = z.object({
   name: z.string().optional(),
   size: z.number(),
   tier: z.enum(["system", "popular", "private"]),
-  category: z.enum(["app-bundle", "contract-abi", "user-content", "media", "data"]),
+  category: z.enum([
+    "app-bundle",
+    "contract-abi",
+    "user-content",
+    "media",
+    "data",
+  ]),
   backends: z.array(z.enum(["webtorrent", "ipfs", "arweave", "local"])),
   magnetUri: z.string().optional(),
   arweaveTxId: z.string().optional(),
@@ -122,28 +141,32 @@ export const TokenSchema = z.object({
 });
 
 export const PoolInfoResponseSchema = z.object({
-  pools: z.array(z.object({
-    poolId: TxHashSchema,
-    token0: TokenSchema,
-    token1: TokenSchema,
-    fee: z.number(),
-    liquidity: z.string(),
-    sqrtPriceX96: z.string(),
-    tick: z.number(),
-  })),
+  pools: z.array(
+    z.object({
+      poolId: TxHashSchema,
+      token0: TokenSchema,
+      token1: TokenSchema,
+      fee: z.number(),
+      liquidity: z.string(),
+      sqrtPriceX96: z.string(),
+      tick: z.number(),
+    }),
+  ),
 });
 
 export const PositionsResponseSchema = z.object({
-  positions: z.array(z.object({
-    positionId: z.string(),
-    token0: AddressSchema,
-    token1: AddressSchema,
-    tickLower: z.number(),
-    tickUpper: z.number(),
-    liquidity: z.string(),
-    feeGrowth0: z.string(),
-    feeGrowth1: z.string(),
-  })),
+  positions: z.array(
+    z.object({
+      positionId: z.string(),
+      token0: AddressSchema,
+      token1: AddressSchema,
+      tickLower: z.number(),
+      tickUpper: z.number(),
+      liquidity: z.string(),
+      feeGrowth0: z.string(),
+      feeGrowth1: z.string(),
+    }),
+  ),
 });
 
 // ============================================================================
@@ -151,27 +174,42 @@ export const PositionsResponseSchema = z.object({
 // ============================================================================
 
 export const CrossChainQuoteResponseSchema = z.object({
-  quotes: z.array(z.object({
-    quoteId: z.string(),
-    sourceChain: z.enum(["jeju", "base", "optimism", "arbitrum", "ethereum"]),
-    destinationChain: z.enum(["jeju", "base", "optimism", "arbitrum", "ethereum"]),
-    sourceToken: AddressSchema,
-    destinationToken: AddressSchema,
-    amountIn: z.string(),
-    amountOut: z.string(),
-    fee: z.string(),
-    feePercent: z.number(),
-    estimatedTimeSeconds: z.number(),
-    route: z.enum(["eil", "oif"]),
-    solver: AddressSchema.optional(),
-    xlp: AddressSchema.optional(),
-    validUntil: z.number(),
-  })),
+  quotes: z.array(
+    z.object({
+      quoteId: z.string(),
+      sourceChain: z.enum(["jeju", "base", "optimism", "arbitrum", "ethereum"]),
+      destinationChain: z.enum([
+        "jeju",
+        "base",
+        "optimism",
+        "arbitrum",
+        "ethereum",
+      ]),
+      sourceToken: AddressSchema,
+      destinationToken: AddressSchema,
+      amountIn: z.string(),
+      amountOut: z.string(),
+      fee: z.string(),
+      feePercent: z.number(),
+      estimatedTimeSeconds: z.number(),
+      route: z.enum(["eil", "oif"]),
+      solver: AddressSchema.optional(),
+      xlp: AddressSchema.optional(),
+      validUntil: z.number(),
+    }),
+  ),
 });
 
 export const IntentStatusSchema = z.object({
   intentId: TxHashSchema,
-  status: z.enum(["open", "pending", "filled", "expired", "cancelled", "failed"]),
+  status: z.enum([
+    "open",
+    "pending",
+    "filled",
+    "expired",
+    "cancelled",
+    "failed",
+  ]),
   solver: AddressSchema.optional(),
   fillTxHash: TxHashSchema.optional(),
   createdAt: z.number(),
@@ -196,7 +234,9 @@ export const XLPInfoSchema = z.object({
 export const SolverInfoSchema = z.object({
   address: AddressSchema,
   name: z.string(),
-  supportedChains: z.array(z.enum(["jeju", "base", "optimism", "arbitrum", "ethereum"])),
+  supportedChains: z.array(
+    z.enum(["jeju", "base", "optimism", "arbitrum", "ethereum"]),
+  ),
   reputation: z.number(),
   successRate: z.number(),
   totalFills: z.number(),
@@ -212,15 +252,20 @@ export const AgentSkillSchema = z.object({
   name: z.string(),
   description: z.string(),
   tags: z.array(z.string()),
-  inputSchema: z.object({
-    type: z.string(),
-    properties: z.record(z.string(), z.object({
+  inputSchema: z
+    .object({
       type: z.string(),
-      description: z.string().optional(),
-      required: z.boolean().optional(),
-    })),
-    required: z.array(z.string()).optional(),
-  }).optional(),
+      properties: z.record(
+        z.string(),
+        z.object({
+          type: z.string(),
+          description: z.string().optional(),
+          required: z.boolean().optional(),
+        }),
+      ),
+      required: z.array(z.string()).optional(),
+    })
+    .optional(),
   outputs: z.record(z.string(), z.string()).optional(),
   paymentRequired: z.boolean().optional(),
 });
@@ -248,28 +293,36 @@ export const DiscoveredAgentSchema = z.object({
   endpoint: z.string(),
   card: AgentCardSchema,
   jnsName: z.string().optional(),
-  skills: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string(),
-  })),
+  skills: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+    }),
+  ),
 });
 
 export const A2AResponseSchema = z.object({
   jsonrpc: z.string(),
   id: z.number(),
-  result: z.object({
-    parts: z.array(z.object({
-      kind: z.string(),
-      text: z.string().optional(),
-      data: JsonRecordSchema.optional(),
-    })),
-  }).optional(),
-  error: z.object({
-    code: z.number(),
-    message: z.string(),
-    data: JsonValueSchema.optional(),
-  }).optional(),
+  result: z
+    .object({
+      parts: z.array(
+        z.object({
+          kind: z.string(),
+          text: z.string().optional(),
+          data: JsonRecordSchema.optional(),
+        }),
+      ),
+    })
+    .optional(),
+  error: z
+    .object({
+      code: z.number(),
+      message: z.string(),
+      data: JsonValueSchema.optional(),
+    })
+    .optional(),
 });
 
 // ============================================================================
@@ -353,15 +406,17 @@ export const BanInfoSchema = z.object({
 // ============================================================================
 
 export const PaymasterInfoResponseSchema = z.object({
-  paymasters: z.array(z.object({
-    address: AddressSchema,
-    token: AddressSchema,
-    tokenSymbol: z.string(),
-    active: z.boolean(),
-    entryPointBalance: z.string(),
-    vaultLiquidity: z.string(),
-    exchangeRate: z.string(),
-  })),
+  paymasters: z.array(
+    z.object({
+      address: AddressSchema,
+      token: AddressSchema,
+      tokenSymbol: z.string(),
+      active: z.boolean(),
+      entryPointBalance: z.string(),
+      vaultLiquidity: z.string(),
+      exchangeRate: z.string(),
+    }),
+  ),
 });
 
 export const PaymasterDetailSchema = z.object({
@@ -456,14 +511,22 @@ export const JobSchema = z.object({
   output: JsonRecordSchema,
   error: z.string().nullable(),
   logs: z.array(z.string()),
-  stepResults: z.array(z.object({
-    stepId: z.string(),
-    status: z.enum(["pending", "running", "completed", "failed", "cancelled"]),
-    startedAt: z.number(),
-    completedAt: z.number(),
-    output: JsonRecordSchema,
-    error: z.string().nullable(),
-  })),
+  stepResults: z.array(
+    z.object({
+      stepId: z.string(),
+      status: z.enum([
+        "pending",
+        "running",
+        "completed",
+        "failed",
+        "cancelled",
+      ]),
+      startedAt: z.number(),
+      completedAt: z.number(),
+      output: JsonRecordSchema,
+      error: z.string().nullable(),
+    }),
+  ),
 });
 
 export const DWSStatsSchema = z.object({
@@ -511,11 +574,13 @@ export const NameRecordsSchema = z.object({
 export const InferenceResponseSchema = z.object({
   id: z.string(),
   model: z.string(),
-  choices: z.array(z.object({
-    message: z.object({
-      content: z.string(),
+  choices: z.array(
+    z.object({
+      message: z.object({
+        content: z.string(),
+      }),
     }),
-  })),
+  ),
   usage: z.object({
     prompt_tokens: z.number(),
     completion_tokens: z.number(),
@@ -527,17 +592,35 @@ export const InferenceResponseSchema = z.object({
 // List Response Wrappers
 // ============================================================================
 
-export const AgentsListSchema = z.object({ agents: z.array(DiscoveredAgentSchema) });
-export const ProposalsListSchema = z.object({ proposals: z.array(ProposalInfoSchema) });
-export const DelegatesListSchema = z.object({ delegates: z.array(DelegateInfoSchema) });
+export const AgentsListSchema = z.object({
+  agents: z.array(DiscoveredAgentSchema),
+});
+export const ProposalsListSchema = z.object({
+  proposals: z.array(ProposalInfoSchema),
+});
+export const DelegatesListSchema = z.object({
+  delegates: z.array(DelegateInfoSchema),
+});
 export const NamesListSchema = z.object({ names: z.array(NameInfoSchema) });
-export const ContentListSchema = z.object({ items: z.array(ContentInfoSchema) });
+export const ContentListSchema = z.object({
+  items: z.array(ContentInfoSchema),
+});
 export const PinsListSchema = z.object({ results: z.array(PinInfoSchema) });
-export const IntentsListSchema = z.object({ intents: z.array(IntentStatusSchema) });
+export const IntentsListSchema = z.object({
+  intents: z.array(IntentStatusSchema),
+});
 export const XLPsListSchema = z.object({ xlps: z.array(XLPInfoSchema) });
-export const SolversListSchema = z.object({ solvers: z.array(SolverInfoSchema) });
-export const TriggersListSchema = z.object({ triggers: z.array(TriggerSchema) });
-export const WorkflowsListSchema = z.object({ workflows: z.array(WorkflowSchema) });
+export const SolversListSchema = z.object({
+  solvers: z.array(SolverInfoSchema),
+});
+export const TriggersListSchema = z.object({
+  triggers: z.array(TriggerSchema),
+});
+export const WorkflowsListSchema = z.object({
+  workflows: z.array(WorkflowSchema),
+});
 export const JobsListSchema = z.object({ jobs: z.array(JobSchema) });
 export const JobLogsSchema = z.object({ logs: z.array(z.string()) });
-export const NodesListSchema = z.object({ nodes: z.array(NodeStakeInfoSchema) });
+export const NodesListSchema = z.object({
+  nodes: z.array(NodeStakeInfoSchema),
+});

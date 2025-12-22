@@ -59,9 +59,11 @@ function parseCron(cron: string): { minute: number; hour: number; dayOfMonth: nu
   const parts = cron.split(' ');
   if (parts.length !== 5) return null;
   const parse = (f: string) => f === '*' ? -1 : parseInt(f, 10);
+  const [p0, p1, p2, p3, p4] = parts;
+  if (!p0 || !p1 || !p2 || !p3 || !p4) return null;
   return {
-    minute: parse(parts[0]!), hour: parse(parts[1]!),
-    dayOfMonth: parse(parts[2]!), month: parse(parts[3]!), dayOfWeek: parse(parts[4]!),
+    minute: parse(p0), hour: parse(p1),
+    dayOfMonth: parse(p2), month: parse(p3), dayOfWeek: parse(p4),
   };
 }
 

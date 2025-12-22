@@ -171,7 +171,7 @@ test.describe('Bridge Transaction Approval', () => {
     });
   });
 
-  test.skip('should execute bridge after approval', async ({ page, metamask }) => {
+  test.skip('should execute bridge after approval', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Implement full bridge flow when Sepolia testnet available
     // Would require:
     // 1. Approval transaction (done above)
@@ -275,7 +275,7 @@ test.describe('Bridge History Display', () => {
     }
   });
 
-  test.skip('should display completed bridge transfer in history', async ({ page }) => {
+  test.skip('should display completed bridge transfer in history', async ({ page: _page }) => {
     // TODO: After executing real bridge transaction, verify it appears in history
     // Would test:
     // - Transfer displayed with correct amount

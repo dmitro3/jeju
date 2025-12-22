@@ -506,14 +506,14 @@ test.describe('Concurrent Validation', () => {
 });
 
 test.describe('Balance Sufficiency Validations', () => {
-  test.skip('should check token balance before allowing transaction', async ({ page, metamask }) => {
+  test.skip('should check token balance before allowing transaction', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Test that UI checks balance before allowing staking
     // If balance < required stake, should show error
 
     console.log('⚠️  Balance check before stake - needs implementation verification');
   });
 
-  test.skip('should check ETH balance before gas-heavy operations', async ({ page }) => {
+  test.skip('should check ETH balance before gas-heavy operations', async ({ page: _page }) => {
     // TODO: Check if UI warns about insufficient ETH for gas
 
     console.log('⚠️  Gas balance check - needs implementation verification');

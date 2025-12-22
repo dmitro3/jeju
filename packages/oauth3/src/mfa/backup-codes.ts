@@ -59,7 +59,22 @@ export class BackupCodesManager {
   }
 
   /**
+   * Timing-safe comparison of two hex strings
+   * SECURITY: Prevents timing attacks by always comparing all bytes
+   */
+  private timingSafeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
+  }
+
+  /**
    * Verify a backup code
+   * SECURITY: Uses timing-safe comparison to prevent timing attacks
    */
   verify(userId: string, code: string): { valid: boolean; remaining: number; error?: string } {
     const codesSet = this.userCodes.get(userId);
@@ -72,10 +87,15 @@ export class BackupCodesManager {
     const normalizedCode = code.replace(/[\s-]/g, '').toUpperCase();
     const hashedInput = this.hashCode(normalizedCode);
 
-    // Find matching unused code
-    const matchingCode = codesSet.codes.find(c => 
-      !c.used && c.hashedCode === hashedInput
-    );
+    // SECURITY: Use timing-safe comparison to prevent timing attacks
+    // Check all codes to avoid leaking information about which codes exist
+    let matchingCode: BackupCode | null = null;
+    for (const c of codesSet.codes) {
+      if (!c.used && this.timingSafeCompare(c.hashedCode, hashedInput)) {
+        matchingCode = c;
+        // Don't break early - continue checking to maintain constant time
+      }
+    }
 
     if (!matchingCode) {
       const remaining = codesSet.codes.filter(c => !c.used).length;

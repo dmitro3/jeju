@@ -33,10 +33,13 @@ export interface EncryptionPolicy {
 class KMSServiceImpl implements KMSServiceClient {
   private endpoint: string;
   private available = true;
+  private isProduction: boolean;
 
   constructor(config: KMSConfig) {
     const validated = KMSConfigSchema.parse(config);
     this.endpoint = validated.endpoint;
+    // Determine if we're in production - insecure fallbacks are disabled in production
+    this.isProduction = process.env.NODE_ENV === 'production';
   }
 
   async encrypt(data: string, owner: Address, policy?: EncryptionPolicy): Promise<string> {
@@ -45,7 +48,14 @@ class KMSServiceImpl implements KMSServiceClient {
       if (result) return result;
     }
 
-    // Fallback to local base64 encoding (not secure, just for dev)
+    // SECURITY: In production, never use insecure fallback
+    if (this.isProduction) {
+      throw new Error('KMS encryption failed and insecure fallback is disabled in production');
+    }
+
+    // Development-only fallback to local base64 encoding
+    // WARNING: This is NOT encryption - only use for development
+    console.warn('[KMS] SECURITY WARNING: Using insecure local encoding fallback (development only)');
     return `local:${Buffer.from(data).toString('base64')}`;
   }
 

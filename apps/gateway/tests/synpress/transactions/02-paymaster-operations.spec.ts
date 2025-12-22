@@ -107,7 +107,7 @@ test.describe('Paymaster Deployment Transactions', () => {
     console.log('✅ Deployment information displayed');
   });
 
-  test('should validate token must be registered first', async ({ page }) => {
+  test('should validate token must be registered first', async ({ page: _page }) => {
     // This would test with an unregistered token
     // Implementation depends on having an unregistered token available
     

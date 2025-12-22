@@ -102,15 +102,16 @@ const settlementsPendingGauge = new Gauge({
 const liquidityGauges = new Map<number, Gauge<string>>();
 
 function getLiquidityGauge(chainId: number): Gauge<string> {
-  if (!liquidityGauges.has(chainId)) {
-    const gauge = new Gauge({
-      name: `${METRICS.LIQUIDITY_AVAILABLE}_${chainId}`,
-      help: `Available liquidity in wei for chain ${chainId}`,
-      registers: [metricsRegistry],
-    });
-    liquidityGauges.set(chainId, gauge);
-  }
-  return liquidityGauges.get(chainId)!;
+  const existingGauge = liquidityGauges.get(chainId);
+  if (existingGauge) return existingGauge;
+  
+  const gauge = new Gauge({
+    name: `${METRICS.LIQUIDITY_AVAILABLE}_${chainId}`,
+    help: `Available liquidity in wei for chain ${chainId}`,
+    registers: [metricsRegistry],
+  });
+  liquidityGauges.set(chainId, gauge);
+  return gauge;
 }
 
 // Export metric recording functions

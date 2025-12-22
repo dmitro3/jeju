@@ -13,12 +13,13 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
 import { createPublicClient, createWalletClient, http, formatEther, parseEther, parseUnits, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount, type Account } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import { 
   createPaymentRequirement, 
   createPaymentPayload
-} from '../../../scripts/shared/x402';
-import { buildSwapIntent } from '../../../scripts/shared/intent-swap';
+} from '../../../packages/deployment/scripts/shared/x402';
+import { buildSwapIntent } from '../../../packages/deployment/scripts/shared/intent-swap';
+import { TEST_ACCOUNTS } from '../shared/utils';
 
 // Test configuration
 const TEST_CONFIG = {
@@ -96,17 +97,17 @@ beforeAll(async () => {
   const chain = inferChainFromRpcUrl(TEST_CONFIG.rpcUrl);
   publicClient = createPublicClient({ chain, transport: http(TEST_CONFIG.rpcUrl) });
   
-  // Use test accounts (anvil defaults)
-  deployerAccount = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`);
+  // Use test accounts from shared constants (Anvil defaults)
+  deployerAccount = privateKeyToAccount(TEST_ACCOUNTS.deployer.privateKey);
   _deployerWalletClient = createWalletClient({ chain, transport: http(TEST_CONFIG.rpcUrl), account: deployerAccount });
   
-  user1Account = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d' as `0x${string}`);
+  user1Account = privateKeyToAccount(TEST_ACCOUNTS.user1.privateKey);
   _user1WalletClient = createWalletClient({ chain, transport: http(TEST_CONFIG.rpcUrl), account: user1Account });
   
-  _user2Account = privateKeyToAccount('0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a' as `0x${string}`);
+  _user2Account = privateKeyToAccount(TEST_ACCOUNTS.user2.privateKey);
   _user2WalletClient = createWalletClient({ chain, transport: http(TEST_CONFIG.rpcUrl), account: _user2Account });
   
-  _solverAccount = privateKeyToAccount('0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6' as `0x${string}`);
+  _solverAccount = privateKeyToAccount(TEST_ACCOUNTS.user3.privateKey);
   _solverWalletClient = createWalletClient({ chain, transport: http(TEST_CONFIG.rpcUrl), account: _solverAccount });
 });
 

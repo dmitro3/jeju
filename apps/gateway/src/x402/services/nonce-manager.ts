@@ -59,22 +59,47 @@ export async function markNonceFailed(payer: Address, nonce: string): Promise<vo
   pendingNonces.delete(getNonceKey(payer, nonce));
 }
 
+/**
+ * SECURITY: Atomic nonce reservation to prevent TOCTOU race conditions
+ * Uses a lock set to ensure only one caller can reserve a nonce at a time
+ */
+const reservationLocks = new Set<string>();
+
 export async function reserveNonce(
   publicClient: PublicClient,
   payer: Address,
   nonce: string
 ): Promise<{ reserved: boolean; error?: string }> {
   const key = getNonceKey(payer, nonce);
+  
+  // SECURITY: Check if another reservation is in progress (atomic using Set.add)
+  if (reservationLocks.has(key)) {
+    return { reserved: false, error: 'Nonce reservation in progress' };
+  }
+  
+  // SECURITY: Atomically acquire lock - if already pending or used, fail fast
   if (pendingNonces.has(key)) return { reserved: false, error: 'Nonce is being processed' };
   if (usedNonces.has(key)) return { reserved: false, error: 'Nonce already used' };
+  
+  // Acquire lock before async operations
+  reservationLocks.add(key);
+  
+  try {
+    // Double-check after acquiring lock (handles race where another check started first)
+    if (pendingNonces.has(key)) return { reserved: false, error: 'Nonce is being processed' };
+    if (usedNonces.has(key)) return { reserved: false, error: 'Nonce already used' };
 
-  if (await isNonceUsedOnChain(publicClient, payer, nonce)) {
-    await markNonceUsed(payer, nonce);
-    return { reserved: false, error: 'Nonce already used on-chain' };
+    if (await isNonceUsedOnChain(publicClient, payer, nonce)) {
+      await markNonceUsed(payer, nonce);
+      return { reserved: false, error: 'Nonce already used on-chain' };
+    }
+
+    await markNoncePending(payer, nonce);
+    return { reserved: true };
+  } finally {
+    // Always release lock
+    reservationLocks.delete(key);
   }
-
-  await markNoncePending(payer, nonce);
-  return { reserved: true };
 }
 
 export function generateNonce(): string {

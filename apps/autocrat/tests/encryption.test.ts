@@ -4,7 +4,7 @@
  * Tests for AES-256-GCM encryption, key derivation, and access control logic
  */
 
-import { describe, test, expect, beforeAll } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { keccak256, stringToHex } from 'viem';
 
 // ============ Type Definitions ============
@@ -21,7 +21,7 @@ interface AccessControlCondition {
   };
 }
 
-interface EncryptedData {
+interface _EncryptedData {
   ciphertext: string;
   dataToEncryptHash: string;
   accessControlConditions: AccessControlCondition[];

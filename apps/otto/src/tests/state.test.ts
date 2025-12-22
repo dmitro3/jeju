@@ -117,20 +117,20 @@ describe('StateManager', () => {
       expect(history[1].content).toBe('hi there');
     });
 
-    test('limits history to 10 messages', () => {
+    test('limits history to max messages (50 by default)', () => {
       const manager = getStateManager();
       
-      // Add 15 messages
-      for (let i = 0; i < 15; i++) {
+      // Add 60 messages (more than the 50 limit)
+      for (let i = 0; i < 60; i++) {
         const role = i % 2 === 0 ? 'user' : 'assistant';
         manager.addToHistory('web', 'channel-limit', role, `message ${i}`);
       }
 
       const history = manager.getHistory('web', 'channel-limit');
-      expect(history).toHaveLength(10);
-      // Should keep the last 10 (messages 5-14)
-      expect(history[0].content).toBe('message 5');
-      expect(history[9].content).toBe('message 14');
+      expect(history).toHaveLength(50);
+      // Should keep the last 50 (messages 10-59)
+      expect(history[0].content).toBe('message 10');
+      expect(history[49].content).toBe('message 59');
     });
   });
 

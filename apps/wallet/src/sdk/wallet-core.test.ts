@@ -4,13 +4,11 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 import { WalletCore, createWalletCore } from './wallet-core';
 
 // Test addresses
 const TEST_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
-const TEST_RECIPIENT = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' as Address;
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address;
 
 describe('WalletCore', () => {
   let wallet: WalletCore;

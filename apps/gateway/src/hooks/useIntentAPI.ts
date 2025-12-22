@@ -75,37 +75,12 @@ const SolverLeaderboardEntrySchema = z.object({
   reputation: z.number(),
 });
 
-const OIFStatsSchema = z.object({
-  totalIntents: z.number(),
-  totalVolume: z.string(),
-  totalVolumeUsd: z.string(),
-  totalFees: z.string(),
-  totalFeesUsd: z.string(),
-  totalSolvers: z.number(),
-  activeSolvers: z.number(),
-  totalSolverStake: z.string(),
-  totalRoutes: z.number(),
-  activeRoutes: z.number(),
-  avgFillTimeSeconds: z.number(),
-  successRate: z.number(),
-  last24hIntents: z.number(),
-  last24hVolume: z.string(),
-  last24hFees: z.string(),
-  lastUpdated: z.number(),
-});
-
 const ChainStatsSchema = z.object({
   chainId: z.number(),
   totalIntents: z.number(),
   totalVolume: z.string(),
   activeRoutes: z.number(),
   activeSolvers: z.number(),
-});
-
-const SupportedChainSchema = z.object({
-  chainId: z.number(),
-  name: z.string(),
-  isL2: z.boolean(),
 });
 
 const SupportedTokenSchema = z.object({

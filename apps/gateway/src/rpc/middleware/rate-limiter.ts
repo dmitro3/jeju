@@ -6,6 +6,70 @@ import { LRUCache } from 'lru-cache';
 export const RATE_LIMITS = { FREE: 10, BASIC: 100, PRO: 1000, UNLIMITED: 0 } as const;
 export type RateTier = keyof typeof RATE_LIMITS;
 
+/**
+ * Check if an IP is a private/local address that could be spoofed
+ */
+function isPrivateIp(ip: string): boolean {
+  // IPv4 private ranges and localhost
+  if (ip.startsWith('10.') || 
+      ip.startsWith('192.168.') || 
+      ip.startsWith('127.') ||
+      ip.startsWith('172.16.') ||
+      ip.startsWith('172.17.') ||
+      ip.startsWith('172.18.') ||
+      ip.startsWith('172.19.') ||
+      ip.startsWith('172.20.') ||
+      ip.startsWith('172.21.') ||
+      ip.startsWith('172.22.') ||
+      ip.startsWith('172.23.') ||
+      ip.startsWith('172.24.') ||
+      ip.startsWith('172.25.') ||
+      ip.startsWith('172.26.') ||
+      ip.startsWith('172.27.') ||
+      ip.startsWith('172.28.') ||
+      ip.startsWith('172.29.') ||
+      ip.startsWith('172.30.') ||
+      ip.startsWith('172.31.') ||
+      ip === 'localhost' ||
+      ip === '::1') {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Extracts client IP address safely from Hono context.
+ * 
+ * SECURITY: X-Forwarded-For can be spoofed by clients.
+ * This function prefers X-Real-IP (set by trusted proxies like nginx)
+ * and validates X-Forwarded-For by taking the rightmost non-private IP.
+ */
+function getClientIp(c: Context): string {
+  // X-Real-IP is typically set by nginx and is more trustworthy
+  const realIp = c.req.header('X-Real-IP');
+  if (realIp) {
+    return realIp.trim();
+  }
+  
+  // For X-Forwarded-For, we take the rightmost non-private IP
+  // The rightmost IP is the one added by our most trusted proxy
+  const forwardedFor = c.req.header('X-Forwarded-For');
+  if (forwardedFor) {
+    // Split and reverse to get rightmost first
+    const ips = forwardedFor.split(',').map(ip => ip.trim()).reverse();
+    for (const ip of ips) {
+      // Skip private/local IPs that could be spoofed
+      if (ip && !isPrivateIp(ip)) {
+        return ip;
+      }
+    }
+    // If all IPs are private, use the last one (closest to us)
+    if (ips[0]) return ips[0];
+  }
+  
+  return 'unknown';
+}
+
 // LRU cache for API key lookups (auto-evicts old entries)
 const apiKeyCache = new LRUCache<string, { address: Address; tier: RateTier }>({
   max: 10000,
@@ -70,7 +134,8 @@ const getUserKey = (c: Context): { key: string; address: Address | null } => {
   if (apiKey && apiKeyCache.has(apiKey)) return { key: `key:${apiKey}`, address: apiKeyCache.get(apiKey)?.address || null };
   const wallet = c.req.header('X-Wallet-Address') as Address | undefined;
   if (wallet) return { key: `addr:${wallet.toLowerCase()}`, address: wallet };
-  const ip = c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() || c.req.header('X-Real-IP') || 'unknown';
+  // Use secure IP extraction that handles proxy header spoofing
+  const ip = getClientIp(c);
   return { key: `ip:${ip}`, address: null };
 };
 

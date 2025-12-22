@@ -261,14 +261,18 @@ export const KEY_DERIVATION_MESSAGE = 'Sign this message to enable Network Messa
 // ============ Utilities ============
 
 /**
- * Compare two public keys
+ * Constant-time comparison to prevent timing attacks.
+ * Always compares all bytes regardless of where mismatch occurs.
  */
 export function publicKeysEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
+  
+  // XOR all bytes and accumulate - takes same time regardless of match position
+  let diff = 0;
   for (let i = 0; i < a.length; i++) {
-    if (a[i] !== b[i]) return false;
+    diff |= a[i] ^ b[i];
   }
-  return true;
+  return diff === 0;
 }
 
 /**

@@ -2,6 +2,10 @@
  * jeju compute - DWS compute operations
  *
  * Manage compute jobs on DWS (Decentralized Web Services).
+ * 
+ * Security notes:
+ * - Shell commands are validated before execution
+ * - User inputs are sanitized
  */
 
 import { Command } from 'commander';
@@ -10,12 +14,24 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../lib/logger';
 import { getChainStatus } from '../lib/chain';
+import { validateShellCommand, validateAddress, validatePort, sanitizeErrorMessage } from '../lib/security';
 import { DEFAULT_PORTS } from '../types';
 
-const DWS_PORT = parseInt(process.env.DWS_PORT || '4030');
+function getDwsPort(): number {
+  const portStr = process.env.DWS_PORT || '4030';
+  return validatePort(portStr);
+}
 
 function getDwsUrl(): string {
-  return process.env.DWS_URL || `http://localhost:${DWS_PORT}`;
+  if (process.env.DWS_URL) {
+    // Basic URL validation
+    const url = process.env.DWS_URL;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      throw new Error('DWS_URL must start with http:// or https://');
+    }
+    return url;
+  }
+  return `http://localhost:${getDwsPort()}`;
 }
 
 export const computeCommand = new Command('compute')
@@ -31,7 +47,7 @@ export const computeCommand = new Command('compute')
     new Command('start')
       .description('Start DWS server')
       .option('--network <network>', 'Network: localnet, testnet, mainnet', 'localnet')
-      .option('--port <port>', 'Server port', String(DWS_PORT))
+      .option('--port <port>', 'Server port', '4030')
       .action(async (options) => {
         await startDws(options);
       })
@@ -263,12 +279,31 @@ async function submitJob(
 ): Promise<void> {
   logger.header('SUBMIT COMPUTE JOB');
 
-  const dwsUrl = getDwsUrl();
-  const address = options.address || process.env.DEPLOYER_ADDRESS || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+  // Validate shell command to prevent obvious injection attempts
+  const validCommand = validateShellCommand(command);
+  
+  // Validate shell type
+  const validShells = ['bash', 'sh', 'pwsh', 'zsh'];
+  if (!validShells.includes(options.shell)) {
+    logger.error(`Invalid shell: ${options.shell}. Must be one of: ${validShells.join(', ')}`);
+    process.exit(1);
+  }
+  
+  // Validate timeout
+  const timeout = parseInt(options.timeout);
+  if (isNaN(timeout) || timeout < 1000 || timeout > 3600000) {
+    logger.error('Timeout must be between 1000ms and 3600000ms (1 hour)');
+    process.exit(1);
+  }
 
-  logger.keyValue('Command', command);
+  const dwsUrl = getDwsUrl();
+  const address = options.address 
+    ? validateAddress(options.address)
+    : (process.env.DEPLOYER_ADDRESS ? validateAddress(process.env.DEPLOYER_ADDRESS) : '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266');
+
+  logger.keyValue('Command', validCommand.slice(0, 100) + (validCommand.length > 100 ? '...' : ''));
   logger.keyValue('Shell', options.shell);
-  logger.keyValue('Timeout', `${options.timeout}ms`);
+  logger.keyValue('Timeout', `${timeout}ms`);
   logger.newline();
 
   try {
@@ -279,16 +314,16 @@ async function submitJob(
         'x-jeju-address': address,
       },
       body: JSON.stringify({
-        command,
+        command: validCommand,
         shell: options.shell,
-        timeout: parseInt(options.timeout),
+        timeout,
       }),
       signal: AbortSignal.timeout(10000),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error);
+      throw new Error(sanitizeErrorMessage(error));
     }
 
     const result = (await response.json()) as { jobId: string; status: string };
@@ -298,7 +333,7 @@ async function submitJob(
     logger.newline();
     logger.info(`Track with: jeju compute job ${result.jobId}`);
   } catch (error) {
-    logger.error(`Failed to submit job: ${error}`);
+    logger.error(`Failed to submit job: ${sanitizeErrorMessage(error as Error)}`);
     process.exit(1);
   }
 }

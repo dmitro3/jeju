@@ -28,7 +28,7 @@ describe("JejuService Integration Tests", () => {
     } catch (e) {
       console.log("⚠️ Service init failed (contracts may not be deployed):", (e as Error).message);
     }
-  }, 90000);
+  });
 
   afterAll(async () => {
     // Cleanup code - try/catch is valid here as we don't want cleanup failures to fail tests
@@ -37,7 +37,7 @@ describe("JejuService Integration Tests", () => {
     } catch {
       // Cleanup failures are not test failures
     }
-  }, 10000);
+  });
 
   test("service initializes correctly", () => {
     if (!env?.chainRunning || !service) return;

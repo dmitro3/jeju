@@ -37,14 +37,14 @@ describe('Port Constants', () => {
     });
 
     it('should have ENV_VAR for each port', () => {
-      Object.entries(CORE_PORTS).forEach(([name, config]) => {
+      Object.entries(CORE_PORTS).forEach(([_name, config]) => {
         expect(config.ENV_VAR).toBeTruthy();
         expect(config.ENV_VAR).toContain('PORT');
       });
     });
 
     it('should have get() function for each port', () => {
-      Object.entries(CORE_PORTS).forEach(([name, config]) => {
+      Object.entries(CORE_PORTS).forEach(([_name, config]) => {
         expect(typeof config.get).toBe('function');
         expect(typeof config.get()).toBe('number');
       });
@@ -206,9 +206,9 @@ describe('Port Conflict Detection', () => {
 
   it('should detect no conflicts with default ports', () => {
     // Reset all port env vars to use defaults
-    Object.values(CORE_PORTS).forEach(config => delete process.env[config.ENV_VAR]);
-    Object.values(VENDOR_PORTS).forEach(config => delete process.env[config.ENV_VAR]);
-    Object.values(INFRA_PORTS).forEach(config => delete process.env[config.ENV_VAR]);
+    Object.values(CORE_PORTS).forEach(config => { process.env[config.ENV_VAR] = undefined; });
+    Object.values(VENDOR_PORTS).forEach(config => { process.env[config.ENV_VAR] = undefined; });
+    Object.values(INFRA_PORTS).forEach(config => { process.env[config.ENV_VAR] = undefined; });
     
     const result = checkPortConflicts();
     expect(result.hasConflicts).toBe(false);
@@ -417,7 +417,7 @@ describe('Port Range Guidelines', () => {
   it('vendor ports should be in 5xxx range (mostly)', () => {
     const vendorPorts = getAllVendorPorts();
     
-    Object.entries(vendorPorts).forEach(([name, port]) => {
+    Object.entries(vendorPorts).forEach(([_name, port]) => {
       // Vendor ports in 3xxx-5xxx range
       expect(port).toBeGreaterThanOrEqual(3000);
       expect(port).toBeLessThan(6000);
@@ -427,7 +427,7 @@ describe('Port Range Guidelines', () => {
   it('infra ports should be in 6xxx-9xxx range', () => {
     const infraPorts = getAllInfraPorts();
     
-    Object.entries(infraPorts).forEach(([name, port]) => {
+    Object.entries(infraPorts).forEach(([_name, port]) => {
       // Infra ports: 6xxx for chain RPC, 4010 for grafana, 9xxx for monitoring
       expect(port).toBeGreaterThanOrEqual(4000);
       expect(port).toBeLessThan(10000);
@@ -439,9 +439,9 @@ describe('Port Range Guidelines', () => {
     const originalEnv = { ...process.env };
     
     // Clear all port env vars
-    Object.values(CORE_PORTS).forEach(c => delete process.env[c.ENV_VAR]);
-    Object.values(VENDOR_PORTS).forEach(c => delete process.env[c.ENV_VAR]);
-    Object.values(INFRA_PORTS).forEach(c => delete process.env[c.ENV_VAR]);
+    Object.values(CORE_PORTS).forEach(c => { process.env[c.ENV_VAR] = undefined; });
+    Object.values(VENDOR_PORTS).forEach(c => { process.env[c.ENV_VAR] = undefined; });
+    Object.values(INFRA_PORTS).forEach(c => { process.env[c.ENV_VAR] = undefined; });
     
     const result = checkPortConflicts();
     

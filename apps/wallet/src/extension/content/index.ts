@@ -17,7 +17,10 @@ function injectProvider(): void {
 
 // Listen for messages from the injected script
 window.addEventListener('message', async (event: MessageEvent<PageRequest | { type: string }>) => {
+  // Only accept messages from the same window/frame
   if (event.source !== window) return;
+  // Verify the message origin matches the current page
+  if (event.origin !== window.location.origin) return;
   if (!event.data || typeof event.data !== 'object') return;
   if (event.data.type !== 'jeju_request') return;
 
@@ -34,13 +37,14 @@ window.addEventListener('message', async (event: MessageEvent<PageRequest | { ty
     id: message.id,
     result: result as EIP1193Param,
   };
-  window.postMessage(response, '*');
+  // Send response only to the same origin
+  window.postMessage(response, window.location.origin);
 });
 
 // Listen for events from background script
 chrome.runtime.onMessage.addListener((message: BackgroundEventMessage) => {
-  // Forward events to the page
-  window.postMessage({ type: 'jeju_event', event: message.type, data: message }, '*');
+  // Forward events to the page (only to same origin)
+  window.postMessage({ type: 'jeju_event', event: message.type, data: message }, window.location.origin);
 });
 
 // Inject provider when DOM is ready

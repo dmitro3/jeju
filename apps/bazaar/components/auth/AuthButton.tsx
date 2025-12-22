@@ -31,7 +31,7 @@ interface AuthSession {
 
 type AuthMethod = 'wallet' | 'farcaster' | 'passkey' | 'google' | 'github' | 'twitter' | 'discord';
 
-const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '';
+import { WALLETCONNECT_PROJECT_ID } from '@/config';
 
 export function AuthButton({ 
   onAuthSuccess, 
@@ -46,7 +46,7 @@ export function AuthButton({
   const [error, setError] = useState<string | null>(null);
 
   const { address, isConnected } = useAccount();
-  const { connectAsync, connectors } = useConnect();
+  const { connectAsync } = useConnect();
   const { disconnectAsync } = useDisconnect();
   const { signMessageAsync } = useSignMessage();
 

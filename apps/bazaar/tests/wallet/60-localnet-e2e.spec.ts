@@ -17,9 +17,6 @@ import { expect } from '@playwright/test'
 
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
 
-const LOCALNET_RPC = 'http://localhost:9545'
-const LOCALNET_CHAIN_ID = '1337'
-
 test.describe('Localnet E2E - Token Creation', () => {
   test('should create a new token on localnet', async ({
     context,

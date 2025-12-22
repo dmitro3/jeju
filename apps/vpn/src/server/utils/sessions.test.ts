@@ -2,7 +2,7 @@
  * Unit tests for session management utilities
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import type { Address } from 'viem';
 import type { VPNSessionState, VPNNodeState, VPNServiceContext } from '../types';
 import {
@@ -93,14 +93,16 @@ describe('generateSessionId', () => {
     expect(id.startsWith('sess-')).toBe(true);
   });
 
-  test('contains timestamp', () => {
-    const before = Date.now();
+  test('contains cryptographically secure UUID', () => {
     const id = generateSessionId();
-    const after = Date.now();
-    const parts = id.split('-');
-    const timestamp = parseInt(parts[1], 10);
-    expect(timestamp).toBeGreaterThanOrEqual(before);
-    expect(timestamp).toBeLessThanOrEqual(after);
+    // Should be "sess-" followed by a UUID (36 chars including hyphens)
+    // Total length: 5 + 36 = 41
+    expect(id.length).toBe(41);
+    
+    // UUID format: 8-4-4-4-12 after the "sess-" prefix
+    const uuid = id.slice(5);
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    expect(uuidRegex.test(uuid)).toBe(true);
   });
 });
 

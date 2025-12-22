@@ -33,7 +33,7 @@ test.describe('Deployment Status', () => {
   });
 
   test('document features available without contracts', async ({ request }) => {
-    const health = await (await request.get(`${API_BASE}/health`)).json();
+    await request.get(`${API_BASE}/health`);
 
     // These features work regardless of contract deployment
     const alwaysAvailable = [

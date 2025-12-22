@@ -34,6 +34,7 @@ export class KMSService {
   private config: KMSConfig;
   private providers = new Map<KMSProviderType, KMSProvider>();
   private initialized = false;
+  private initializePromise: Promise<void> | null = null;
 
   constructor(config: KMSConfig) {
     this.config = config;
@@ -56,6 +57,7 @@ export class KMSService {
     if (defaultProvider) await defaultProvider.connect();
 
     this.initialized = true;
+    this.initializePromise = null;
     log.info('Initialized', { providers: Array.from(this.providers.keys()) });
   }
 

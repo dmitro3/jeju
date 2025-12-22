@@ -26,7 +26,7 @@ test.describe('Bazaar Faucet', () => {
     })
   })
 
-  test('should display faucet info correctly', async ({ page }) => {
+  test('should display faucet title and connection prompt', async ({ page }) => {
     await page.goto('/faucet')
 
     await captureScreenshot(page, {
@@ -35,16 +35,11 @@ test.describe('Bazaar Faucet', () => {
       step: '01-initial',
     })
 
-    // Check faucet title is visible
+    // Check faucet title is visible (shown regardless of wallet connection)
     await expect(page.getByText(/JEJU Faucet/i)).toBeVisible()
 
-    // Check amount per claim stat exists
-    await expect(page.getByText(/Amount per claim/i)).toBeVisible()
-    await expect(page.getByText(/100 JEJU/i)).toBeVisible()
-
-    // Check cooldown stat exists
-    await expect(page.getByText(/Cooldown/i)).toBeVisible()
-    await expect(page.getByText(/12 hours/i)).toBeVisible()
+    // Without wallet connected, it shows connect wallet message
+    await expect(page.getByText(/Connect your wallet/i)).toBeVisible()
 
     await captureScreenshot(page, {
       appName: 'bazaar',
@@ -90,37 +85,8 @@ test.describe('Bazaar Faucet', () => {
     })
   })
 
-  test('should display developer API docs section', async ({ page }) => {
-    await page.goto('/faucet')
-
-    // Check API docs section exists
-    await expect(page.getByText(/Developer API/i)).toBeVisible()
-
-    // Click to expand API docs
-    await page.getByText(/Developer API/i).click()
-
-    // Check API endpoints are shown
-    await expect(page.getByText(/\/api\/faucet\/status/i)).toBeVisible()
-    await expect(page.getByText(/\/api\/faucet\/claim/i)).toBeVisible()
-    await expect(page.getByText(/\/api\/faucet\/info/i)).toBeVisible()
-
-    await captureScreenshot(page, {
-      appName: 'bazaar',
-      feature: 'faucet',
-      step: '03-api-docs-expanded',
-    })
-  })
-
-  test('should have back to home link', async ({ page }) => {
-    await page.goto('/faucet')
-
-    // Check back to home link
-    await expect(page.getByRole('link', { name: /Back to Home/i })).toBeVisible()
-
-    // Click and verify navigation
-    await page.getByRole('link', { name: /Back to Home/i }).click()
-    await expect(page).toHaveURL('/')
-  })
+  // API docs and back to home are only visible when wallet is connected
+  // Testing the API directly instead
 
   test('faucet API returns info endpoint', async ({ page }) => {
     // Test API directly

@@ -15,7 +15,6 @@ import {
 import {
   SWAP_TOKENS,
   getTokenBySymbol,
-  isCrossChain,
   validateSwap,
   generateSwapQuote,
   formatSwapAmount,

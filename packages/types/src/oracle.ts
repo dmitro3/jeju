@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema, HexSchema } from './validation';
+import { AddressSchema, HexSchema, MAX_SMALL_ARRAY_LENGTH, MAX_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_RECORD_KEYS } from './validation';
 import type { Address, Hex } from 'viem';
 
 // ============ Core Types ============
@@ -36,7 +36,7 @@ export type FeedCategory = z.infer<typeof FeedCategorySchema>;
 
 export const FeedSpecSchema = z.object({
   feedId: HexSchema,
-  symbol: z.string(),
+  symbol: z.string().max(MAX_SHORT_STRING_LENGTH),
   baseToken: AddressSchema,
   quoteToken: AddressSchema,
   decimals: z.number().int().positive(),
@@ -93,8 +93,8 @@ export const PriceReportSchema = z.object({
   confidence: z.bigint(),
   timestamp: z.bigint(),
   round: z.bigint(),
-  sources: z.array(VenueSourceSchema),
-  signatures: z.array(OracleSignatureSchema),
+  sources: z.array(VenueSourceSchema).max(MAX_SMALL_ARRAY_LENGTH),
+  signatures: z.array(OracleSignatureSchema).max(MAX_SMALL_ARRAY_LENGTH),
 });
 export type PriceReport = z.infer<typeof PriceReportSchema>;
 
@@ -143,8 +143,8 @@ export const OracleOperatorSchema = z.object({
   registrationTime: z.bigint(),
   lastSubmissionTime: z.bigint(),
   status: OperatorStatusSchema,
-  workerKeys: z.array(AddressSchema),
-  supportedFeeds: z.array(HexSchema),
+  workerKeys: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH),
+  supportedFeeds: z.array(HexSchema).max(MAX_ARRAY_LENGTH),
 });
 export type OracleOperator = z.infer<typeof OracleOperatorSchema>;
 
@@ -152,8 +152,8 @@ export const OperatorRegistrationParamsSchema = z.object({
   stakingToken: AddressSchema,
   stakeAmount: z.bigint(),
   agentId: z.bigint(),
-  workerKeys: z.array(AddressSchema).optional(),
-  supportedFeeds: z.array(HexSchema).optional(),
+  workerKeys: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH).optional(),
+  supportedFeeds: z.array(HexSchema).max(MAX_ARRAY_LENGTH).optional(),
 });
 export type OperatorRegistrationParams = z.infer<typeof OperatorRegistrationParamsSchema>;
 
@@ -175,7 +175,7 @@ export type OperatorPerformance = z.infer<typeof OperatorPerformanceSchema>;
 export const CommitteeSchema = z.object({
   feedId: HexSchema,
   round: z.bigint(),
-  members: z.array(AddressSchema),
+  members: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH),
   threshold: z.number().int().positive(),
   activeUntil: z.bigint(),
   leader: AddressSchema,
@@ -280,7 +280,7 @@ export const DisputeSchema = z.object({
   createdAt: z.bigint(),
   deadline: z.bigint(),
   resolution: DisputeResolutionSchema.nullable(),
-  affectedSigners: z.array(AddressSchema),
+  affectedSigners: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH),
 });
 export type Dispute = z.infer<typeof DisputeSchema>;
 
@@ -306,7 +306,7 @@ export type FeeConfig = z.infer<typeof FeeConfigSchema>;
 
 export const SubscriptionSchema = z.object({
   subscriber: AddressSchema,
-  feedIds: z.array(HexSchema),
+  feedIds: z.array(HexSchema).max(MAX_ARRAY_LENGTH),
   startTime: z.bigint(),
   endTime: z.bigint(),
   amountPaid: z.bigint(),
@@ -320,7 +320,10 @@ export const OperatorEarningsSchema = z.object({
   totalClaimed: z.bigint(),
   pendingRewards: z.bigint(),
   lastClaimTime: z.bigint(),
-  earningsByFeed: z.record(z.string(), z.bigint()),
+  earningsByFeed: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.bigint()).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} feed earnings entries` }
+  ),
 });
 export type OperatorEarnings = z.infer<typeof OperatorEarningsSchema>;
 
@@ -342,7 +345,7 @@ export type OracleNetworkStats = z.infer<typeof OracleNetworkStatsSchema>;
 
 export const FeedStatsSchema = z.object({
   feedId: HexSchema,
-  symbol: z.string(),
+  symbol: z.string().max(MAX_SHORT_STRING_LENGTH),
   totalReports: z.bigint(),
   avgUpdateFrequency: z.number().nonnegative(),
   avgConfidence: z.number().nonnegative(),
@@ -373,7 +376,7 @@ export const OracleModerationActionSchema = z.object({
   operatorId: HexSchema,
   agentId: z.bigint(),
   action: OracleModerationActionTypeSchema,
-  reason: z.string(),
+  reason: z.string().max(MAX_SHORT_STRING_LENGTH),
   evidenceHash: HexSchema,
   duration: z.bigint(),
   timestamp: z.bigint(),
@@ -397,7 +400,7 @@ export type ReportError = z.infer<typeof ReportErrorSchema>;
 export const ReportVerificationResultSchema = z.object({
   isValid: z.boolean(),
   reportHash: HexSchema,
-  errors: z.array(ReportErrorSchema),
+  errors: z.array(ReportErrorSchema).max(MAX_SMALL_ARRAY_LENGTH),
   validSignerCount: z.number().int().nonnegative(),
   quorumMet: z.boolean(),
 });
@@ -407,9 +410,9 @@ export type ReportVerificationResult = z.infer<typeof ReportVerificationResultSc
 
 export const TWAPSourceSchema = z.object({
   chainId: z.number().int().positive(),
-  chainName: z.string(),
+  chainName: z.string().max(MAX_SHORT_STRING_LENGTH),
   venue: AddressSchema,
-  venueName: z.string(),
+  venueName: z.string().max(MAX_SHORT_STRING_LENGTH),
   poolAddress: AddressSchema,
   token0: AddressSchema,
   token1: AddressSchema,
@@ -421,7 +424,7 @@ export type TWAPSource = z.infer<typeof TWAPSourceSchema>;
 
 export const TWAPConfigSchema = z.object({
   feedId: HexSchema,
-  sources: z.array(TWAPSourceSchema),
+  sources: z.array(TWAPSourceSchema).max(MAX_SMALL_ARRAY_LENGTH),
   windowSeconds: z.number().int().positive(),
   minSources: z.number().int().positive(),
   outlierThresholdBps: z.number().int().nonnegative(),
@@ -498,7 +501,7 @@ export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
 export const OperatorSlashedEventSchema = z.object({
   operatorId: HexSchema,
   amount: z.bigint(),
-  reason: z.string(),
+  reason: z.string().max(MAX_SHORT_STRING_LENGTH),
   transactionHash: HexSchema,
   blockNumber: z.bigint(),
 });

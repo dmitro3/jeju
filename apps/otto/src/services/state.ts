@@ -3,7 +3,7 @@
  * Handles persistence for users, sessions, and pending actions
  */
 
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { z } from 'zod';
 import type { Address, Hex } from 'viem';
 import type {
@@ -16,6 +16,12 @@ import type {
 import { expectValid, OttoUserSchema, LimitOrderSchema, validateOrNull } from '../schemas';
 
 const DATA_DIR = process.env.OTTO_DATA_DIR ?? './data';
+
+// Bounded limits to prevent memory exhaustion
+const MAX_CONVERSATIONS = 10000;
+const MAX_SESSIONS = 10000;
+const MAX_HISTORY_PER_CONVERSATION = 50;
+const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 
 // Pending action types - extend base types with metadata
 export interface PendingSwap {
@@ -71,6 +77,8 @@ class StateManager {
   constructor() {
     this.ensureDataDir();
     this.load();
+    // Start automatic cleanup to prevent unbounded growth
+    setInterval(() => this.cleanup(), CLEANUP_INTERVAL_MS);
   }
 
   private ensureDataDir(): void {
@@ -88,7 +96,7 @@ class StateManager {
     if (!existsSync(path)) return;
 
     const file = Bun.file(path);
-    const text = file.size > 0 ? require('fs').readFileSync(path, 'utf-8') : null;
+    const text = file.size > 0 ? readFileSync(path, 'utf-8') : null;
     if (!text) return;
 
     let parsed: unknown;
@@ -173,6 +181,16 @@ class StateManager {
     let state = this.conversations.get(key);
     
     if (!state) {
+      // Enforce max conversations limit
+      if (this.conversations.size >= MAX_CONVERSATIONS) {
+        // Remove oldest conversation
+        const entries = this.conversations.entries();
+        const oldest = entries.next().value;
+        if (oldest) {
+          this.conversations.delete(oldest[0]);
+        }
+      }
+      
       state = { history: [], lastUpdated: Date.now() };
       this.conversations.set(key, state);
     }
@@ -208,9 +226,9 @@ class StateManager {
   addToHistory(platform: Platform, channelId: string, role: 'user' | 'assistant', content: string): void {
     const state = this.getConversation(platform, channelId);
     state.history.push({ role, content });
-    // Keep last 10 messages for context
-    if (state.history.length > 10) {
-      state.history = state.history.slice(-10);
+    // Enforce bounded history to prevent memory exhaustion
+    if (state.history.length > MAX_HISTORY_PER_CONVERSATION) {
+      state.history = state.history.slice(-MAX_HISTORY_PER_CONVERSATION);
     }
     state.lastUpdated = Date.now();
   }
@@ -224,6 +242,16 @@ class StateManager {
   // ============================================================================
 
   createSession(walletAddress?: Address): ChatSession {
+    // Enforce max sessions limit to prevent memory exhaustion
+    if (this.sessions.size >= MAX_SESSIONS) {
+      // Remove oldest session
+      const entries = this.sessions.entries();
+      const oldest = entries.next().value;
+      if (oldest) {
+        this.sessions.delete(oldest[0]);
+      }
+    }
+    
     const sessionId = crypto.randomUUID();
     const session: ChatSession = {
       sessionId,

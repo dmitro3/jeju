@@ -47,9 +47,6 @@ export class SecurityService {
   private runtime: IAgentRuntime | null = null;
   private publicClients: Map<number, PublicClient> = new Map();
   
-  
-  constructor() {}
-  
   get serviceType(): string {
     return SecurityService.serviceType;
   }

@@ -134,6 +134,7 @@ federationCommand
     console.log(chalk.cyan('Sending transaction...'));
 
     const hash = await walletClient.writeContract({
+      chain: null,
       address: registryAddress as `0x${string}`,
       abi: NETWORK_REGISTRY_ABI,
       functionName: 'registerNetwork',
@@ -302,6 +303,7 @@ federationCommand
     console.log(`  Amount: ${options.amount} ETH`);
 
     const hash = await walletClient.writeContract({
+      chain: null,
       address: registryAddress as `0x${string}`,
       abi: NETWORK_REGISTRY_ABI,
       functionName: 'addStake',
@@ -514,7 +516,7 @@ federationCommand
     logger.header('CONFIGURE HYPERLANE REMOTES');
 
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/configure-hyperlane-remotes.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/infrastructure/configure-hyperlane-remotes.ts');
 
     if (!existsSync(scriptPath)) {
       logger.error('Configure remotes script not found');

@@ -61,21 +61,22 @@ export class OAuth3DecentralizedDiscovery {
   private storage: OAuth3StorageService;
   private compute: OAuth3ComputeService;
   private appRegistryAddress: Address;
+  private chainId: number;
   private nodeCache = new Map<string, DiscoveredNode>();
   private appCache = new Map<string, DiscoveredApp>();
   private lastCacheUpdate = 0;
 
   constructor(config: DecentralizedConfig = {}) {
-    const chainId = config.chainId || CHAIN_IDS.localnet;
-    const contracts = getContracts(chainId);
+    this.chainId = config.chainId || CHAIN_IDS.localnet;
+    const contracts = getContracts(this.chainId);
     const rpcUrl = config.rpcUrl || process.env.JEJU_RPC_URL || DEFAULT_RPC;
     
     this.client = createPublicClient({ transport: http(rpcUrl) });
     this.appRegistryAddress = config.appRegistryAddress || contracts.appRegistry;
 
-    this.jns = createOAuth3JNSService({ rpcUrl, chainId });
+    this.jns = createOAuth3JNSService({ rpcUrl, chainId: this.chainId });
     this.storage = createOAuth3StorageService({ ipfsApiEndpoint: config.ipfsApiEndpoint, ipfsGatewayEndpoint: config.ipfsGatewayEndpoint });
-    this.compute = createOAuth3ComputeService({ rpcUrl, chainId, teeVerifierAddress: config.teeVerifierAddress });
+    this.compute = createOAuth3ComputeService({ rpcUrl, chainId: this.chainId, teeVerifierAddress: config.teeVerifierAddress });
   }
 
   async discoverApp(nameOrId: string): Promise<DiscoveredApp | null> {
@@ -249,8 +250,11 @@ export class OAuth3DecentralizedDiscovery {
 
     const attestation = await attestResponse.json() as TEEAttestation;
     
-    // Simulated TEE is ONLY allowed in localnet (chain 420691)
-    const isLocalnet = process.env.JEJU_CHAIN_ID === '420691' || !process.env.JEJU_CHAIN_ID;
+    // SECURITY: Simulated TEE is ONLY allowed in localnet (chain 420691 or 1337)
+    // Use the configured chainId from the service, not environment variable
+    const configuredChainId = this.getConfiguredChainId();
+    const isLocalnet = configuredChainId === CHAIN_IDS.localnet || configuredChainId === CHAIN_IDS.localnetAnvil;
+    
     if (!attestation.verified) {
       if (attestation.provider === TEEProvider.SIMULATED && isLocalnet) {
         return { valid: true, attestation, latency };
@@ -259,6 +263,14 @@ export class OAuth3DecentralizedDiscovery {
     }
 
     return { valid: true, attestation, latency };
+  }
+
+  /**
+   * Get the configured chain ID for this discovery service
+   * SECURITY: Uses the chain ID set at construction time, not environment variables
+   */
+  private getConfiguredChainId(): number {
+    return this.chainId;
   }
 
   async validateRedirectUri(appId: Hex, uri: string): Promise<boolean> {

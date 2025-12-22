@@ -17,7 +17,6 @@ import {
   DASampler,
   SampleVerifier,
   createSampleRequest,
-  validateSampleResponse,
 } from '../src/da/sampling';
 import type { Address, Hex } from 'viem';
 import { keccak256, toBytes } from 'viem';
@@ -163,8 +162,7 @@ describe('generateSampleIndices', () => {
     }
     
     // Each index should appear roughly sampleCount/totalChunks * iterations times
-    const expected = (sampleCount / totalChunks) * iterations;
-    const tolerance = expected * 0.5; // 50% tolerance for randomness
+    // Using 50% tolerance for randomness (expected * 0.5)
     
     // At least check that no index is completely starved
     for (let i = 0; i < totalChunks; i++) {
@@ -272,7 +270,7 @@ describe('verifyPeerDASSampling', () => {
 
 describe('DASampler', () => {
   it('should use default config', () => {
-    const sampler = new DASampler({});
+    const _sampler = new DASampler({});
     
     expect(DEFAULT_SAMPLING_CONFIG.sampleCount).toBe(16);
     expect(DEFAULT_SAMPLING_CONFIG.targetConfidence).toBe(0.9999);

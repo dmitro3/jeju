@@ -207,14 +207,14 @@ test.describe('Balance Updates After Transactions', () => {
 });
 
 test.describe('Token Approval Status', () => {
-  test.skip('should display approval status for tokens', async ({ page }) => {
+  test.skip('should display approval status for tokens', async ({ page: _page }) => {
     // TODO: If approval status UI exists, test it
     // Would show which tokens are approved for which contracts
 
     console.log('⚠️  Approval status display - check if implemented');
   });
 
-  test.skip('should revoke token approvals', async ({ page, metamask }) => {
+  test.skip('should revoke token approvals', async ({ page: _page, metamask: _metamask }) => {
     // TODO: If revoke functionality exists
     // await revokeApproval(page, metamask, tokenAddress, spenderAddress);
 
@@ -254,14 +254,14 @@ test.describe('Balance Precision and Formatting', () => {
 });
 
 test.describe('Real-Time Balance Updates', () => {
-  test.skip('should update balance in real-time when transaction confirms', async ({ page, metamask }) => {
+  test.skip('should update balance in real-time when transaction confirms', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Monitor balance element and verify it updates
     // when transaction is mined (without page reload)
 
     console.log('⚠️  Real-time updates - needs observation');
   });
 
-  test.skip('should show pending transaction indicator', async ({ page }) => {
+  test.skip('should show pending transaction indicator', async ({ page: _page }) => {
     // TODO: Check for pending tx indicators while transaction confirming
 
     console.log('⚠️  Pending indicator - check if implemented');

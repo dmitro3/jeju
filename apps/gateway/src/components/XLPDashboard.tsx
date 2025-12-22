@@ -600,7 +600,7 @@ function VoucherHistory() {
   
   const { data: history = [], isLoading, error } = useQuery({
     queryKey: ['xlp-voucher-history', address],
-    queryFn: () => fetchXLPVoucherHistory(address!),
+    queryFn: () => address ? fetchXLPVoucherHistory(address) : Promise.resolve([]),
     enabled: !!address,
     refetchInterval: 30000,
   });

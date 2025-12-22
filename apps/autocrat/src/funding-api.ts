@@ -5,27 +5,30 @@
  */
 
 import type { Address, Hash } from 'viem';
-import type {
-  ContributorProfile,
-  SocialLink,
-  RepositoryClaim,
-  DependencyClaim,
-  PaymentRequest,
-  CouncilVote,
-  CEODecision,
-  DAOPool,
-  FundingEpoch,
-  ContributorShare,
-  DependencyShare,
-  FeeDistributionConfig,
-  WeightVote,
-  ScanResult,
-  VoteType,
-} from '../../types/funding';
-import { getDeepFundingService } from './deep-funding-service';
-import { getContributorService } from './contributor-service';
-import { getPaymentRequestService } from './payment-request-service';
-import { getDependencyScanner } from './dependency-scanner';
+import {
+  getDeepFundingService,
+  type DAOPool,
+  type FundingEpoch,
+  type ContributorShare,
+  type DependencyShare,
+  type FeeDistributionConfig,
+  type WeightVote,
+} from './deep-funding-service';
+import {
+  getContributorService,
+  type ContributorProfile,
+  type SocialLink,
+  type RepositoryClaim,
+  type DependencyClaim,
+} from './contributor-service';
+import {
+  getPaymentRequestService,
+  type PaymentRequest,
+  type CouncilVote,
+  type CEODecision,
+  type VoteType,
+} from './payment-request-service';
+import { getDependencyScanner, type ScanResult } from './dependency-scanner';
 
 // ============ Types ============
 

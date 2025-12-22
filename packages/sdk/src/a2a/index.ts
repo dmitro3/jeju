@@ -101,12 +101,19 @@ export interface A2AModule {
   ): Promise<void>;
 }
 
+// Maximum buffer size for SSE streaming (1MB)
+const MAX_STREAM_BUFFER_SIZE = 1024 * 1024;
+
 export function createA2AModule(
   wallet: JejuWallet,
   _network: NetworkType,
   services: ServicesConfig,
 ): A2AModule {
+  // Use atomic counter pattern to avoid race conditions
   let messageCounter = 0;
+  const getNextMessageId = (): number => {
+    return ++messageCounter;
+  };
 
   async function buildAuthHeaders(): Promise<Record<string, string>> {
     const timestamp = Date.now().toString();
@@ -182,7 +189,8 @@ export function createA2AModule(
       headers["x-payment"] = request.paymentHeader;
     }
 
-    const messageId = `msg-${++messageCounter}-${Date.now()}`;
+    const msgId = getNextMessageId();
+    const messageId = `msg-${msgId}-${Date.now()}`;
 
     const body = {
       jsonrpc: "2.0",
@@ -201,7 +209,7 @@ export function createA2AModule(
           ],
         },
       },
-      id: messageCounter,
+      id: msgId,
     };
 
     const a2aUrl = endpoint.endsWith("/a2a") ? endpoint : `${endpoint}/a2a`;
@@ -243,7 +251,7 @@ export function createA2AModule(
 
     return {
       message: textPart?.text ?? "",
-      data: dataPart?.data ?? {},  // Empty object is valid for responses with no structured data
+      data: dataPart?.data ?? {}, // Empty object is valid for responses with no structured data
     };
   }
 
@@ -279,7 +287,9 @@ export function createA2AModule(
     });
 
     if (!response.data || !Array.isArray(response.data.apps)) {
-      throw new Error("Invalid response from list-registered-apps: expected apps array");
+      throw new Error(
+        "Invalid response from list-registered-apps: expected apps array",
+      );
     }
     const apps = response.data.apps as Array<{
       name: string;
@@ -294,7 +304,9 @@ export function createA2AModule(
       // Agent discovery can fail for individual agents without failing the whole list
       // Log the error but continue with other agents
       const card = await discover(app.endpoint).catch((err: Error) => {
-        console.warn(`Failed to discover agent at ${app.endpoint}: ${err.message}`);
+        console.warn(
+          `Failed to discover agent at ${app.endpoint}: ${err.message}`,
+        );
         return null;
       });
       if (card) {
@@ -321,7 +333,8 @@ export function createA2AModule(
     onMessage: (msg: A2AMessage) => void,
   ): Promise<void> {
     const headers = await buildAuthHeaders();
-    const messageId = `msg-${++messageCounter}-${Date.now()}`;
+    const msgId = getNextMessageId();
+    const messageId = `msg-${msgId}-${Date.now()}`;
 
     const body = {
       jsonrpc: "2.0",
@@ -340,7 +353,7 @@ export function createA2AModule(
           ],
         },
       },
-      id: messageCounter,
+      id: msgId,
     };
 
     const a2aUrl = endpoint.endsWith("/a2a") ? endpoint : `${endpoint}/a2a`;
@@ -364,6 +377,11 @@ export function createA2AModule(
 
       buffer += decoder.decode(value, { stream: true });
 
+      // Prevent unbounded buffer growth (DoS protection)
+      if (buffer.length > MAX_STREAM_BUFFER_SIZE) {
+        throw new Error("SSE stream buffer exceeded maximum size");
+      }
+
       // Parse SSE events
       const lines = buffer.split("\n");
       buffer = lines.pop() ?? "";
@@ -373,7 +391,25 @@ export function createA2AModule(
           const data = line.slice(6);
           if (data === "[DONE]") return;
 
-          const parsed = JSON.parse(data) as A2AMessage;
+          // Safely parse JSON with error handling
+          let parsed: A2AMessage;
+          try {
+            parsed = JSON.parse(data) as A2AMessage;
+          } catch {
+            console.error("Invalid JSON in SSE stream, skipping message");
+            continue;
+          }
+
+          // Validate required fields
+          if (
+            typeof parsed.role !== "string" ||
+            !Array.isArray(parsed.parts) ||
+            typeof parsed.messageId !== "string"
+          ) {
+            console.error("Invalid A2A message format, skipping");
+            continue;
+          }
+
           onMessage(parsed);
         }
       }

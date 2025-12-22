@@ -133,6 +133,7 @@ export {
   generateKeyId,
   deriveKeyFromSecret,
   deriveKeyForEncryption,
+  constantTimeCompare,
   type AESGCMPayload,
 } from './crypto.js';
 

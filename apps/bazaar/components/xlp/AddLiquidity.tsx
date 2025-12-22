@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLiquidityVault } from '@/hooks/useLiquidityVault';
 import { usePaymasterDeployment } from '@/hooks/usePaymasterFactory';
 import { useProtocolTokens } from '@/hooks/useProtocolTokens';
-import { parseEther, formatEther } from 'viem';
+import { formatEther } from 'viem';
 import TokenSelector from '@/components/TokenSelector';
 import type { TokenOption } from '@/components/TokenSelector';
 

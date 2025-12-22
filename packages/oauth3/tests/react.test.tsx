@@ -9,7 +9,7 @@ import { describe, it, expect, mock } from 'bun:test';
 // Mock React for testing without DOM
 // Note: Using explicit type casts since we're testing module exports, not React integration
 function mockUseState<T>(initial: T): [T, () => void] {
-  return [initial, mock(() => {})];
+  return [initial, mock(() => { /* state setter mock */ })];
 }
 function mockUseEffect(fn: () => void): void { fn(); }
 function mockUseContext(): null { return null; }
@@ -373,7 +373,7 @@ describe('OAuth3 Client SDK', () => {
       chainId: 420691,
     });
     
-    const handler = mock(() => {});
+    const handler = mock(() => { /* login handler mock */ });
     const unsubscribe = client.on('login', handler);
     
     expect(typeof unsubscribe).toBe('function');

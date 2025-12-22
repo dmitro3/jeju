@@ -16,9 +16,11 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { $ } from 'bun';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, waitForTransactionReceipt, formatEther, parseEther, type Address, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther, parseEther, type Address, type PublicClient, type WalletClient } from 'viem';
+import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
+import { TEST_ACCOUNTS } from '../shared/utils';
 
 // This E2E test starts a full localnet - only run manually with RUN_E2E_TESTS=1
 // Check if explicitly enabled and if Kurtosis is installed
@@ -69,8 +71,8 @@ describe.skipIf(!runE2ETests || !kurtosisAvailable)('Node Staking System E2E (Mu
     const chain = inferChainFromRpcUrl(rpcUrl);
     publicClient = createPublicClient({ chain, transport: http(rpcUrl) });
     
-    // Create wallets
-    deployerAccount = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`);
+    // Create wallets using shared test accounts
+    deployerAccount = privateKeyToAccount(TEST_ACCOUNTS.deployer.privateKey);
     deployerWalletClient = createWalletClient({ chain, transport: http(rpcUrl), account: deployerAccount });
     
     operator1Account = privateKeyToAccount(generatePrivateKey());

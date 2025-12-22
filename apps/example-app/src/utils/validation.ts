@@ -167,3 +167,41 @@ export function expectMaxLength<T>(array: T[], maxLength: number, context?: stri
   }
   return array;
 }
+
+/**
+ * Sanitizes error messages for external responses.
+ * Removes stack traces and internal details that could leak information.
+ */
+export function sanitizeErrorMessage(error: Error | ValidationError, isLocalnet: boolean): string {
+  // ValidationErrors are user-facing and can be returned as-is
+  if (error instanceof ValidationError) {
+    return error.message;
+  }
+  
+  // In localnet, show full error for debugging
+  if (isLocalnet) {
+    return error.message;
+  }
+  
+  // In production, hide internal error details
+  // Only show generic message to prevent information leakage
+  const message = error.message.toLowerCase();
+  
+  // Allow certain safe error messages through
+  if (
+    message.includes('not found') ||
+    message.includes('unauthorized') ||
+    message.includes('forbidden') ||
+    message.includes('bad request') ||
+    message.includes('invalid')
+  ) {
+    // Remove any path or internal details
+    return error.message
+      .replace(/\/[^\s]+/g, '[path]')
+      .replace(/at .+$/gm, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  
+  return 'An internal error occurred';
+}

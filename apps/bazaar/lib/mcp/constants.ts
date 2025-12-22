@@ -3,11 +3,42 @@
  * Centralized constants for MCP server configuration
  */
 
-export const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Payment',
-};
+// Allowed origins for CORS - restrict to known domains
+const ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:4006',
+  'https://bazaar.jejunetwork.org',
+  'https://testnet.bazaar.jejunetwork.org',
+];
+
+/**
+ * Get CORS headers with strict origin validation
+ * Rejects unknown origins by not including them in CORS headers
+ */
+export function getCORSHeaders(requestOrigin?: string | null): Record<string, string> {
+  // Only allow explicitly whitelisted origins
+  const isAllowed = requestOrigin && ALLOWED_ORIGINS.includes(requestOrigin);
+  
+  if (!isAllowed) {
+    // Return restrictive headers for unknown origins
+    return {
+      'Access-Control-Allow-Origin': 'null',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Payment',
+      'Access-Control-Allow-Credentials': 'false',
+    };
+  }
+  
+  return {
+    'Access-Control-Allow-Origin': requestOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Payment',
+    'Access-Control-Allow-Credentials': 'true',
+  };
+}
+
+// Default CORS headers for static responses (development-friendly but secure)
+export const CORS_HEADERS = getCORSHeaders();
 
 export const MCP_SERVER_INFO = {
   name: 'jeju-bazaar',

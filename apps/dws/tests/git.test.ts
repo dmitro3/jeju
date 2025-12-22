@@ -5,7 +5,7 @@
  * Or via: bun run test:integration
  */
 
-import { describe, test, expect, beforeAll, beforeEach, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, beforeEach, setDefaultTimeout } from 'bun:test';
 import { createBackendManager, type BackendManager } from '../src/storage/backends';
 import { GitObjectStore } from '../src/git/object-store';
 import { PackfileWriter, PackfileReader } from '../src/git/pack';

@@ -88,7 +88,7 @@ test.describe('Parallel Request Handling', () => {
   });
 
   test('handles 10 concurrent A2A requests', async ({ request }) => {
-    const requests = Array.from({ length: 10 }, (_, i) => 
+    const requests = Array.from({ length: 10 }, () => 
       sendA2A(request, 'get-governance-stats')
     );
     
@@ -340,7 +340,7 @@ test.describe('Error Recovery', () => {
     // Send invalid request
     await request.post(`${AUTOCRAT_URL}/a2a`, {
       data: 'not valid json at all {'
-    }).catch(() => {});
+    }).catch(() => { /* expected to fail */ });
     
     // Server should still respond to valid requests
     const result = await sendA2A(request, 'get-governance-stats');

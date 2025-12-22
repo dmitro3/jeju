@@ -79,3 +79,41 @@ export const addresses = getContractAddresses();
 export const rpcUrl = getRpcUrl();
 export const dwsUrl = getDwsUrl();
 export const chainId = getChainId();
+
+// Extended contract addresses for other registries
+type ExtendedContractKey = keyof ContractAddresses | 'bountyRegistry' | 'modelRegistry' | 'guardianRegistry' | 'repoRegistry' | 'packageRegistry' | 'trainingCoordinator' | 'trainingRewards' | 'nodePerformanceOracle';
+
+const EXTENDED_LOCALNET_ADDRESSES: Record<ExtendedContractKey, Address> = {
+  ...LOCALNET_ADDRESSES,
+  bountyRegistry: '0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0',
+  modelRegistry: '0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9',
+  guardianRegistry: '0x8A791620dd6260079BF849Dc5567aDC3F2FdC318',
+  repoRegistry: '0x610178dA211FEF7D417bC0e6FeD39F05609AD788',
+  packageRegistry: '0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e',
+  trainingCoordinator: '0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0',
+  trainingRewards: '0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82',
+  nodePerformanceOracle: '0x9A676e781A523b5d0C0e43731313A708CB607508',
+};
+
+// Get a single contract address by key
+export function getContractAddress(key: ExtendedContractKey): Address {
+  const chainId = getChainId();
+  if (chainId === 31337 || chainId === 1337) {
+    return EXTENDED_LOCALNET_ADDRESSES[key];
+  }
+  // For testnet/mainnet, fall back to base addresses or zero address
+  const baseAddresses = getContractAddresses();
+  if (key in baseAddresses) {
+    return baseAddresses[key as keyof ContractAddresses];
+  }
+  return '0x0000000000000000000000000000000000000000';
+}
+
+// Get a contract address safely (returns null if not configured)
+export function getContractAddressSafe(key: ExtendedContractKey): Address | null {
+  const address = getContractAddress(key);
+  if (address === '0x0000000000000000000000000000000000000000') {
+    return null;
+  }
+  return address;
+}
