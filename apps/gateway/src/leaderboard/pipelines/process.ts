@@ -254,7 +254,8 @@ async function getDailyActivities(date: string, repository?: string): Promise<Da
     if (!users.has(pr.author)) {
       users.set(pr.author, createEmptyActivity(pr.author, date));
     }
-    const activity = users.get(pr.author)!;
+    const activity = users.get(pr.author);
+    if (!activity) continue;
     activity.prsOpened = pr.opened;
     activity.prsMerged = pr.merged;
     activity.linesAdded += pr.additions;
@@ -277,7 +278,8 @@ async function getDailyActivities(date: string, repository?: string): Promise<Da
     if (!users.has(issue.author)) {
       users.set(issue.author, createEmptyActivity(issue.author, date));
     }
-    users.get(issue.author)!.issuesOpened = issue.opened;
+    const activity = users.get(issue.author);
+    if (activity) activity.issuesOpened = issue.opened;
   }
 
   // Get commit activity
@@ -301,7 +303,8 @@ async function getDailyActivities(date: string, repository?: string): Promise<Da
     if (!users.has(commit.author)) {
       users.set(commit.author, createEmptyActivity(commit.author, date));
     }
-    const activity = users.get(commit.author)!;
+    const activity = users.get(commit.author);
+    if (!activity) continue;
     activity.commits = commit.commits;
     activity.linesAdded += commit.additions;
     activity.linesDeleted += commit.deletions;
@@ -329,7 +332,8 @@ async function getDailyActivities(date: string, repository?: string): Promise<Da
     if (!users.has(review.author)) {
       users.set(review.author, createEmptyActivity(review.author, date));
     }
-    const activity = users.get(review.author)!;
+    const activity = users.get(review.author);
+    if (!activity) continue;
     activity.prReviewsApproved = review.approved;
     activity.prReviewsChanges = review.changes;
     activity.prReviewsComment = review.commented;

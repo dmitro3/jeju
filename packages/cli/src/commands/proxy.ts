@@ -11,7 +11,7 @@ import { Command } from 'commander';
 import { logger } from '../lib/logger';
 import { join } from 'path';
 
-// Import from scripts/shared (relative path from cli package)
+// Import from packages/deployment/scripts/shared (relative path from cli package)
 const SCRIPTS_SHARED = join(process.cwd(), 'scripts', 'shared', 'local-proxy.ts');
 
 interface ProxyModule {

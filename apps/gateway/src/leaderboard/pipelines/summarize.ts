@@ -62,21 +62,24 @@ export async function runSummarize(options: SummarizeOptions): Promise<{
   let tokensUsed = 0;
 
   switch (options.type) {
-    case 'contributor':
+    case 'contributor': {
       const contribResult = await generateContributorSummaries(apiKey, dateRange, interval, options);
       summariesGenerated = contribResult.count;
       tokensUsed = contribResult.tokens;
       break;
-    case 'repository':
+    }
+    case 'repository': {
       const repoResult = await generateRepositorySummaries(apiKey, dateRange, interval, options);
       summariesGenerated = repoResult.count;
       tokensUsed = repoResult.tokens;
       break;
-    case 'overall':
+    }
+    case 'overall': {
       const overallResult = await generateOverallSummaries(apiKey, dateRange, interval, options);
       summariesGenerated = overallResult.count;
       tokensUsed = overallResult.tokens;
       break;
+    }
   }
 
   console.log(`[Summarize] Completed: ${summariesGenerated} summaries, ${tokensUsed} tokens`);

@@ -34,6 +34,9 @@ export interface StrategyStats {
 
 // ============ Bot Engine ============
 
+// Maximum history entries to prevent memory leaks
+const MAX_TRADE_HISTORY = 10000;
+
 export class BotEngine extends EventEmitter {
   private config: BotEngineConfig;
   private tfmmRebalancer: TFMMRebalancer | null = null;
@@ -47,6 +50,12 @@ export class BotEngine extends EventEmitter {
 
   constructor(config: BotEngineConfig) {
     super();
+    
+    // Validate private key format before use
+    if (!config.privateKey.match(/^0x[a-fA-F0-9]{64}$/)) {
+      throw new Error('Invalid private key format: must be 0x-prefixed 64 hex characters');
+    }
+    
     this.config = config;
 
     // Initialize enabled strategies
@@ -231,6 +240,11 @@ export class BotEngine extends EventEmitter {
 
     this.tradeHistory.push(tradeResult);
     this.totalTrades++;
+
+    // Prevent unbounded memory growth - trim oldest entries
+    if (this.tradeHistory.length > MAX_TRADE_HISTORY) {
+      this.tradeHistory = this.tradeHistory.slice(-MAX_TRADE_HISTORY);
+    }
 
     if (tradeResult.success) {
       this.totalProfit += tradeResult.profitUsd;

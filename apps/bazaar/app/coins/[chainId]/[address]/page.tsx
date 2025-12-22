@@ -6,11 +6,11 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useAccount, useReadContract } from 'wagmi'
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { formatEther, parseEther, type Address } from 'viem'
+import { formatEther, type Address } from 'viem'
 import { TokenLaunchpadAbi } from '@jejunetwork/contracts'
 import { getLaunchpadContracts, hasLaunchpad } from '@/config/contracts'
 import { useBondingCurve, useBondingCurveQuote, formatBondingCurvePrice, formatProgress } from '@/hooks/launchpad'
-import { useICOPresale, formatPresaleProgress, formatTimeRemaining } from '@/hooks/launchpad'
+import { useICOPresale, formatTimeRemaining } from '@/hooks/launchpad'
 
 interface PageProps {
   params: Promise<{
@@ -36,7 +36,6 @@ function BondingCurvePanel({ bondingCurveAddress, tokenAddress }: { bondingCurve
     error,
     buy,
     sell,
-    reset,
   } = useBondingCurve(bondingCurveAddress)
 
   const { tokensOut, priceImpact } = useBondingCurveQuote(
@@ -230,16 +229,14 @@ function BondingCurvePanel({ bondingCurveAddress, tokenAddress }: { bondingCurve
   )
 }
 
-function PresalePanel({ presaleAddress, tokenAddress }: { presaleAddress: Address; tokenAddress: string }) {
-  const { address, isConnected } = useAccount()
+function PresalePanel({ presaleAddress }: { presaleAddress: Address }) {
+  const { isConnected } = useAccount()
   const [contributeAmount, setContributeAmount] = useState('')
 
   const {
     status,
     contribution,
     config,
-    presaleStart,
-    presaleEnd,
     canClaim,
     canRefund,
     txHash,
@@ -412,7 +409,7 @@ import { use } from 'react'
 
 export default function TokenDetailPage({ params }: PageProps) {
   const resolvedParams = use(params)
-  const { isConnected } = useAccount()
+  useAccount()
   const chainId = parseInt(resolvedParams.chainId)
   const tokenAddress = resolvedParams.address as Address
 
@@ -545,18 +542,17 @@ export default function TokenDetailPage({ params }: PageProps) {
         {/* Trading Panel */}
         <div className="lg:col-span-2 space-y-6">
           {/* Bonding Curve Panel */}
-          {hasBondingCurve && (
+          {hasBondingCurve && launch && (
             <BondingCurvePanel
-              bondingCurveAddress={launch!.bondingCurve}
+              bondingCurveAddress={launch.bondingCurve}
               tokenAddress={resolvedParams.address}
             />
           )}
 
           {/* Presale Panel */}
-          {hasPresale && (
+          {hasPresale && launch && (
             <PresalePanel
-              presaleAddress={launch!.presale}
-              tokenAddress={resolvedParams.address}
+              presaleAddress={launch.presale}
             />
           )}
 

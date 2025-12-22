@@ -99,10 +99,16 @@ async function main(): Promise<void> {
 
   if (dryRun) {
     console.log('[OK] Configuration valid');
+    // SECURITY: Only output non-sensitive configuration data
+    // Avoid exposing full RPC URLs which may contain API keys
+    const rpcUrlSafe = config.rpcUrl.includes('localhost') || config.rpcUrl.includes('127.0.0.1')
+      ? config.rpcUrl
+      : config.rpcUrl.replace(/\/\/([^:]+):([^@]+)@/, '//<redacted>@').split('?')[0]; // Strip query params and auth
+    
     console.log(JSON.stringify({
       network,
       chainId: config.chainId,
-      rpcUrl: config.rpcUrl,
+      rpcUrl: rpcUrlSafe,
       feedRegistry: config.feedRegistry,
       reportVerifier: config.reportVerifier,
       committeeManager: config.committeeManager,

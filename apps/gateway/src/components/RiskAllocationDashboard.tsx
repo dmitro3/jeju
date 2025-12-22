@@ -1,4 +1,4 @@
-import { useState, useMemo, type ComponentType } from 'react';
+import { useState, type ComponentType } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { parseEther, formatEther, type Address } from 'viem';
 import { Shield, Zap, Flame, type LucideProps } from 'lucide-react';
@@ -13,20 +13,6 @@ enum RiskTier {
   CONSERVATIVE = 0,
   BALANCED = 1,
   AGGRESSIVE = 2,
-}
-
-interface SleeveStats {
-  deposited: bigint;
-  utilized: bigint;
-  available: bigint;
-  utilizationBps: bigint;
-  yieldBps: bigint;
-}
-
-interface UserPosition {
-  deposited: bigint;
-  pendingYield: bigint;
-  depositDuration: bigint;
 }
 
 const RISK_SLEEVE_ABI = [

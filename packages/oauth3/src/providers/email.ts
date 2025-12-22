@@ -63,12 +63,15 @@ const DEFAULT_MAGIC_LINK_EXPIRY = 15; // minutes
 const DEFAULT_OTP_EXPIRY = 10; // minutes
 const DEFAULT_OTP_LENGTH = 6;
 const MAX_OTP_ATTEMPTS = 3;
+const MAX_PENDING_TOKENS = 10000; // Maximum pending tokens before cleanup
+const CLEANUP_INTERVAL = 60000; // Run cleanup every minute
 
 export class EmailProvider {
   private config: EmailAuthConfig;
   private pendingMagicLinks = new Map<string, MagicLinkToken>();
   private pendingOTPs = new Map<string, OTPToken>();
   private users = new Map<string, EmailUser>();
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: EmailAuthConfig) {
     this.config = {
@@ -77,6 +80,72 @@ export class EmailProvider {
       otpExpiryMinutes: config.otpExpiryMinutes ?? DEFAULT_OTP_EXPIRY,
       otpLength: config.otpLength ?? DEFAULT_OTP_LENGTH,
     };
+    
+    // SECURITY: Start periodic cleanup to prevent unbounded memory growth (DoS)
+    this.startCleanup();
+  }
+
+  /**
+   * Start periodic cleanup of expired tokens
+   * SECURITY: Prevents unbounded memory growth from abandoned auth flows
+   */
+  private startCleanup(): void {
+    if (this.cleanupInterval) return;
+    
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredTokens();
+    }, CLEANUP_INTERVAL);
+  }
+
+  /**
+   * Clean up expired tokens and enforce size limits
+   * SECURITY: Prevents DoS via memory exhaustion
+   */
+  private cleanupExpiredTokens(): void {
+    const now = Date.now();
+    
+    // Clean expired magic links
+    for (const [token, data] of this.pendingMagicLinks.entries()) {
+      if (now > data.expiresAt || data.used) {
+        this.pendingMagicLinks.delete(token);
+      }
+    }
+    
+    // Clean expired OTPs
+    for (const [email, data] of this.pendingOTPs.entries()) {
+      if (now > data.expiresAt) {
+        this.pendingOTPs.delete(email);
+      }
+    }
+    
+    // Enforce size limits - remove oldest entries if over limit
+    if (this.pendingMagicLinks.size > MAX_PENDING_TOKENS) {
+      const entries = Array.from(this.pendingMagicLinks.entries())
+        .sort((a, b) => a[1].createdAt - b[1].createdAt);
+      const toRemove = entries.slice(0, entries.length - MAX_PENDING_TOKENS);
+      for (const [token] of toRemove) {
+        this.pendingMagicLinks.delete(token);
+      }
+    }
+    
+    if (this.pendingOTPs.size > MAX_PENDING_TOKENS) {
+      const entries = Array.from(this.pendingOTPs.entries())
+        .sort((a, b) => a[1].createdAt - b[1].createdAt);
+      const toRemove = entries.slice(0, entries.length - MAX_PENDING_TOKENS);
+      for (const [email] of toRemove) {
+        this.pendingOTPs.delete(email);
+      }
+    }
+  }
+
+  /**
+   * Stop cleanup interval (for testing/cleanup)
+   */
+  destroy(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+    }
   }
 
   /**
@@ -166,7 +235,22 @@ export class EmailProvider {
   }
 
   /**
+   * Timing-safe comparison of two strings
+   * SECURITY: Prevents timing attacks by always comparing all characters
+   */
+  private timingSafeCompare(a: string, b: string): boolean {
+    if (a.length !== b.length) return false;
+    
+    let result = 0;
+    for (let i = 0; i < a.length; i++) {
+      result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+    }
+    return result === 0;
+  }
+
+  /**
    * Verify OTP code
+   * SECURITY: Uses timing-safe comparison to prevent timing attacks
    */
   async verifyOTP(email: string, code: string): Promise<EmailAuthResult> {
     const normalizedEmail = email.toLowerCase();
@@ -188,7 +272,8 @@ export class EmailProvider {
       return { success: false, error: 'Too many attempts. Please request a new code.' };
     }
 
-    if (otpToken.code !== code) {
+    // SECURITY: Use timing-safe comparison to prevent timing attacks
+    if (!this.timingSafeCompare(otpToken.code, code)) {
       return { success: false, error: 'Invalid verification code' };
     }
 
@@ -440,12 +525,14 @@ export class EmailProvider {
     
     if (derivedArray.length !== expectedHash.length) return false;
     
-    let match = true;
+    // SECURITY: Use constant-time comparison to prevent timing attacks
+    // XOR all bytes and accumulate result - compare all bytes regardless of mismatches
+    let result = 0;
     for (let i = 0; i < derivedArray.length; i++) {
-      if (derivedArray[i] !== expectedHash[i]) match = false;
+      result |= derivedArray[i] ^ expectedHash[i];
     }
     
-    return match;
+    return result === 0;
   }
 
   private async sendEmail(_to: string, _subject: string, _html: string): Promise<void> {

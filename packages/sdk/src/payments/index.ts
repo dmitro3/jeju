@@ -181,8 +181,16 @@ export function createPaymentsModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): PaymentsModule {
-  const paymasterFactoryAddress = requireContract("payments", "paymasterFactory", network);
-  const creditManagerAddress = requireContract("payments", "creditManager", network);
+  const paymasterFactoryAddress = requireContract(
+    "payments",
+    "paymasterFactory",
+    network,
+  );
+  const creditManagerAddress = requireContract(
+    "payments",
+    "creditManager",
+    network,
+  );
   const services = getServicesConfig(network);
 
   async function getBalance(): Promise<bigint> {
@@ -224,7 +232,19 @@ export function createPaymentsModule(
       throw new Error(`Failed to list paymasters: ${response.statusText}`);
     }
 
-    const data = (await response.json()) as {
+    const rawData: unknown = await response.json();
+
+    // Validate response structure
+    if (
+      typeof rawData !== "object" ||
+      rawData === null ||
+      !("paymasters" in rawData) ||
+      !Array.isArray((rawData as { paymasters: unknown }).paymasters)
+    ) {
+      throw new Error("Invalid paymaster API response format");
+    }
+
+    const data = rawData as {
       paymasters: Array<{
         address: Address;
         token: Address;

@@ -4,7 +4,7 @@
  * Tests for TEE-backed XMTP key management.
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 import {
   TEEXMTPKeyManager,
   createTEEKeyManager,
@@ -339,22 +339,22 @@ describe('TEE Integration Flow', () => {
     expect(identityKey.attestation).toBeDefined();
     
     // 2. Generate pre-key
-    const preKey = await keyManager.generatePreKey(identityKey.keyId);
+    await keyManager.generatePreKey(identityKey.keyId);
     
     // 3. Derive installation key
-    const installationKey = await keyManager.deriveInstallationKey(
+    await keyManager.deriveInstallationKey(
       identityKey.keyId,
       'test-device',
     );
     
     // 4. Sign a message
-    const signature = await keyManager.sign(
+    await keyManager.sign(
       identityKey.keyId,
       new TextEncoder().encode('test'),
     );
     
     // 5. Export backup
-    const backup = await keyManager.exportEncrypted(identityKey.keyId, 'password');
+    await keyManager.exportEncrypted(identityKey.keyId, 'password');
     
     // 6. Verify attestation
     const verification = await keyManager.verifyAttestation(identityKey.attestation!);
@@ -394,10 +394,9 @@ describe('TEE Integration Flow', () => {
     expect(signer2.getIdentityKey().publicKey).toBe(signer.getIdentityKey().publicKey);
     
     // But different attestations (different enclaves)
-    const att1 = await signer.getAttestation();
-    const att2 = await signer2.getAttestation();
-    
     // Note: In real TEE, attestations would differ by enclave
+    await signer.getAttestation();
+    await signer2.getAttestation();
   });
 });
 

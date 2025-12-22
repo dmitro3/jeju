@@ -124,8 +124,9 @@ export class AppOrchestrator {
     
     try {
       // Dynamic import - tests package may not be available
-      const warmupModule = await import('@jejunetwork/tests/warmup');
-      await warmupModule.quickWarmup(options.apps);
+      // @ts-expect-error - optional peer dependency
+      const warmupModule = await import('@jejunetwork/tests/warmup') as { quickWarmup: (apps: string[]) => Promise<void> };
+      await warmupModule.quickWarmup(options.apps ?? []);
       logger.success('Apps warmed up');
     } catch (error) {
       logger.debug(`Warmup module not available or failed: ${error instanceof Error ? error.message : String(error)}`);

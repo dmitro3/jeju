@@ -6,7 +6,6 @@
 
 import { describe, test, expect } from 'bun:test';
 import {
-  HardwareInfoSchema,
   WalletInfoSchema,
   BalanceInfoSchema,
   AgentInfoSchema,
@@ -16,7 +15,6 @@ import {
   RuntimeConfigSchema,
   ExecutorConfigSchema,
   ArbOpportunitySchema,
-  validateHardwareInfo,
   validateWalletInfo,
   validateBalanceInfo,
   validateNetworkConfig,

@@ -2,7 +2,13 @@
  * Local Development Configuration for ZK Bridge
  */
 
-import type { BridgeConfig, ChainId, ChainRPCConfig, ProverConfig, TEEBatchingConfig } from "../types/index.js";
+import type {
+	BridgeConfig,
+	ChainId,
+	ChainRPCConfig,
+	ProverConfig,
+	TEEBatchingConfig,
+} from "../types/index.js";
 
 export interface LocalChainConfig {
 	evm: {
@@ -20,11 +26,26 @@ export interface LocalChainConfig {
 	};
 }
 
+/**
+ * LOCAL DEVELOPMENT ONLY - These are well-known Anvil/Hardhat test private keys
+ * derived from the mnemonic: "test test test test test test test test test test test junk"
+ * 
+ * SECURITY WARNING: These keys are publicly known and should NEVER be used for:
+ * - Testnet deployments
+ * - Mainnet deployments
+ * - Storing real funds
+ * 
+ * They are safe ONLY for local development with Anvil/Hardhat.
+ */
 export const LOCAL_CHAIN_CONFIG: LocalChainConfig = {
 	evm: {
 		chainId: 31337,
 		rpcUrl: "http://127.0.0.1:8545",
 		wsUrl: "ws://127.0.0.1:8545",
+		// SECURITY: These are well-known Anvil test keys - LOCAL DEVELOPMENT ONLY
+		// Account #0: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+		// Account #1: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+		// Account #2: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
 		privateKeys: [
 			"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 			"0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
@@ -56,12 +77,16 @@ export let LOCAL_DEPLOYED_CONTRACTS: LocalDeployedContracts = {
 	crossChainToken: ZERO_ADDR,
 };
 
-export function setLocalDeployedContracts(contracts: LocalDeployedContracts): void {
+export function setLocalDeployedContracts(
+	contracts: LocalDeployedContracts,
+): void {
 	LOCAL_DEPLOYED_CONTRACTS = contracts;
 }
 
 export function areLocalContractsDeployed(): boolean {
-	return Object.values(LOCAL_DEPLOYED_CONTRACTS).every((addr) => addr !== ZERO_ADDR);
+	return Object.values(LOCAL_DEPLOYED_CONTRACTS).every(
+		(addr) => addr !== ZERO_ADDR,
+	);
 }
 
 export interface LocalSolanaPrograms {
@@ -83,7 +108,9 @@ export function setLocalSolanaPrograms(programs: LocalSolanaPrograms): void {
 }
 
 export function areLocalSolanaProgramsDeployed(): boolean {
-	return Object.values(LOCAL_SOLANA_PROGRAMS).every((id) => id !== SYSTEM_PROGRAM);
+	return Object.values(LOCAL_SOLANA_PROGRAMS).every(
+		(id) => id !== SYSTEM_PROGRAM,
+	);
 }
 
 export const LOCAL_TEE_CONFIG: TEEBatchingConfig = {
@@ -144,9 +171,24 @@ export interface TestToken {
 }
 
 export const TEST_TOKENS: TestToken[] = [
-	{ name: "Test USD Coin", symbol: "USDC", decimals: 6, initialSupply: BigInt(1000000000000) },
-	{ name: "Test Wrapped Ether", symbol: "WETH", decimals: 18, initialSupply: BigInt(10000) * BigInt(10 ** 18) },
-	{ name: "Test Cross Chain Token", symbol: "XCT", decimals: 18, initialSupply: BigInt(100000000) * BigInt(10 ** 18) },
+	{
+		name: "Test USD Coin",
+		symbol: "USDC",
+		decimals: 6,
+		initialSupply: BigInt(1000000000000),
+	},
+	{
+		name: "Test Wrapped Ether",
+		symbol: "WETH",
+		decimals: 18,
+		initialSupply: BigInt(10000) * BigInt(10 ** 18),
+	},
+	{
+		name: "Test Cross Chain Token",
+		symbol: "XCT",
+		decimals: 18,
+		initialSupply: BigInt(100000000) * BigInt(10 ** 18),
+	},
 ];
 
 export interface GenesisState {

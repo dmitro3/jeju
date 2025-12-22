@@ -6,10 +6,8 @@ import { z } from 'zod'
 import { AddressSchema } from '@jejunetwork/types'
 import {
   BigIntSchema,
-  DateSchema,
   NonEmptyStringSchema,
   URLSchema,
-  NonNegativeNumberSchema,
 } from './common'
 
 export const SolanaCreatorSchema = z.object({

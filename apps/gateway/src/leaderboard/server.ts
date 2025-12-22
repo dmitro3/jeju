@@ -5,10 +5,12 @@
  * Mount at /leaderboard/api in main gateway.
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
+import { bodyLimit } from 'hono/body-limit';
+import { timingSafeEqual } from 'crypto';
 import type { Address, Hex } from 'viem';
-import { isAddress, isHex } from 'viem';
+import { isAddress } from 'viem';
 import {
   authenticateRequest,
   verifyUserOwnership,
@@ -39,20 +41,32 @@ import {
   LeaderboardQuerySchema,
   UsernameSchema,
   expect,
-  expectAddress,
   validateBody,
   validateQuery,
 } from '../lib/validation.js';
 
 const app = new Hono();
 
-// CORS middleware
+// SECURITY: Configure CORS based on environment
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production';
+
 app.use('*', cors({
-  origin: '*',
+  // SECURITY: In production, require explicit origin whitelist
+  origin: isProduction && CORS_ORIGINS?.length ? CORS_ORIGINS : '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   maxAge: 86400,
+}));
+
+// SECURITY: Limit request body size to prevent DoS attacks
+const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+app.use('*', bodyLimit({
+  maxSize: MAX_BODY_SIZE,
+  onError: (c: Context) => {
+    return c.json({ error: 'Request body too large', maxSize: MAX_BODY_SIZE }, 413);
+  },
 }));
 
 // Health check
@@ -468,7 +482,7 @@ app.get('/api/agent/link', async (c) => {
   } else if (walletAddress) {
     links = await query(`SELECT * FROM agent_identity_links WHERE wallet_address = ?`, [walletAddress.toLowerCase()]);
   } else {
-    links = await query(`SELECT * FROM agent_identity_links WHERE user_id = ?`, [username!]);
+    links = await query(`SELECT * FROM agent_identity_links WHERE user_id = ?`, [username ?? '']);
   }
 
   // Get user info for each link
@@ -685,7 +699,7 @@ app.get('/api/profile/:username', async (c) => {
 // A2A Endpoint
 // ============================================================================
 
-import { A2ARequestSchema, type A2ARequest } from '../lib/validation.js';
+import { A2ARequestSchema } from '../lib/validation.js';
 
 /**
  * POST /api/a2a
@@ -782,12 +796,30 @@ app.post('/api/a2a', async (c) => {
 // ============================================================================
 
 /**
+ * SECURITY: Constant-time string comparison to prevent timing attacks
+ */
+function timingSafeCompare(a: string | undefined | null, b: string): boolean {
+  if (!a) return false;
+  // Pad to same length to ensure constant-time comparison
+  const aLen = Buffer.from(a).length;
+  const bLen = Buffer.from(b).length;
+  const aBuf = Buffer.alloc(Math.max(aLen, bLen));
+  const bBuf = Buffer.alloc(Math.max(aLen, bLen));
+  Buffer.from(a).copy(aBuf);
+  Buffer.from(b).copy(bBuf);
+  
+  // Use timing-safe comparison - lengths must match for true result
+  return aLen === bLen && timingSafeEqual(aBuf, bBuf);
+}
+
+/**
  * POST /api/contributions/jeju-git
  * Record Git activity from DWS Git service
  */
 app.post('/api/contributions/jeju-git', async (c) => {
   const service = c.req.header('x-jeju-service');
-  if (service !== 'dws-git') {
+  // SECURITY: Use timing-safe comparison to prevent header enumeration
+  if (!timingSafeCompare(service, 'dws-git')) {
     return c.json({ error: 'Invalid service header' }, 401);
   }
 
@@ -893,7 +925,8 @@ app.post('/api/contributions/jeju-git', async (c) => {
  */
 app.post('/api/contributions/jeju-npm', async (c) => {
   const service = c.req.header('x-jeju-service');
-  if (service !== 'dws-npm') {
+  // SECURITY: Use timing-safe comparison to prevent header enumeration
+  if (!timingSafeCompare(service, 'dws-npm')) {
     return c.json({ error: 'Invalid service header' }, 401);
   }
 
@@ -969,7 +1002,8 @@ app.post('/api/contributions/jeju-npm', async (c) => {
  */
 app.post('/api/packages/downloads', async (c) => {
   const service = c.req.header('x-jeju-service');
-  if (service !== 'dws-npm') {
+  // SECURITY: Use timing-safe comparison to prevent header enumeration
+  if (!timingSafeCompare(service, 'dws-npm')) {
     return c.json({ error: 'Invalid service header' }, 401);
   }
 

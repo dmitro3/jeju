@@ -13,9 +13,6 @@ import {
   Connection,
   PublicKey,
   Keypair,
-  Transaction,
-  TransactionInstruction,
-  sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import {
   createPublicClient,
@@ -29,7 +26,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
-import type { PsycheClient, CoordinatorState, WitnessProof } from './psyche-client';
+import type { PsycheClient, CoordinatorState } from './psyche-client';
 
 // ============================================================================
 // Constants
@@ -373,10 +370,10 @@ export class CrossChainTrainingBridge {
     console.log(`[Bridge] Registered client ${registration.evmAddress}: ${hash}`);
 
     // Wait for transaction and get client ID from logs
-    const receipt = await this.evmPublicClient.waitForTransactionReceipt({ hash });
+    const _receipt = await this.evmPublicClient.waitForTransactionReceipt({ hash });
     
     // Parse client ID from logs (simplified)
-    return 0; // Would parse from receipt.logs
+    return 0; // Would parse from _receipt.logs
   }
 
   async distributeRewards(

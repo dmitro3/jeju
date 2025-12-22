@@ -193,7 +193,8 @@ export function listDeployments(filter?: {
   let result = Array.from(deployments.values());
   
   if (filter?.owner) {
-    result = result.filter(d => d.owner.toLowerCase() === filter.owner!.toLowerCase());
+    const ownerLower = filter.owner.toLowerCase();
+    result = result.filter(d => d.owner.toLowerCase() === ownerLower);
   }
   if (filter?.type) {
     result = result.filter(d => d.type === filter.type);

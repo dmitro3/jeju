@@ -3,10 +3,7 @@ import { ref, computed } from 'vue';
 
 const currentNetwork = ref<'testnet' | 'mainnet'>('testnet');
 
-const networkConfig = computed(() => {
-  return currentNetwork.value === 'testnet' ? testnetConfig : mainnetConfig;
-});
-
+// Hardcoded trusted network configs - not user-modifiable
 const testnetConfig = {
   chainId: 420690,
   name: 'Jeju Testnet',
@@ -16,7 +13,7 @@ const testnetConfig = {
   l1ChainId: 84532,
   l1Name: 'Base Sepolia',
   l1RpcUrl: 'https://sepolia.base.org',
-};
+} as const;
 
 const mainnetConfig = {
   chainId: 420691,
@@ -27,7 +24,11 @@ const mainnetConfig = {
   l1ChainId: 8453,
   l1Name: 'Base',
   l1RpcUrl: 'https://mainnet.base.org',
-};
+} as const;
+
+const networkConfig = computed(() => {
+  return currentNetwork.value === 'testnet' ? testnetConfig : mainnetConfig;
+});
 
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);
@@ -82,7 +83,7 @@ const copyToClipboard = (text: string) => {
 
       <div class="info-row">
         <span class="label">Explorer:</span>
-        <a :href="networkConfig.explorerUrl" target="_blank" class="value">
+        <a :href="networkConfig.explorerUrl" target="_blank" rel="noopener noreferrer" class="value">
           {{ networkConfig.explorerUrl }}
         </a>
       </div>

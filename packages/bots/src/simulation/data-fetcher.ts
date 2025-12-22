@@ -20,6 +20,9 @@ export interface PriceCandle {
   volume: number;
 }
 
+// Maximum cache entries to prevent memory leaks
+const MAX_CACHE_ENTRIES = 100;
+
 const COINGECKO_IDS: Record<string, string> = {
   ETH: 'ethereum',
   WETH: 'ethereum',
@@ -52,8 +55,9 @@ export class HistoricalDataFetcher {
   ): Promise<PriceDataPoint[]> {
     const cacheKey = `${tokens.map(t => t.symbol).join('-')}-${startDate.getTime()}-${endDate.getTime()}`;
     
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)!;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      return cached;
     }
 
     // Fetch data for each token
@@ -72,6 +76,12 @@ export class HistoricalDataFetcher {
 
     // Merge into data points
     const dataPoints = this.mergeTokenPrices(tokenPrices, tokens, startDate, endDate, intervalMs);
+    
+    // Evict oldest cache entries if over limit (simple LRU approximation)
+    if (this.cache.size >= MAX_CACHE_ENTRIES) {
+      const firstKey = this.cache.keys().next().value;
+      if (firstKey) this.cache.delete(firstKey);
+    }
     
     this.cache.set(cacheKey, dataPoints);
     return dataPoints;

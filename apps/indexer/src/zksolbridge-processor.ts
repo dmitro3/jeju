@@ -12,7 +12,7 @@ import {
   Log as _Log,
   Transaction as _Transaction,
 } from '@subsquid/evm-processor';
-import { Store, TypeormDatabase } from '@subsquid/typeorm-store';
+import { Store } from '@subsquid/typeorm-store';
 import * as bridgeAbi from './abi/zksolbridge';
 
 // Bridge contract addresses per chain

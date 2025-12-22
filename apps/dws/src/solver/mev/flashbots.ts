@@ -457,7 +457,7 @@ export class MevBoostProvider extends EventEmitter {
       error?: { message: string } 
     };
     
-    if (result.error) {
+    if (result.error || !result.result) {
       return { 
         success: false, 
         results: [], 
@@ -468,7 +468,7 @@ export class MevBoostProvider extends EventEmitter {
       };
     }
     
-    const r = result.result!;
+    const r = result.result;
     return {
       success: r.results.every(tx => !tx.error),
       results: r.results.map(tx => ({

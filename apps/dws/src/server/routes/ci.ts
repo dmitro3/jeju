@@ -255,7 +255,7 @@ export function createCIRouter(ctx: CIContext): Hono {
         unsubscribe();
       });
 
-      await new Promise(() => {});
+      await new Promise(() => { /* no-op */ });
     });
   });
 

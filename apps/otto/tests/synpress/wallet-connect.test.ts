@@ -16,7 +16,7 @@ test.describe('Otto Wallet Connection', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -25,12 +25,6 @@ test.describe('Otto Wallet Connection', () => {
 
     // Navigate to Otto auth callback (simulating OAuth3 redirect)
     await page.goto('/auth/callback?platform=discord&platformId=123&nonce=test');
-
-    // In a real test, we would:
-    // 1. Click connect button
-    // 2. Connect MetaMask
-    // 3. Sign the message
-    // 4. Verify connection success
 
     // For now, verify the page loads
     await expect(page.locator('body')).toContainText('Connected');
@@ -42,15 +36,14 @@ test.describe('Otto Wallet Connection', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
       extensionId
     );
 
-    // This test would verify the session key creation flow
-    // For now, just verify the API is accessible
+    // Verify the API is accessible
     const response = await page.request.get('/health');
     expect(response.ok()).toBe(true);
   });

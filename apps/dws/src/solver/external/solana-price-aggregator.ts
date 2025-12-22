@@ -24,9 +24,9 @@ import {
 import * as BufferLayout from '@solana/buffer-layout';
 
 // Define custom layouts for Solana account parsing
-const { u8, s32: i32, struct } = BufferLayout;
+const { u8, s32: _i32, struct } = BufferLayout;
 const u64 = BufferLayout.nu64; // nu64 is for unsigned 64-bit integers
-const u128 = (property: string) => BufferLayout.blob(16, property); // 128-bit as blob
+const _u128 = (property: string) => BufferLayout.blob(16, property); // 128-bit as blob
 const publicKey = (property: string) => BufferLayout.blob(32, property);
 
 // ============ Types ============
@@ -80,13 +80,13 @@ export interface OrcaWhirlpoolState {
 const RAYDIUM_AMM_PROGRAM = new PublicKey('675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8');
 
 // Orca Whirlpool Program
-const ORCA_WHIRLPOOL_PROGRAM = new PublicKey('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc');
+const _ORCA_WHIRLPOOL_PROGRAM = new PublicKey('whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc');
 
 // Raydium CLMM Program
-const RAYDIUM_CLMM_PROGRAM = new PublicKey('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK');
+const _RAYDIUM_CLMM_PROGRAM = new PublicKey('CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK');
 
 // Token Program
-const TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+const _TOKEN_PROGRAM = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 // Known token mints
 const KNOWN_TOKENS: Record<string, { symbol: string; decimals: number; isStablecoin: boolean }> = {
@@ -434,7 +434,7 @@ export class SolanaPriceAggregator {
   /**
    * Find Orca Whirlpool pools (simplified)
    */
-  private async findOrcaPools(mint: string): Promise<SolanaPriceSource[]> {
+  private async findOrcaPools(_mint: string): Promise<SolanaPriceSource[]> {
     // Orca whirlpool discovery is more complex
     // For now, return empty - would implement full whirlpool scanning
     return [];

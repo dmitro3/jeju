@@ -11,6 +11,8 @@ import {
   type PublicClient,
   type WalletClient,
   type Chain,
+  type Hex,
+  type Log,
   decodeEventLog,
 } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -19,6 +21,11 @@ import type { WorkerdWorkerDefinition } from './types';
 // ============================================================================
 // Types
 // ============================================================================
+
+// Extended log type with topics for event decoding
+interface EventLog extends Log {
+  topics: [Hex, ...Hex[]];
+}
 
 export interface WorkerRegistration {
   workerId: string;
@@ -256,34 +263,7 @@ export class DecentralizedWorkerRegistry {
     });
 
     // Parse agentId from Transfer event (ERC-721 mint emits Transfer with tokenId)
-    const transferLog = receipt.logs.find((log) => {
-      try {
-        const decoded = decodeEventLog({
-          abi: IDENTITY_REGISTRY_ABI,
-          data: log.data,
-          topics: log.topics,
-        });
-        return decoded.eventName === 'Transfer';
-      } catch {
-        return false;
-      }
-    });
-
-    if (!transferLog) {
-      throw new Error('Transfer event not found in registration transaction');
-    }
-
-    const decoded = decodeEventLog({
-      abi: IDENTITY_REGISTRY_ABI,
-      data: transferLog.data,
-      topics: transferLog.topics,
-    });
-
-    if (decoded.eventName !== 'Transfer') {
-      throw new Error('Unexpected event type');
-    }
-
-    const agentId = (decoded.args as { tokenId: bigint }).tokenId;
+    const agentId = this.extractAgentIdFromReceipt(receipt.logs as EventLog[]);
 
     // Set metadata
     await this.setWorkerMetadata(agentId, worker);
@@ -367,6 +347,42 @@ export class DecentralizedWorkerRegistry {
     });
 
     await this.walletClient.writeContract(request);
+  }
+
+  /**
+   * Extract agentId from transaction receipt logs by finding Transfer event
+   */
+  private extractAgentIdFromReceipt(logs: EventLog[]): bigint {
+    // Type for decoded Transfer event
+    type DecodedTransferEvent = {
+      eventName: 'Transfer';
+      args: { from: Address; to: Address; tokenId: bigint };
+    };
+
+    const transferLog = logs.find((log) => {
+      try {
+        const decoded = decodeEventLog({
+          abi: IDENTITY_REGISTRY_ABI,
+          data: log.data,
+          topics: log.topics,
+        }) as DecodedTransferEvent;
+        return decoded.eventName === 'Transfer';
+      } catch {
+        return false;
+      }
+    });
+
+    if (!transferLog) {
+      throw new Error('Transfer event not found in registration transaction');
+    }
+
+    const decoded = decodeEventLog({
+      abi: IDENTITY_REGISTRY_ABI,
+      data: transferLog.data,
+      topics: transferLog.topics,
+    }) as DecodedTransferEvent;
+
+    return decoded.args.tokenId;
   }
 
   // ============================================================================
@@ -498,34 +514,7 @@ export class DecentralizedWorkerRegistry {
     });
 
     // Parse agentId from Transfer event (ERC-721 mint emits Transfer with tokenId)
-    const transferLog = receipt.logs.find((log) => {
-      try {
-        const decoded = decodeEventLog({
-          abi: IDENTITY_REGISTRY_ABI,
-          data: log.data,
-          topics: log.topics,
-        });
-        return decoded.eventName === 'Transfer';
-      } catch {
-        return false;
-      }
-    });
-
-    if (!transferLog) {
-      throw new Error('Transfer event not found in registration transaction');
-    }
-
-    const decoded = decodeEventLog({
-      abi: IDENTITY_REGISTRY_ABI,
-      data: transferLog.data,
-      topics: transferLog.topics,
-    });
-
-    if (decoded.eventName !== 'Transfer') {
-      throw new Error('Unexpected event type');
-    }
-
-    const agentId = (decoded.args as { tokenId: bigint }).tokenId;
+    const agentId = this.extractAgentIdFromReceipt(receipt.logs as EventLog[]);
 
     // Set endpoint and metadata
     await this.setEndpoint(agentId, endpoint);

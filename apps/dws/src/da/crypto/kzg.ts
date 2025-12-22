@@ -218,7 +218,7 @@ function modPow(base: bigint, exp: bigint, mod: bigint): bigint {
   return result;
 }
 
-function modInverse(a: bigint, mod: bigint): bigint {
+function _modInverse(a: bigint, mod: bigint): bigint {
   return modPow(a, mod - 2n, mod);
 }
 
@@ -369,7 +369,7 @@ export function verifyProof(
     const C = bls.G1.ProjectivePoint.fromHex(commitmentBytes);
     const pi = bls.G1.ProjectivePoint.fromHex(proofBytes);
     const y = bytesToFieldElement(valueBytes);
-    const z = BigInt(point);
+    const _z = BigInt(point);
     
     // C - y*G1
     const yG1 = bls.G1.ProjectivePoint.BASE.multiply(y);

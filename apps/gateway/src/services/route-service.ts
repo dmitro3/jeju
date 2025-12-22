@@ -9,8 +9,6 @@ import {
   expect,
   expectChainId,
   type ListRoutesQuery,
-  type GetBestRouteRequest,
-  type GetVolumeQuery,
 } from '../lib/validation.js';
 
 // Chain configurations

@@ -68,7 +68,7 @@ export default function StakingUI({ agentId: providedAgentId }: StakingUIProps) 
     address: MODERATION_CONTRACTS.IdentityRegistry as `0x${string}`,
     abi: IDENTITY_REGISTRY_ABI,
     functionName: 'addressToAgentId',
-    args: [address!],
+    args: address ? [address] : undefined,
     query: { enabled: !!address && !providedAgentId },
   });
 

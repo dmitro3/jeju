@@ -11,18 +11,16 @@
  *   3. Export addresses or use deployment-localnet.json
  */
 
-import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test';
 import {
   createPublicClient,
   createWalletClient,
   http,
   type Address,
   type Hex,
-  parseEther,
   keccak256,
   encodeAbiParameters,
   parseAbiParameters,
-  zeroHash,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
@@ -73,9 +71,6 @@ let COORDINATOR_ADDRESS: Address;
 let REWARDS_ADDRESS: Address;
 let PERFORMANCE_ADDRESS: Address;
 let REGISTRY_ADDRESS: Address;
-let COMPUTE_REGISTRY_ADDRESS: Address;
-let MPC_KEY_REGISTRY_ADDRESS: Address;
-let IDENTITY_REGISTRY_ADDRESS: Address;
 
 interface DeploymentResult {
   coordinator: Address;
@@ -181,8 +176,6 @@ describe.skipIf(SKIP)('Training SDK On-Chain Integration', () => {
     REWARDS_ADDRESS = deployment.rewards;
     PERFORMANCE_ADDRESS = deployment.oracle;
     REGISTRY_ADDRESS = deployment.registry;
-    COMPUTE_REGISTRY_ADDRESS = deployment.computeRegistry;
-    MPC_KEY_REGISTRY_ADDRESS = deployment.mpcKeyRegistry;
 
     console.log('[Integration] Using addresses:', {
       coordinator: COORDINATOR_ADDRESS,
@@ -362,7 +355,7 @@ describe.skipIf(SKIP)('Training SDK On-Chain Integration', () => {
 
     // First ensure node is registered
     const attestationHash = keccak256(encodeAbiParameters(parseAbiParameters('string'), ['metrics-test']));
-    await sdk.registerNode(GPUTier.HighEnd, attestationHash).catch(() => {});
+    await sdk.registerNode(GPUTier.HighEnd, attestationHash).catch(() => { /* ignore registration errors */ });
 
     const metrics = await sdk.getNodeMetrics(account1);
     expect(metrics).toBeDefined();
@@ -380,11 +373,9 @@ describe.skipIf(SKIP)('Distributed Training Client On-Chain Integration', () => 
   let publicClient: ReturnType<typeof createPublicClient>;
   let walletClient: ReturnType<typeof createWalletClient>;
   let client: DistributedTrainingClient;
-  let account: Address;
 
   beforeAll(async () => {
     const acc = privateKeyToAccount(PRIVATE_KEY);
-    account = acc.address;
 
     publicClient = createPublicClient({
       chain: foundry,

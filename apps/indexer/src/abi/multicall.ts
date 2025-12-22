@@ -138,7 +138,7 @@ export class Multicall extends ContractBase {
    * with different signatures - TypeScript can't narrow the union.
    */
   private makeCalls(args: unknown[]): [calls: Call[], funcs: PolymorphicFunc[], page: number] {
-    let page = typeof args[args.length - 1] == 'number' ? (args.pop() as number) : Number.MAX_SAFE_INTEGER
+    const page = typeof args[args.length - 1] === 'number' ? (args.pop() as number) : Number.MAX_SAFE_INTEGER
     switch (args.length) {
       case 1: {
         const list = args[0] as AggregateTuple[]

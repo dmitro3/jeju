@@ -37,7 +37,7 @@ test.describe('Multi-User LP Scenarios', () => {
     console.log('✅ User-specific LP positions tested');
   });
 
-  test.skip('should not show other users LP positions', async ({ page }) => {
+  test.skip('should not show other users LP positions', async ({ page: _page }) => {
     // TODO: Switch to second account and verify positions are different
     // Requires: await metamask.switchAccount(1);
 

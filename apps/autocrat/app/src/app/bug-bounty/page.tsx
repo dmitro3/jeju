@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
-  Shield, AlertTriangle, DollarSign, Clock, 
+  Shield, AlertTriangle, DollarSign, 
   CheckCircle, XCircle, Eye, ArrowRight,
   Bug, Zap, Lock, Server, Wallet, Code,
   TrendingUp, Users, Award

@@ -265,7 +265,8 @@ export class TransactionExecutor {
       return this.failResult(opportunity, `Simulation failed: ${simulation.error || 'Unknown error'}`, context.startTime);
     }
 
-    const estimatedGasCost = simulation.gasUsed * context.gasPrice;
+    const gasUsed = simulation.gasUsed;
+    const estimatedGasCost = gasUsed * context.gasPrice;
     const expectedProfitWei = BigInt(opportunity.expectedProfit);
     if (estimatedGasCost >= expectedProfitWei) {
       return this.failResult(opportunity, `Estimated gas cost ${estimatedGasCost} exceeds expected profit ${expectedProfitWei}`, context.startTime);
@@ -276,7 +277,7 @@ export class TransactionExecutor {
       account: this.account,
       to: routerAddress as `0x${string}`,
       data: data as `0x${string}`,
-      gas: simulation.gasUsed! * 12n / 10n,
+      gas: gasUsed * 12n / 10n,
       gasPrice: context.gasPrice,
       nonce: context.nonce,
     });
@@ -344,10 +345,8 @@ export class TransactionExecutor {
     }
 
     const inputToken = frontrunTx.path[0] as `0x${string}`;
-    const outputToken = frontrunTx.path[frontrunTx.path.length - 1] as `0x${string}`;
 
     const balanceBefore = await this.getTokenBalance(publicClient, inputToken, this.account.address);
-    const outputBalanceBefore = await this.getTokenBalance(publicClient, outputToken, this.account.address);
     
     if (balanceBefore < BigInt(frontrunTx.amountIn)) {
       return this.failResult(opportunity, `Insufficient balance for frontrun: have ${balanceBefore}, need ${frontrunTx.amountIn}`, context.startTime);
@@ -640,7 +639,7 @@ export class TransactionExecutor {
   }
 
   private getAndIncrementNonce(chainId: ChainId): number {
-    const nonce = this.nonces.get(chainId)!;
+    const nonce = this.nonces.get(chainId) ?? 0;
     this.nonces.set(chainId, nonce + 1);
     return nonce;
   }

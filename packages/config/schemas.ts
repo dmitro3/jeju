@@ -104,7 +104,23 @@ export type ContractCategory =
   | 'governance' 
   | 'oif' 
   | 'eil'
-  | 'security';
+  | 'security'
+  | 'agents'
+  | 'amm'
+  | 'bridge'
+  | 'cdn'
+  | 'distributor'
+  | 'liquidity'
+  | 'messaging'
+  | 'oracle'
+  | 'otc'
+  | 'perps'
+  | 'prediction'
+  | 'rpc'
+  | 'sequencer'
+  | 'staking'
+  | 'training'
+  | 'work';
 
 /**
  * Extended contract categories that may be used in deployments
@@ -126,6 +142,22 @@ const NetworkContractsSchema = z.object({
   oif: ContractCategorySchema,
   eil: ContractCategorySchema,
   security: ContractCategorySchema,
+  agents: ContractCategorySchema.optional(),
+  amm: ContractCategorySchema.optional(),
+  bridge: ContractCategorySchema.optional(),
+  cdn: ContractCategorySchema.optional(),
+  distributor: ContractCategorySchema.optional(),
+  liquidity: ContractCategorySchema.optional(),
+  messaging: ContractCategorySchema.optional(),
+  oracle: ContractCategorySchema.optional(),
+  otc: ContractCategorySchema.optional(),
+  perps: ContractCategorySchema.optional(),
+  prediction: ContractCategorySchema.optional(),
+  rpc: ContractCategorySchema.optional(),
+  sequencer: ContractCategorySchema.optional(),
+  staking: ContractCategorySchema.optional(),
+  training: ContractCategorySchema.optional(),
+  work: ContractCategorySchema.optional(),
 });
 
 const ExternalChainContractsSchema = z.object({
@@ -505,7 +537,6 @@ export const TestnetConfigSchema = z.object({
     rpc: z.object({
       http: z.string(),
       ws: z.string(),
-      internal: z.string(),
     }),
     explorer: z.string(),
     blockTime: z.number(),

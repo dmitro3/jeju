@@ -41,6 +41,11 @@ interface X402NonceRow {
 
 let db: Database | null = null;
 
+function getDb(): Database {
+  if (!db) throw new Error('Database not initialized - call initializeState first');
+  return db;
+}
+
 export async function initializeState(): Promise<void> {
   if (db) return;
 
@@ -103,7 +108,7 @@ export const apiKeyState = {
   }): Promise<void> {
     if (!db) await initializeState();
     
-    db!.run(`
+    getDb().run(`
       INSERT INTO api_keys (id, key_hash, address, name, tier, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [record.id, record.keyHash, record.address, record.name, record.tier, record.createdAt]);
@@ -112,7 +117,7 @@ export const apiKeyState = {
   async getByHash(keyHash: string): Promise<ApiKeyRow | null> {
     if (!db) await initializeState();
     
-    const row = db!.query<ApiKeyRow, [string]>(`
+    const row = getDb().query<ApiKeyRow, [string]>(`
       SELECT * FROM api_keys WHERE key_hash = ?
     `).get(keyHash);
     
@@ -122,7 +127,7 @@ export const apiKeyState = {
   async getById(id: string): Promise<ApiKeyRow | null> {
     if (!db) await initializeState();
     
-    const row = db!.query<ApiKeyRow, [string]>(`
+    const row = getDb().query<ApiKeyRow, [string]>(`
       SELECT * FROM api_keys WHERE id = ?
     `).get(id);
     
@@ -132,7 +137,7 @@ export const apiKeyState = {
   async listByAddress(address: Address): Promise<ApiKeyRow[]> {
     if (!db) await initializeState();
     
-    const rows = db!.query<ApiKeyRow, [string]>(`
+    const rows = getDb().query<ApiKeyRow, [string]>(`
       SELECT * FROM api_keys WHERE LOWER(address) = LOWER(?) ORDER BY created_at DESC
     `).all(address);
     
@@ -142,7 +147,7 @@ export const apiKeyState = {
   async recordUsage(keyHash: string): Promise<void> {
     if (!db) await initializeState();
     
-    db!.run(`
+    getDb().run(`
       UPDATE api_keys 
       SET last_used_at = ?, request_count = request_count + 1 
       WHERE key_hash = ?
@@ -152,7 +157,7 @@ export const apiKeyState = {
   async revoke(id: string): Promise<boolean> {
     if (!db) await initializeState();
     
-    const result = db!.run(`
+    const result = getDb().run(`
       UPDATE api_keys SET is_active = 0 WHERE id = ?
     `, [id]);
     
@@ -168,7 +173,7 @@ export const x402State = {
   async getCredits(address: string): Promise<bigint> {
     if (!db) await initializeState();
     
-    const row = db!.query<X402CreditsRow, [string]>(`
+    const row = getDb().query<X402CreditsRow, [string]>(`
       SELECT balance FROM x402_credits WHERE LOWER(address) = LOWER(?)
     `).get(address);
     
@@ -181,7 +186,7 @@ export const x402State = {
     const current = await this.getCredits(address);
     const newBalance = (current + amount).toString();
     
-    db!.run(`
+    getDb().run(`
       INSERT INTO x402_credits (address, balance, updated_at)
       VALUES (LOWER(?), ?, ?)
       ON CONFLICT(address) DO UPDATE SET balance = ?, updated_at = ?
@@ -196,7 +201,7 @@ export const x402State = {
     
     const newBalance = (current - amount).toString();
     
-    db!.run(`
+    getDb().run(`
       UPDATE x402_credits SET balance = ?, updated_at = ? WHERE LOWER(address) = LOWER(?)
     `, [newBalance, Date.now(), address]);
     
@@ -206,7 +211,7 @@ export const x402State = {
   async isNonceUsed(nonceKey: string): Promise<boolean> {
     if (!db) await initializeState();
     
-    const row = db!.query<X402NonceRow, [string]>(`
+    const row = getDb().query<X402NonceRow, [string]>(`
       SELECT 1 FROM x402_nonces WHERE nonce_key = ?
     `).get(nonceKey);
     
@@ -216,7 +221,7 @@ export const x402State = {
   async markNonceUsed(nonceKey: string): Promise<void> {
     if (!db) await initializeState();
     
-    db!.run(`
+    getDb().run(`
       INSERT OR IGNORE INTO x402_nonces (nonce_key, used_at) VALUES (?, ?)
     `, [nonceKey, Date.now()]);
   },
@@ -245,7 +250,7 @@ interface ComputeJobRow {
 async function ensureComputeJobsTable(): Promise<void> {
   if (!db) await initializeState();
   
-  db!.run(`
+  getDb().run(`
     CREATE TABLE IF NOT EXISTS compute_jobs (
       job_id TEXT PRIMARY KEY,
       command TEXT NOT NULL,
@@ -281,7 +286,7 @@ export const computeJobState = {
   }): Promise<void> {
     await ensureComputeJobsTable();
     
-    db!.run(`
+    getDb().run(`
       INSERT INTO compute_jobs (job_id, command, shell, env, working_dir, timeout, status, output, exit_code, submitted_by, started_at, completed_at, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(job_id) DO UPDATE SET
@@ -310,7 +315,7 @@ export const computeJobState = {
   async get(jobId: string): Promise<ComputeJobRow | null> {
     await ensureComputeJobsTable();
     
-    const row = db!.query<ComputeJobRow, [string]>(`
+    const row = getDb().query<ComputeJobRow, [string]>(`
       SELECT * FROM compute_jobs WHERE job_id = ?
     `).get(jobId);
     
@@ -320,7 +325,7 @@ export const computeJobState = {
   async getQueued(): Promise<ComputeJobRow[]> {
     await ensureComputeJobsTable();
     
-    return db!.query<ComputeJobRow, []>(`
+    return getDb().query<ComputeJobRow, []>(`
       SELECT * FROM compute_jobs WHERE status = 'queued' ORDER BY created_at ASC
     `).all();
   },
@@ -343,7 +348,7 @@ export const computeJobState = {
     query += ' ORDER BY created_at DESC LIMIT ?';
     params.push(opts.limit);
     
-    return db!.query<ComputeJobRow, typeof params>(query).all(...params);
+    return getDb().query<ComputeJobRow, typeof params>(query).all(...params);
   },
 };
 

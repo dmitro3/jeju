@@ -1,18 +1,39 @@
 import { describe, test, expect } from 'bun:test';
+import { usePlayerEvents, type PlayerSkillEvent, type PlayerStats } from '../usePlayerEvents';
 
 describe('usePlayerEvents Hook', () => {
   test('should export usePlayerEvents function', () => {
-    const { usePlayerEvents } = require('../usePlayerEvents');
     expect(typeof usePlayerEvents).toBe('function');
   });
 
   test('should export PlayerSkillEvent interface', () => {
-    const module = require('../usePlayerEvents');
-    expect(module).toHaveProperty('usePlayerEvents');
+    // Type-only import, verify it exists by using it in a type assertion
+    const _testEvent: PlayerSkillEvent = {
+      id: '',
+      player: '',
+      skillName: '',
+      newLevel: 0,
+      totalXp: 0n,
+      timestamp: '',
+      blockNumber: 0n,
+      transactionHash: '',
+    };
+    expect(_testEvent).toBeDefined();
   });
 
   test('should export PlayerStats interface', () => {
-    const module = require('../usePlayerEvents');
-    expect(module).toHaveProperty('usePlayerEvents');
+    // Type-only import, verify it exists by using it in a type assertion
+    const _testStats: PlayerStats = {
+      id: '',
+      player: '',
+      totalSkillEvents: 0,
+      totalDeaths: 0,
+      totalKills: 0,
+      totalAchievements: 0,
+      highestSkillLevel: 0,
+      highestSkillName: null,
+      lastActive: '',
+    };
+    expect(_testStats).toBeDefined();
   });
 });

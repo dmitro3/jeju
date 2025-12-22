@@ -296,12 +296,31 @@ export function validateOrThrow<T>(schema: z.ZodSchema<T>, data: unknown, errorP
   return result.data;
 }
 
+/** Safe integer bounds for JavaScript */
+const MAX_SAFE_INT = Number.MAX_SAFE_INTEGER;
+const MIN_SAFE_INT = Number.MIN_SAFE_INTEGER;
+
 export function parseEnvInt(value: string | undefined, defaultValue?: number): number {
   if (value === undefined) {
     if (defaultValue === undefined) throw new Error('Environment variable required but not set');
     return defaultValue;
   }
-  const parsed = parseInt(value, 10);
+  
+  // Trim whitespace and check for empty string
+  const trimmed = value.trim();
+  if (trimmed === '') throw new Error('Invalid integer: empty string');
+  
+  // Check for valid integer format (optional sign followed by digits)
+  if (!/^-?\d+$/.test(trimmed)) throw new Error(`Invalid integer format: ${value}`);
+  
+  const parsed = parseInt(trimmed, 10);
+  
   if (isNaN(parsed)) throw new Error(`Invalid integer: ${value}`);
+  
+  // Check for overflow beyond safe integer range
+  if (parsed > MAX_SAFE_INT || parsed < MIN_SAFE_INT) {
+    throw new Error(`Integer overflow: ${value} is outside safe range`);
+  }
+  
   return parsed;
 }

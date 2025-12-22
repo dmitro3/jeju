@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther } from 'viem';
-import type { ContributorProfile, SocialLink, RepositoryClaim, DependencyClaim, ContributorType, SocialPlatform } from '../../types/funding';
+import type { ContributorProfile, ContributorType, SocialPlatform } from '../../types/funding';
 import { CONTRIBUTOR_TYPES, SOCIAL_PLATFORMS } from '../../types/funding';
 import { 
   useContributorByWallet, 

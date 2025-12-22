@@ -17,6 +17,7 @@
 import { keccak256, toBytes } from "viem";
 import type { TEEAttestation } from "../types/index.js";
 import { toHash32 } from "../types/index.js";
+import { createLogger } from "../utils/logger.js";
 import type {
 	AttestationRequest,
 	AttestationResponse,
@@ -27,7 +28,6 @@ import type {
 	TEECapability,
 	TEEProvider,
 } from "./types.js";
-import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("aws-nitro");
 
@@ -180,7 +180,7 @@ export class AWSNitroProvider implements ITEEProvider {
 		if (process.env.AWS_ENCLAVE_ID) {
 			return true;
 		}
-		
+
 		// Check for Nitro-specific files/devices
 		try {
 			// Check for NSM device
@@ -190,7 +190,10 @@ export class AWSNitroProvider implements ITEEProvider {
 			}
 
 			// Skip IMDS check in test environment to avoid slow timeouts
-			if (process.env.NODE_ENV === "test" || process.env.AWS_NITRO_SIMULATE === "true") {
+			if (
+				process.env.NODE_ENV === "test" ||
+				process.env.AWS_NITRO_SIMULATE === "true"
+			) {
 				return false;
 			}
 
@@ -268,7 +271,8 @@ export class AWSNitroProvider implements ITEEProvider {
 		// 3. Get enclave ID and public key
 
 		// In real Nitro environment, AWS_ENCLAVE_ID should be set
-		this.enclaveId = process.env.AWS_ENCLAVE_ID ?? `enclave-${Date.now().toString(36)}`;
+		this.enclaveId =
+			process.env.AWS_ENCLAVE_ID ?? `enclave-${Date.now().toString(36)}`;
 
 		// Generate key pair in enclave
 		this.publicKey = new Uint8Array(33);
@@ -387,16 +391,16 @@ export class AWSNitroProvider implements ITEEProvider {
 		// This requires the AWS Nitro SDK or equivalent CBOR/COSE parsing
 		throw new Error(
 			"[AWSNitro] Production attestation verification requires AWS Nitro SDK. " +
-			"Install @aws-sdk/client-nitro-enclaves-nsm or implement COSE signature verification."
+				"Install @aws-sdk/client-nitro-enclaves-nsm or implement COSE signature verification.",
 		);
 	}
 
 	private verifySimulatedDocument(quote: Uint8Array): boolean {
 		// Validate simulated attestation structure
-		const docString = Buffer.from(quote).toString('utf-8');
-		
+		const docString = Buffer.from(quote).toString("utf-8");
+
 		const doc = JSON.parse(docString) as NitroAttestationDocument;
-		
+
 		// Verify required fields exist
 		if (!doc.moduleId || !doc.timestamp || !doc.digest) {
 			log.error("Invalid document: missing required fields");
@@ -404,7 +408,7 @@ export class AWSNitroProvider implements ITEEProvider {
 		}
 
 		// Verify PCRs exist
-		if (!doc.pcrs || typeof doc.pcrs[0] !== 'string') {
+		if (!doc.pcrs || typeof doc.pcrs[0] !== "string") {
 			log.error("Invalid document: missing PCR values");
 			return false;
 		}
@@ -413,7 +417,10 @@ export class AWSNitroProvider implements ITEEProvider {
 		const now = Date.now();
 		const docTime = doc.timestamp;
 		if (Math.abs(now - docTime) > 3600000) {
-			log.error("Invalid document: timestamp too old or in future", { docTime, now });
+			log.error("Invalid document: timestamp too old or in future", {
+				docTime,
+				now,
+			});
 			return false;
 		}
 
@@ -430,7 +437,7 @@ export function createAWSNitroProvider(
 ): AWSNitroProvider {
 	// Region has a sensible default for AWS services
 	const region = config?.region ?? process.env.AWS_REGION ?? "us-east-1";
-	
+
 	return new AWSNitroProvider({
 		region,
 		...config,

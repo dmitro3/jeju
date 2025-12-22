@@ -69,7 +69,7 @@ const MODE_NEEDS_APPS: Record<TestMode, boolean> = {
 export class TestOrchestrator {
   private options: TestOrchestratorOptions;
   private infrastructureService: InfrastructureService;
-  private lockManager: { releaseLock: () => boolean } | null = null;
+  private lockManager: { acquireLock: () => { acquired: boolean; message?: string }; releaseLock: () => boolean } | null = null;
   private localnetOrchestrator: LocalnetOrchestrator | null = null;
   private dockerOrchestrator: DockerOrchestrator | null = null;
   private appOrchestrator: AppOrchestrator | null = null;
@@ -99,8 +99,14 @@ export class TestOrchestrator {
     if (!this.options.skipLock) {
       try {
         logger.step('Acquiring test lock...');
-        const { LockManager } = await import('@jejunetwork/tests/lock-manager');
-        this.lockManager = new LockManager({ force: this.options.force });
+        // @ts-expect-error - optional peer dependency
+        const lockModule = await import('@jejunetwork/tests/lock-manager') as { 
+          LockManager: new (opts: { force?: boolean }) => { 
+            acquireLock: () => { acquired: boolean; message?: string };
+            releaseLock: () => boolean;
+          } 
+        };
+        this.lockManager = new lockModule.LockManager({ force: this.options.force });
         const lockResult = this.lockManager.acquireLock();
         
         if (!lockResult.acquired) {
@@ -173,8 +179,11 @@ export class TestOrchestrator {
         if (!chainId) {
           throw new Error('No CHAIN_ID available for preflight checks.');
         }
-        const { runPreflightChecks } = await import('@jejunetwork/tests/preflight');
-        const preflightResult = await runPreflightChecks({
+        // @ts-expect-error - optional peer dependency
+        const preflightModule = await import('@jejunetwork/tests/preflight') as {
+          runPreflightChecks: (opts: { rpcUrl: string; chainId: number }) => Promise<{ success: boolean }>;
+        };
+        const preflightResult = await preflightModule.runPreflightChecks({
           rpcUrl,
           chainId: parseInt(chainId),
         });

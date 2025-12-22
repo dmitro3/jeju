@@ -227,6 +227,24 @@ export class LiquidationBot {
     }
 
     const [account] = await this.walletClient.getAddresses();
+
+    // Estimate gas dynamically with a buffer
+    let estimatedGas: bigint;
+    try {
+      estimatedGas = await this.publicClient.estimateGas({
+        account,
+        to: this.config.perpMarketAddress,
+        data: '0x' as `0x${string}`, // The actual call data would go here
+      });
+      // Add 30% buffer for safety
+      estimatedGas = (estimatedGas * 130n) / 100n;
+    } catch {
+      // Fallback to default if estimation fails
+      estimatedGas = 400000n;
+    }
+    
+    // Cap at reasonable maximum
+    const gasLimit = estimatedGas < 600000n ? estimatedGas : 600000n;
     
     const hash = await this.walletClient.writeContract({
       account,
@@ -235,7 +253,7 @@ export class LiquidationBot {
       abi: PERP_MARKET_ABI,
       functionName: 'liquidate',
       args: [pos.positionId],
-      gas: 400000n,
+      gas: gasLimit,
       maxFeePerGas: priorityPrice,
       maxPriorityFeePerGas: priorityPrice - gasPrice,
     });

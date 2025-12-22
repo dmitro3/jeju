@@ -23,8 +23,11 @@ export {
   getNetworkName,
   type NetworkConfig,
   type ServicesConfig,
-  type ContractCategoryName,
 } from "@jejunetwork/config";
+
+// Import ContractCategoryName for internal use
+import type { ContractCategoryName } from "@jejunetwork/config";
+export type { ContractCategoryName };
 
 /** Contract addresses for SDK modules - maps to contracts.json structure */
 export interface ContractAddresses {
@@ -57,6 +60,18 @@ export interface ContractAddresses {
   // Staking contracts
   staking?: Address;
   nodeStakingManager?: Address;
+
+  // Extended module contracts
+  gameIntegration?: Address;
+  containerRegistry?: Address;
+  tokenLaunchpad?: Address;
+  bondingCurve?: Address;
+  lpLocker?: Address;
+  networkRegistry?: Address;
+  registryHub?: Address;
+  datasetRegistry?: Address;
+  modelRegistry?: Address;
+  vpnRegistry?: Address;
 }
 
 /** Safe contract lookup - returns undefined if not found instead of throwing
@@ -87,7 +102,9 @@ export function requireContract(
 ): Address {
   const addr = getContract(category, name, network);
   if (!addr) {
-    throw new Error(`Contract ${category}/${name} returned empty address for ${network}`);
+    throw new Error(
+      `Contract ${category}/${name} returned empty address for ${network}`,
+    );
   }
   return addr as Address;
 }
@@ -118,6 +135,18 @@ export function getContractAddresses(network: NetworkType): ContractAddresses {
     // Staking
     staking: safeGetContract("compute", "staking", network),
     nodeStakingManager: safeGetContract("nodeStaking", "manager", network),
+
+    // Extended module contracts
+    gameIntegration: safeGetContract("registry", "gameIntegration", network),
+    containerRegistry: safeGetContract("registry", "container", network),
+    tokenLaunchpad: safeGetContract("defi", "launchpad", network),
+    bondingCurve: safeGetContract("defi", "bondingCurve", network),
+    lpLocker: safeGetContract("defi", "lpLocker", network),
+    networkRegistry: safeGetContract("registry", "network", network),
+    registryHub: safeGetContract("registry", "hub", network),
+    datasetRegistry: safeGetContract("registry", "dataset", network),
+    modelRegistry: safeGetContract("registry", "model", network),
+    vpnRegistry: safeGetContract("registry", "vpn", network),
   };
 }
 

@@ -5,7 +5,11 @@
  */
 
 import { Elysia } from "elysia";
-import { createLogger, EVMRPCResponseSchema, SolanaHealthResponseSchema } from "../utils/index.js";
+import {
+	createLogger,
+	EVMRPCResponseSchema,
+	SolanaHealthResponseSchema,
+} from "../utils/index.js";
 
 const log = createLogger("health");
 
@@ -216,12 +220,12 @@ export class HealthChecker {
 
 			const json = await response.json();
 			const data = EVMRPCResponseSchema.parse(json);
-			
+
 			if (data.error) {
 				this.setComponentHealth(name, "unhealthy", latency, data.error.message);
 				return;
 			}
-			
+
 			if (data.result) {
 				this.metrics.evmBlockNumbers.set(chainId, BigInt(data.result));
 			}
@@ -264,12 +268,12 @@ export class HealthChecker {
 
 			const json = await response.json();
 			const data = SolanaHealthResponseSchema.parse(json);
-			
+
 			if (data.error) {
 				this.setComponentHealth(name, "unhealthy", latency, data.error.message);
 				return;
 			}
-			
+
 			if (data.result === "ok") {
 				this.setComponentHealth(
 					name,
@@ -407,74 +411,90 @@ export class HealthChecker {
 // PROMETHEUS FORMAT HELPERS
 // =============================================================================
 
-function formatPrometheusMetrics(metrics: Metrics, health: SystemHealth): string {
+function formatPrometheusMetrics(
+	metrics: Metrics,
+	health: SystemHealth,
+): string {
 	const lines: string[] = [
-		'# HELP zksolbridge_transfers_initiated_total Total transfers initiated',
-		'# TYPE zksolbridge_transfers_initiated_total counter',
+		"# HELP zksolbridge_transfers_initiated_total Total transfers initiated",
+		"# TYPE zksolbridge_transfers_initiated_total counter",
 		`zksolbridge_transfers_initiated_total ${metrics.transfersInitiated}`,
-		'',
-		'# HELP zksolbridge_transfers_completed_total Total transfers completed',
-		'# TYPE zksolbridge_transfers_completed_total counter',
+		"",
+		"# HELP zksolbridge_transfers_completed_total Total transfers completed",
+		"# TYPE zksolbridge_transfers_completed_total counter",
 		`zksolbridge_transfers_completed_total ${metrics.transfersCompleted}`,
-		'',
-		'# HELP zksolbridge_transfers_failed_total Total transfers failed',
-		'# TYPE zksolbridge_transfers_failed_total counter',
+		"",
+		"# HELP zksolbridge_transfers_failed_total Total transfers failed",
+		"# TYPE zksolbridge_transfers_failed_total counter",
 		`zksolbridge_transfers_failed_total ${metrics.transfersFailed}`,
-		'',
-		'# HELP zksolbridge_transfer_duration_ms Average transfer duration in milliseconds',
-		'# TYPE zksolbridge_transfer_duration_ms gauge',
+		"",
+		"# HELP zksolbridge_transfer_duration_ms Average transfer duration in milliseconds",
+		"# TYPE zksolbridge_transfer_duration_ms gauge",
 		`zksolbridge_transfer_duration_ms ${metrics.averageTransferTimeMs}`,
-		'',
-		'# HELP zksolbridge_proofs_generated_total Total ZK proofs generated',
-		'# TYPE zksolbridge_proofs_generated_total counter',
+		"",
+		"# HELP zksolbridge_proofs_generated_total Total ZK proofs generated",
+		"# TYPE zksolbridge_proofs_generated_total counter",
 		`zksolbridge_proofs_generated_total ${metrics.proofsGenerated}`,
-		'',
-		'# HELP zksolbridge_proof_generation_ms Proof generation time in milliseconds',
-		'# TYPE zksolbridge_proof_generation_ms gauge',
+		"",
+		"# HELP zksolbridge_proof_generation_ms Proof generation time in milliseconds",
+		"# TYPE zksolbridge_proof_generation_ms gauge",
 		`zksolbridge_proof_generation_ms ${metrics.proofGenerationTimeMs}`,
-		'',
-		'# HELP zksolbridge_batch_size Current batch size',
-		'# TYPE zksolbridge_batch_size gauge',
+		"",
+		"# HELP zksolbridge_batch_size Current batch size",
+		"# TYPE zksolbridge_batch_size gauge",
 		`zksolbridge_batch_size ${metrics.batchSize}`,
-		'',
-		'# HELP zksolbridge_solana_slot Latest verified Solana slot',
-		'# TYPE zksolbridge_solana_slot gauge',
+		"",
+		"# HELP zksolbridge_solana_slot Latest verified Solana slot",
+		"# TYPE zksolbridge_solana_slot gauge",
 		`zksolbridge_solana_slot ${metrics.solanaSlot.toString()}`,
-		'',
-		'# HELP zksolbridge_ethereum_slot Latest verified Ethereum slot',
-		'# TYPE zksolbridge_ethereum_slot gauge',
+		"",
+		"# HELP zksolbridge_ethereum_slot Latest verified Ethereum slot",
+		"# TYPE zksolbridge_ethereum_slot gauge",
 		`zksolbridge_ethereum_slot ${metrics.ethereumSlot.toString()}`,
-		'',
-		'# HELP zksolbridge_memory_usage_mb Memory usage in megabytes',
-		'# TYPE zksolbridge_memory_usage_mb gauge',
+		"",
+		"# HELP zksolbridge_memory_usage_mb Memory usage in megabytes",
+		"# TYPE zksolbridge_memory_usage_mb gauge",
 		`zksolbridge_memory_usage_mb ${metrics.memoryUsageMb.toFixed(2)}`,
-		'',
-		'# HELP zksolbridge_uptime_seconds Service uptime in seconds',
-		'# TYPE zksolbridge_uptime_seconds gauge',
+		"",
+		"# HELP zksolbridge_uptime_seconds Service uptime in seconds",
+		"# TYPE zksolbridge_uptime_seconds gauge",
 		`zksolbridge_uptime_seconds ${Math.floor(health.uptime / 1000)}`,
-		'',
-		'# HELP zksolbridge_health_status Health status (1=healthy, 0.5=degraded, 0=unhealthy)',
-		'# TYPE zksolbridge_health_status gauge',
-		`zksolbridge_health_status ${health.status === 'healthy' ? 1 : health.status === 'degraded' ? 0.5 : 0}`,
+		"",
+		"# HELP zksolbridge_health_status Health status (1=healthy, 0.5=degraded, 0=unhealthy)",
+		"# TYPE zksolbridge_health_status gauge",
+		`zksolbridge_health_status ${health.status === "healthy" ? 1 : health.status === "degraded" ? 0.5 : 0}`,
 	];
 
 	// Add per-chain block numbers
 	for (const [chainId, blockNumber] of metrics.evmBlockNumbers) {
-		lines.push('');
-		lines.push(`# HELP zksolbridge_evm_block_number{chain_id="${chainId}"} Latest EVM block number`);
+		lines.push("");
+		lines.push(
+			`# HELP zksolbridge_evm_block_number{chain_id="${chainId}"} Latest EVM block number`,
+		);
 		lines.push(`# TYPE zksolbridge_evm_block_number gauge`);
-		lines.push(`zksolbridge_evm_block_number{chain_id="${chainId}"} ${blockNumber.toString()}`);
+		lines.push(
+			`zksolbridge_evm_block_number{chain_id="${chainId}"} ${blockNumber.toString()}`,
+		);
 	}
 
 	// Add component health
 	for (const component of health.components) {
-		const status = component.status === 'healthy' ? 1 : component.status === 'degraded' ? 0.5 : 0;
-		lines.push('');
-		lines.push(`zksolbridge_component_health{name="${component.name}"} ${status}`);
-		lines.push(`zksolbridge_component_latency_ms{name="${component.name}"} ${component.latencyMs}`);
+		const status =
+			component.status === "healthy"
+				? 1
+				: component.status === "degraded"
+					? 0.5
+					: 0;
+		lines.push("");
+		lines.push(
+			`zksolbridge_component_health{name="${component.name}"} ${status}`,
+		);
+		lines.push(
+			`zksolbridge_component_latency_ms{name="${component.name}"} ${component.latencyMs}`,
+		);
 	}
 
-	return lines.join('\n') + '\n';
+	return `${lines.join("\n")}\n`;
 }
 
 // =============================================================================
@@ -499,7 +519,7 @@ export function healthPlugin(checker: HealthChecker) {
 			};
 		})
 		.get("/metrics/prometheus", ({ set }) => {
-			set.headers['content-type'] = 'text/plain; version=0.0.4; charset=utf-8';
+			set.headers["content-type"] = "text/plain; version=0.0.4; charset=utf-8";
 			return formatPrometheusMetrics(checker.getMetrics(), checker.getHealth());
 		})
 		.get("/ready", () => {

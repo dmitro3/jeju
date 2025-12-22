@@ -1,5 +1,9 @@
 /**
  * jeju fund - Fund development accounts
+ * 
+ * Security notes:
+ * - Addresses are validated before use
+ * - Amounts are validated and bounded
  */
 
 import { Command } from 'commander';
@@ -11,6 +15,7 @@ import { join } from 'path';
 import { logger } from '../lib/logger';
 import { checkRpcHealth } from '../lib/chain';
 import { findMonorepoRoot } from '../lib/system';
+import { validateAddress, sanitizeErrorMessage } from '../lib/security';
 import { DEFAULT_PORTS, WELL_KNOWN_KEYS } from '../types';
 
 const localnetChain = {
@@ -58,8 +63,19 @@ export const fundCommand = new Command('fund')
   });
 
 async function fundAddress(rpcUrl: string, address: string, amountEth: string): Promise<boolean> {
-  if (!address.startsWith('0x') || address.length !== 42) {
-    logger.error('Invalid address');
+  // Validate address using security utility
+  let validAddress: `0x${string}`;
+  try {
+    validAddress = validateAddress(address);
+  } catch {
+    logger.error('Invalid address format');
+    return false;
+  }
+
+  // Validate amount
+  const amountNum = parseFloat(amountEth);
+  if (isNaN(amountNum) || amountNum <= 0 || amountNum > 10000) {
+    logger.error('Invalid amount: must be between 0 and 10000 ETH');
     return false;
   }
 
@@ -84,19 +100,19 @@ async function fundAddress(rpcUrl: string, address: string, amountEth: string): 
     return false;
   }
 
-  logger.step(`Sending ${amountEth} ETH to ${address.slice(0, 10)}...`);
+  logger.step(`Sending ${amountEth} ETH to ${validAddress.slice(0, 10)}...`);
 
   try {
     const hash = await walletClient.sendTransaction({
       account,
-      to: address as `0x${string}`,
+      to: validAddress,
       value: requiredAmount,
     });
 
     const receipt = await client.waitForTransactionReceipt({ hash });
     
     if (receipt.status === 'success') {
-      const newBalance = await client.getBalance({ address: address as `0x${string}` });
+      const newBalance = await client.getBalance({ address: validAddress });
       logger.success(`Done. Balance: ${formatEther(newBalance)} ETH`);
       return true;
     } else {
@@ -104,7 +120,7 @@ async function fundAddress(rpcUrl: string, address: string, amountEth: string): 
       return false;
     }
   } catch (error) {
-    logger.error('Transaction error: ' + (error as Error).message);
+    logger.error('Transaction error: ' + sanitizeErrorMessage(error as Error));
     return false;
   }
 }
@@ -185,7 +201,7 @@ async function showBalances(rpcUrl: string): Promise<void> {
 
 async function fundTestnetDeployer(bridge: boolean): Promise<void> {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/keys/fund-testnet-deployer.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/deploy/fund-testnet-deployer.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Fund testnet deployer script not found');

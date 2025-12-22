@@ -17,6 +17,7 @@ import {
   validateIntentQuote,
   validateIntentInfo,
   validateServiceExists,
+  truncateOutput,
 } from "../validation";
 
 export const createIntentAction: Action = {
@@ -214,18 +215,21 @@ export const listSolversAction: Action = {
       return;
     }
 
+    // Sanitize external solver data
     const solverList = solvers
       .slice(0, 10)
-      .map(
-        (s) =>
-          `• ${s.address.slice(0, 10)}... - Rep: ${s.reputation} - Liquidity: ${s.liquidity}`,
-      )
+      .map((s) => {
+        const safeAddress = truncateOutput(s.address, 42).slice(0, 10);
+        const safeRep = String(s.reputation).slice(0, 10);
+        const safeLiquidity = truncateOutput(s.liquidity, 50);
+        return `• ${safeAddress}... - Rep: ${safeRep} - Liquidity: ${safeLiquidity}`;
+      })
       .join("\n");
 
     callback?.({
       text: `Active Solvers (${solvers.length}):
 ${solverList}`,
-      content: { solvers },
+      content: { solvers: solvers.slice(0, 10) },
     });
   },
 

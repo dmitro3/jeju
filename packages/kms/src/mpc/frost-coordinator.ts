@@ -40,6 +40,12 @@ function isFROSTCoordinatorType(value: { FROSTCoordinator?: { new (...args: [str
 
 let FROSTCoordinator: FROSTCoordinatorType | null = null;
 
+/** Maximum concurrent signing sessions to prevent resource exhaustion */
+const MAX_SESSIONS = 1000;
+
+/** Session expiry time in milliseconds (5 minutes) */
+const SESSION_EXPIRY_MS = 5 * 60 * 1000;
+
 async function loadFROST(): Promise<void> {
   if (!FROSTCoordinator) {
     const oauth3 = await import('@jejunetwork/oauth3');
@@ -153,6 +159,14 @@ export class FROSTMPCCoordinator {
     await loadFROST();
 
     const { keyId, messageHash, requester } = request;
+
+    // Force cleanup if sessions exceed maximum to prevent DoS
+    if (this.sessions.size >= MAX_SESSIONS) {
+      this.cleanupExpiredSessions();
+      if (this.sessions.size >= MAX_SESSIONS) {
+        throw new Error('Session storage limit reached');
+      }
+    }
 
     const coordinator = this.frostClusters.get(keyId);
     if (!coordinator) throw new Error(`Key ${keyId} not found`);
@@ -269,6 +283,18 @@ export class FROSTMPCCoordinator {
       activeSessions: this.sessions.size,
       config: this.config,
     };
+  }
+
+  /**
+   * Clean up expired sessions to prevent memory exhaustion
+   */
+  private cleanupExpiredSessions(): void {
+    const now = Date.now();
+    for (const [sessionId, session] of this.sessions) {
+      if (now - session.createdAt > SESSION_EXPIRY_MS || session.status === 'complete' || session.status === 'failed') {
+        this.sessions.delete(sessionId);
+      }
+    }
   }
 }
 

@@ -5,8 +5,12 @@
  * across providers and eliminate code duplication.
  */
 
-import { keccak256, toBytes, toHex, type Hex } from 'viem';
+import { keccak256, toBytes, toHex } from 'viem';
+import type { Hex } from 'viem';
 import { ciphertextPayloadSchema } from './schemas.js';
+
+/** Maximum allowed data size for encryption (100MB) to prevent DoS */
+const MAX_ENCRYPTION_SIZE = 100 * 1024 * 1024;
 
 /** Helper to ensure ArrayBuffer compatibility for Web Crypto API */
 function toArrayBuffer(data: Uint8Array): ArrayBuffer {
@@ -27,6 +31,15 @@ export async function aesGcmEncrypt(
   data: Uint8Array,
   key: Uint8Array
 ): Promise<{ ciphertext: Uint8Array; iv: Uint8Array }> {
+  // Validate input size to prevent DoS
+  if (data.byteLength > MAX_ENCRYPTION_SIZE) {
+    throw new Error(`Data exceeds maximum allowed size of ${MAX_ENCRYPTION_SIZE} bytes`);
+  }
+  // Validate key size (must be 256 bits for AES-256)
+  if (key.byteLength !== 32) {
+    throw new Error('AES-256 requires a 32-byte (256-bit) key');
+  }
+  
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cryptoKey = await crypto.subtle.importKey('raw', toArrayBuffer(key), { name: 'AES-GCM' }, false, ['encrypt']);
   const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, cryptoKey, toArrayBuffer(data));
@@ -39,6 +52,17 @@ export async function aesGcmDecrypt(
   iv: Uint8Array,
   key: Uint8Array
 ): Promise<Uint8Array> {
+  // Validate input sizes
+  if (ciphertext.byteLength > MAX_ENCRYPTION_SIZE + 16) { // +16 for auth tag
+    throw new Error(`Ciphertext exceeds maximum allowed size`);
+  }
+  if (iv.byteLength !== 12) {
+    throw new Error('AES-GCM IV must be 12 bytes');
+  }
+  if (key.byteLength !== 32) {
+    throw new Error('AES-256 requires a 32-byte (256-bit) key');
+  }
+  
   const cryptoKey = await crypto.subtle.importKey('raw', toArrayBuffer(key), { name: 'AES-GCM' }, false, ['decrypt']);
   const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: toArrayBuffer(iv) }, cryptoKey, toArrayBuffer(ciphertext));
   return new Uint8Array(decrypted);
@@ -120,6 +144,30 @@ export function parseCiphertextPayload(payloadJson: string): AESGCMPayload {
 /** Generate a unique key ID with given prefix */
 export function generateKeyId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
+/** 
+ * Constant-time comparison of two hex strings to prevent timing attacks.
+ * Both strings must be valid hex (with 0x prefix).
+ * Compares in constant time regardless of where differences occur.
+ * For different lengths, pads shorter string and always returns false.
+ */
+export function constantTimeCompare(a: Hex, b: Hex): boolean {
+  // Use the longer length to ensure constant-time comparison
+  // regardless of input lengths
+  const maxLen = Math.max(a.length, b.length);
+  
+  // Track both XOR result and length mismatch
+  let result = a.length ^ b.length; // Non-zero if lengths differ
+  
+  for (let i = 0; i < maxLen; i++) {
+    // Use 0 for out-of-bounds access to maintain constant time
+    const charA = i < a.length ? a.charCodeAt(i) : 0;
+    const charB = i < b.length ? b.charCodeAt(i) : 0;
+    result |= charA ^ charB;
+  }
+  
+  return result === 0;
 }
 
 /** Derive a master key from a secret string */

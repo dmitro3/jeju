@@ -7,12 +7,30 @@ import prompts from 'prompts';
 import { execa } from 'execa';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { z } from 'zod';
 import { logger } from '../lib/logger';
 import { checkRpcHealth, getAccountBalance } from '../lib/chain';
 import { hasKeys, resolvePrivateKey } from '../lib/keys';
 import { checkDocker, checkFoundry, getNetworkDir, findMonorepoRoot } from '../lib/system';
 import { CHAIN_CONFIG, type NetworkType } from '../types';
 import { privateKeyToAccount } from 'viem/accounts';
+
+// Schema validation for deployment config files
+const DeployConfigSchema = z.object({
+  network: z.enum(['localnet', 'testnet', 'mainnet']),
+  lastDeployed: z.string().optional(),
+  deployerAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  contracts: z.boolean().optional(),
+  infrastructure: z.boolean().optional(),
+  apps: z.boolean().optional(),
+});
+
+// Schema for contracts deployment file
+const ContractsDeploymentSchema = z.record(z.string(), z.string().or(z.object({
+  address: z.string(),
+  deployedAt: z.number().optional(),
+  txHash: z.string().optional(),
+})));
 
 interface DeployConfig {
   network: NetworkType;
@@ -31,7 +49,14 @@ function loadConfig(): DeployConfig | null {
   const path = getConfigPath();
   if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
+    const rawData = JSON.parse(readFileSync(path, 'utf-8'));
+    // SECURITY: Validate schema to prevent insecure deserialization
+    const result = DeployConfigSchema.safeParse(rawData);
+    if (!result.success) {
+      logger.warn(`Invalid deploy config format: ${result.error.message}`);
+      return null;
+    }
+    return result.data;
   } catch {
     return null;
   }
@@ -583,7 +608,19 @@ deployCommand
     const deploymentsFile = join(rootDir, `packages/contracts/deployments/${network}/contracts.json`);
     
     if (existsSync(deploymentsFile)) {
-      const deployments = JSON.parse(readFileSync(deploymentsFile, 'utf-8'));
+      const rawData = JSON.parse(readFileSync(deploymentsFile, 'utf-8'));
+      // SECURITY: Validate schema to prevent insecure deserialization
+      const result = ContractsDeploymentSchema.safeParse(rawData);
+      if (!result.success) {
+        logger.warn('Invalid contracts deployment file format');
+        logger.table([{
+          label: 'Contracts',
+          value: 'Invalid format',
+          status: 'error',
+        }]);
+        return;
+      }
+      const deployments = result.data;
       const count = Object.keys(deployments).length;
       logger.table([{
         label: 'Contracts',
@@ -616,7 +653,7 @@ deployCommand
 
     // Run the comprehensive check script
     const rootDir = findMonorepoRoot();
-    const checkScript = join(rootDir, 'scripts/verify/check-testnet-readiness.ts');
+    const checkScript = join(rootDir, 'packages/deployment/scripts/verify/check-testnet-readiness.ts');
     
     if (!existsSync(checkScript)) {
       logger.error('Check script not found');
@@ -640,7 +677,7 @@ deployCommand
     
     if (type === 'oif') {
       const rootDir = findMonorepoRoot();
-      const verifyScript = join(rootDir, 'scripts/verify/verify-oif-deployment.ts');
+      const verifyScript = join(rootDir, 'packages/deployment/scripts/verify/verify-oif-deployment.ts');
       
       if (!existsSync(verifyScript)) {
         logger.error('OIF verify script not found');
@@ -925,7 +962,7 @@ deployCommand
   .option('--contracts-only', 'Deploy contracts only (skip infrastructure)')
   .action(async (options) => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/deploy/testnet-full-crosschain.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/deploy/testnet-full-crosschain.ts');
     
     if (!existsSync(scriptPath)) {
       logger.error('Testnet full deployment script not found');
@@ -1029,7 +1066,7 @@ deployCommand
   .option('--network <network>', 'Network: localnet | testnet | mainnet', 'localnet')
   .action(async (options) => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/governance/deploy-security-council.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/deploy/deploy-security-council.ts');
     
     if (!existsSync(scriptPath)) {
       logger.error('Security council deploy script not found');
@@ -1050,11 +1087,11 @@ deployCommand
 // Helper function to run deploy scripts
 async function runDeployScript(scriptName: string, network: string, options: Record<string, unknown> = {}) {
   const rootDir = findMonorepoRoot();
-  // Check if script is in deploy/ subdirectory or root scripts/
-  let scriptPath = join(rootDir, 'scripts/deploy', `${scriptName}.ts`);
+  // Check if script is in packages/deployment/scripts/deploy/
+  let scriptPath = join(rootDir, 'packages/deployment/scripts/deploy', `${scriptName}.ts`);
   if (!existsSync(scriptPath)) {
-    // Also check root scripts/ for backwards compatibility
-    scriptPath = join(rootDir, 'scripts', `${scriptName}.ts`);
+    // Also check packages/deployment/scripts/ for other scripts
+    scriptPath = join(rootDir, 'packages/deployment/scripts', `${scriptName}.ts`);
   }
   
   if (!existsSync(scriptPath)) {

@@ -234,7 +234,7 @@ class ManifestParser {
     // Second pass: process workloads
     for (const manifest of manifests) {
       switch (manifest.kind) {
-        case 'Deployment':
+        case 'Deployment': {
           const workers = this.parseDeployment(manifest);
           deployment.workers.push(...workers);
           if (!deployment.name) {
@@ -242,16 +242,19 @@ class ManifestParser {
             deployment.namespace = manifest.metadata.namespace ?? 'default';
           }
           break;
+        }
 
-        case 'Service':
+        case 'Service': {
           const service = this.parseService(manifest);
           deployment.services.push(service);
           break;
+        }
 
-        case 'PersistentVolumeClaim':
+        case 'PersistentVolumeClaim': {
           const storage = this.parsePVC(manifest);
           deployment.storage.push(storage);
           break;
+        }
 
         case 'Job':
         case 'CronJob':
@@ -476,7 +479,7 @@ export function createHelmProviderRouter(): Hono {
   // Apply Helm release / K8s manifests
   router.post('/helm/apply', async (c) => {
     const body = await validateBody(manifestsSchema, c);
-    const owner = c.req.header('x-jeju-address') as Address;
+    const _owner = c.req.header('x-jeju-address') as Address;
 
     const deployment = parser.parseManifests(body.manifests as KubeManifest[]);
     deployment.name = body.release ?? deployment.name;

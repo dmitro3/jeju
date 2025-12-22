@@ -10,7 +10,6 @@
  * - Testnet/Mainnet: Dedicated nodes serve the base providers
  */
 
-import type { Address } from 'viem';
 
 export interface InferenceNode {
   address: string;

@@ -273,7 +273,7 @@ export async function processComputeEvents(ctx: ProcessorContext<Store>): Promis
       if (eventSig === RENTAL_STARTED) {
         // RentalStarted(bytes32 indexed rentalId, string sshHost, uint16 sshPort, string containerId)
         const rentalId = log.topics[1];
-        let rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
+        const rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
         if (rental) {
           rental.status = ComputeRentalStatus.ACTIVE;
           rental.startTime = blockTimestamp;
@@ -284,7 +284,7 @@ export async function processComputeEvents(ctx: ProcessorContext<Store>): Promis
       if (eventSig === RENTAL_COMPLETED) {
         // RentalCompleted(bytes32 indexed rentalId, uint256 actualDuration, uint256 refundAmount)
         const rentalId = log.topics[1];
-        let rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
+        const rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
         if (rental) {
           rental.status = ComputeRentalStatus.COMPLETED;
           rental.endTime = blockTimestamp;
@@ -305,7 +305,7 @@ export async function processComputeEvents(ctx: ProcessorContext<Store>): Promis
       if (eventSig === RENTAL_CANCELLED) {
         // RentalCancelled(bytes32 indexed rentalId, uint256 refundAmount)
         const rentalId = log.topics[1];
-        let rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
+        const rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
         if (rental) {
           rental.status = ComputeRentalStatus.CANCELLED;
           rental.endTime = blockTimestamp;
@@ -321,7 +321,7 @@ export async function processComputeEvents(ctx: ProcessorContext<Store>): Promis
           log.data as `0x${string}`
         );
 
-        let rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
+        const rental = rentals.get(rentalId) || await ctx.store.get(ComputeRental, rentalId);
         if (rental) {
           rental.duration += BigInt(decoded[0].toString()) * 3600n;
           rental.price += BigInt(decoded[1].toString());

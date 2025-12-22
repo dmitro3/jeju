@@ -44,7 +44,7 @@ export {
 } from './migration.js';
 
 // Utilities
-export { parsePort, parseTimeout, parseBoolean } from './utils.js';
+export { parsePort, parseTimeout, parseBoolean, validateSQLIdentifier, validateSQLIdentifiers, validateSQLDefault, sanitizeObject, sanitizeRows } from './utils.js';
 
 // Types
 export type {

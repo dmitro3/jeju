@@ -41,8 +41,8 @@ function calculateAmountOut(amountIn: bigint, reserveIn: bigint, reserveOut: big
   return numerator / denominator;
 }
 
-// Helper: Calculate price impact
-function calculatePriceImpact(amountIn: bigint, reserveIn: bigint): number {
+// Helper: Calculate price impact (reserved for future use)
+function _calculatePriceImpact(amountIn: bigint, reserveIn: bigint): number {
   return Number((amountIn * 10000n) / reserveIn) / 100; // percentage
 }
 
@@ -267,13 +267,13 @@ describe('DEX Arbitrage Profitability', () => {
       const eth = '0x0000000000000000000000000000000000000001';
       const usdc = '0x0000000000000000000000000000000000000002';
       
-      // Small price difference (1%)
-      const poolA = createPool('0xpoolA', eth, usdc,
+      // Small price difference (1%) - pools created for documentation
+      createPool('0xpoolA', eth, usdc,
         (100n * BigInt(1e18)).toString(),
         (297000n * BigInt(1e6)).toString() // $2970
       );
       
-      const poolB = createPool('0xpoolB', eth, usdc,
+      createPool('0xpoolB', eth, usdc,
         (100n * BigInt(1e18)).toString(),
         (300000n * BigInt(1e6)).toString() // $3000
       );
@@ -524,10 +524,9 @@ describe('Profit Simulation Summary', () => {
     console.log('MEV/ARBITRAGE PROFITABILITY ANALYSIS');
     console.log('========================================\n');
     
-    // Scenario 1: DEX arbitrage on same chain
+    // Scenario 1: DEX arbitrage on same chain (10 ETH input)
     console.log('Scenario 1: Same-chain DEX Arbitrage');
     console.log('─────────────────────────────────────');
-    const dexInput = BigInt(10e18); // 10 ETH
     const dexGrossProfit = BigInt(1e17); // 0.1 ETH (1%)
     const dexGasCost = BigInt(300000) * BigInt(30e9); // 300k gas at 30 gwei
     const dexNetProfit = dexGrossProfit - dexGasCost;
@@ -559,7 +558,6 @@ describe('Profit Simulation Summary', () => {
     // Scenario 3: Sandwich (MEV)
     console.log('Scenario 3: Sandwich Attack');
     console.log('─────────────────────────────────────');
-    const victimSize = BigInt(50e18); // 50 ETH victim swap
     const frontrunSize = BigInt(5e18); // 5 ETH frontrun
     const priceImpactBps = 50; // 0.5% price impact from frontrun
     const sandwichProfit = (frontrunSize * BigInt(priceImpactBps)) / 10000n;

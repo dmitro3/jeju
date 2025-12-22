@@ -8,10 +8,9 @@
  * - Concurrent operations
  */
 
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { OrgAgent } from './org-agent';
 import { CQLClient } from '@jeju/db';
-import type { OrgTodo, OrgCheckinSchedule, OrgCheckinResponse, OrgTeamMember } from '../types';
 
 /** Database row for todo queries */
 interface TodoDbRow {
@@ -117,7 +116,7 @@ function createMockFn<T>(defaultValue: T): MockFn<T> {
 }
 
 // Create typed mocks
-const mockExec = createMockFn<void>(undefined);
+const mockExec = createMockFn<undefined>(undefined);
 const mockQuery = createMockFn<QueryResult>({ rows: [] });
 
 describe('OrgAgent', () => {

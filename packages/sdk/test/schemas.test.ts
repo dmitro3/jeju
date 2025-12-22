@@ -16,7 +16,6 @@ import {
   SwapQuoteResponseSchema,
   TokenSchema,
   PoolInfoResponseSchema,
-  PositionsResponseSchema,
   StorageStatsSchema,
   PinInfoSchema,
   ContentInfoSchema,

@@ -6,8 +6,6 @@ import { TokenLaunchpadAbi } from '@jejunetwork/contracts'
 import { getLaunchpadContracts, hasLaunchpad } from '@/config/contracts'
 import { JEJU_CHAIN_ID } from '@/config/chains'
 import {
-  validateBondingCurveLaunch,
-  validateICOLaunch,
   type BondingCurveConfig,
   type ICOConfig,
   type LaunchInfo,
@@ -16,7 +14,7 @@ import {
 export type { BondingCurveConfig, ICOConfig, LaunchInfo }
 
 export function useTokenLaunchpad(chainId: number = JEJU_CHAIN_ID) {
-  const { address, isConnected } = useAccount()
+  const { isConnected } = useAccount()
   const contracts = getLaunchpadContracts(chainId)
   const launchpadAddress = contracts?.tokenLaunchpad as Address | undefined
   const isAvailable = hasLaunchpad(chainId)

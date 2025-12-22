@@ -9,7 +9,7 @@ import { cors } from 'hono/cors';
 import { validateBody, mcpResourceReadSchema, mcpToolCallSchema, mcpPromptGetSchema, validateOrThrow, analyzeTransactionPromptArgsSchema, summarizeAgentActivityPromptArgsSchema, explainProposalPromptArgsSchema } from './lib/validation';
 import { BadRequestError, NotFoundError } from './lib/types';
 import { addressSchema, hashSchema, blockNumberSchema } from './lib/validation';
-import { z } from 'zod';
+import type { z as _z } from 'zod';
 import {
   buildBlockQuery,
   buildTransactionQuery,
@@ -209,10 +209,95 @@ const PROMPTS = [
 // MCP Server
 // ============================================================================
 
+// Request body size limit (1MB)
+const MAX_BODY_SIZE = 1024 * 1024;
+
+// Simple in-memory rate limiter for MCP server
+const mcpRateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const MCP_RATE_LIMIT = 100; // requests per minute
+const MCP_RATE_WINDOW = 60_000; // 1 minute
+
+// Cleanup expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, { resetAt }] of mcpRateLimitStore) {
+    if (now > resetAt) mcpRateLimitStore.delete(key);
+  }
+}, 60_000).unref();
+
 export function createIndexerMCPServer(): Hono {
   const app = new Hono();
 
-  app.use('/*', cors());
+  // SECURITY: Global error handler for JSON parse errors and other exceptions
+  app.onError((err, c) => {
+    console.error('[MCP] Error:', err.message);
+    
+    // Handle JSON parse errors
+    if (err.message.includes('JSON') || err.message.includes('Unexpected')) {
+      return c.json({ error: 'Invalid JSON in request body' }, 400);
+    }
+    
+    // Handle validation errors
+    if (err.message.includes('Validation')) {
+      return c.json({ error: err.message }, 400);
+    }
+    
+    // Handle not found errors
+    if (err.message.includes('not found')) {
+      return c.json({ error: err.message }, 404);
+    }
+    
+    // Don't expose internal error details
+    return c.json({ error: 'Internal server error' }, 500);
+  });
+
+  // SECURITY: Configure CORS with allowlist - defaults to permissive for local dev
+  const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean);
+  
+  if (CORS_ORIGINS?.length) {
+    app.use('/*', cors({ origin: CORS_ORIGINS, credentials: true }));
+  } else {
+    // Permissive CORS for local development when CORS_ORIGINS not set
+    app.use('/*', cors());
+  }
+  
+  // SECURITY: Request body size limit middleware
+  app.use('/*', async (c, next) => {
+    const contentLength = c.req.header('content-length');
+    if (contentLength && parseInt(contentLength) > MAX_BODY_SIZE) {
+      return c.json({ error: 'Request body too large' }, 413);
+    }
+    return next();
+  });
+  
+  // SECURITY: Rate limiting middleware
+  app.use('/*', async (c, next) => {
+    // Skip rate limiting for info endpoint
+    if (c.req.path === '/') return next();
+    
+    // Use IP or API key for rate limiting
+    const forwarded = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const apiKey = c.req.header('x-api-key');
+    const clientKey = apiKey ? `apikey:${apiKey}` : `ip:${forwarded || 'unknown'}`;
+    
+    const now = Date.now();
+    let record = mcpRateLimitStore.get(clientKey);
+    if (!record || now > record.resetAt) {
+      record = { count: 0, resetAt: now + MCP_RATE_WINDOW };
+      mcpRateLimitStore.set(clientKey, record);
+    }
+    record.count++;
+    
+    c.header('X-RateLimit-Limit', String(MCP_RATE_LIMIT));
+    c.header('X-RateLimit-Remaining', String(Math.max(0, MCP_RATE_LIMIT - record.count)));
+    c.header('X-RateLimit-Reset', String(Math.ceil(record.resetAt / 1000)));
+    
+    if (record.count > MCP_RATE_LIMIT) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
+    }
+    
+    return next();
+  });
 
   // Initialize
   app.post('/initialize', (c) => {
@@ -298,7 +383,7 @@ export function createIndexerMCPServer(): Hono {
     const body = await c.req.json();
     const { name, arguments: args } = validateBody(mcpToolCallSchema, body, 'MCP POST /tools/call');
     let result: MCPToolResult;
-    let isError = false;
+    const isError = false;
 
     switch (name) {
       case 'query_graphql': {

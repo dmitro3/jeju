@@ -39,6 +39,15 @@ import {
   resetContributionPeriod,
 } from './utils/contributions';
 
+// Import SSRF validation from shared utility
+import { validateProxyUrlWithDNS } from './utils/proxy-validation';
+
+// Maximum request body size (1MB)
+const MAX_REQUEST_BODY_SIZE = 1024 * 1024;
+
+// Maximum response body size (10MB)
+const MAX_RESPONSE_BODY_SIZE = 10 * 1024 * 1024;
+
 export function createRESTRouter(ctx: VPNServiceContext): Hono {
   const router = new Hono();
 
@@ -181,11 +190,12 @@ export function createRESTRouter(ctx: VPNServiceContext): Hono {
         persistentKeepalive: 25,
       } : undefined,
       // For SOCKS5, return proxy details
+      // SECURITY: Generate a random token instead of using wallet address as password
       socks5Config: session.protocol === 'socks5' ? {
         host: targetNode.endpoint.split(':')[0],
         port: 1080,
         username: session.sessionId,
-        password: auth.address,
+        password: crypto.randomUUID(), // Random token, not sensitive address
       } : undefined,
     });
   });
@@ -266,22 +276,70 @@ export function createRESTRouter(ctx: VPNServiceContext): Hono {
       paymentResult.error || 'Payment required. Include x-payment header with valid x402 payment.'
     );
 
+    // SECURITY: Check content-length before parsing body
+    const contentLength = c.req.header('content-length');
+    if (contentLength && parseInt(contentLength, 10) > MAX_REQUEST_BODY_SIZE) {
+      throw new Error(`Request body too large. Max size: ${MAX_REQUEST_BODY_SIZE} bytes`);
+    }
+
     const rawBody = await c.req.json();
     const body = expectValid(ProxyRequestSchema, rawBody, 'proxy request');
+
+    // SECURITY: Validate URL with DNS resolution to prevent SSRF and DNS rebinding attacks
+    await validateProxyUrlWithDNS(body.url);
 
     // Find exit node
     const exitNode = findBestNode(ctx, body.countryCode);
     expect(exitNode !== undefined, 'No available nodes matching criteria');
 
-    // Make proxied request
+    // Make proxied request with timeout
     const startTime = Date.now();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
     const response = await fetch(body.url, {
       method: body.method,
       headers: body.headers,
       body: body.body,
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
 
-    const responseBody = await response.text();
+    // SECURITY: Check response size before reading
+    const responseContentLength = response.headers.get('content-length');
+    if (responseContentLength && parseInt(responseContentLength, 10) > MAX_RESPONSE_BODY_SIZE) {
+      throw new Error(`Response too large. Max size: ${MAX_RESPONSE_BODY_SIZE} bytes`);
+    }
+
+    // SECURITY: Read response with size limit
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+    
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      totalSize += value.length;
+      if (totalSize > MAX_RESPONSE_BODY_SIZE) {
+        reader.cancel();
+        throw new Error(`Response too large. Max size: ${MAX_RESPONSE_BODY_SIZE} bytes`);
+      }
+      chunks.push(value);
+    }
+    
+    const responseBody = new TextDecoder().decode(
+      chunks.reduce((acc, chunk) => {
+        const result = new Uint8Array(acc.length + chunk.length);
+        result.set(acc);
+        result.set(chunk, acc.length);
+        return result;
+      }, new Uint8Array(0))
+    );
+    
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((v, k) => { responseHeaders[k] = v; });
 

@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { discoverAllApps, displayAppsSummary } from '../../../../scripts/shared/discover-apps';
+import { discoverAllApps, displayAppsSummary } from '../../../../packages/deployment/scripts/shared/discover-apps';
 import { logger } from '../lib/logger';
 
 export const appsCommand = new Command('apps')
@@ -59,8 +59,13 @@ export const appsCommand = new Command('apps')
         }
       }
       
-      if (app.manifest.dependencies && app.manifest.dependencies.length > 0) {
-        logger.keyValue('Dependencies', app.manifest.dependencies.join(', '));
+      if (app.manifest.dependencies) {
+        const deps = Array.isArray(app.manifest.dependencies) 
+          ? app.manifest.dependencies 
+          : Object.keys(app.manifest.dependencies);
+        if (deps.length > 0) {
+          logger.keyValue('Dependencies', deps.join(', '));
+        }
       }
       
       if (app.manifest.tags && app.manifest.tags.length > 0) {

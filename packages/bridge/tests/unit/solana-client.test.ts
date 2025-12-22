@@ -19,7 +19,9 @@ import {
 
 // Mock program IDs (using valid Base58-encoded 32-byte public keys)
 const MOCK_BRIDGE_PROGRAM = new PublicKey("11111111111111111111111111111111"); // System program (32 bytes = valid)
-const MOCK_LIGHT_CLIENT_PROGRAM = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111"); // BPF Upgradeable loader
+const MOCK_LIGHT_CLIENT_PROGRAM = new PublicKey(
+	"BPFLoaderUpgradeab1e11111111111111111111111",
+); // BPF Upgradeable loader
 
 describe("SolanaClient", () => {
 	describe("Client Creation", () => {
@@ -40,7 +42,7 @@ describe("SolanaClient", () => {
 
 		it("should create client with different commitment levels", () => {
 			const commitments = ["processed", "confirmed", "finalized"] as const;
-			
+
 			for (const commitment of commitments) {
 				const client = createSolanaClient({
 					rpcUrl: "http://127.0.0.1:8899",
@@ -124,7 +126,7 @@ describe("SolanaClient", () => {
 			const nonce = 12345;
 			const bytes = new Uint8Array(32);
 			new DataView(bytes.buffer).setBigUint64(0, BigInt(nonce), false);
-			
+
 			const hash = toHash32(bytes);
 			expect(hash.length).toBe(32);
 		});
@@ -132,11 +134,16 @@ describe("SolanaClient", () => {
 		it("should handle 32-byte EVM addresses", () => {
 			// EVM addresses are 20 bytes, but we pad to 32 for cross-chain
 			const evmAddress = new Uint8Array(32);
-			evmAddress.set([0xf3, 0x9F, 0xd6, 0xe5, 0x1a, 0xad, 0x88, 0xF6, 0xF4, 0xce,
-				0x6a, 0xB8, 0x82, 0x72, 0x79, 0xcf, 0xff, 0xb9, 0x22, 0x66], 12); // Right-padded
+			evmAddress.set(
+				[
+					0xf3, 0x9f, 0xd6, 0xe5, 0x1a, 0xad, 0x88, 0xf6, 0xf4, 0xce, 0x6a,
+					0xb8, 0x82, 0x72, 0x79, 0xcf, 0xff, 0xb9, 0x22, 0x66,
+				],
+				12,
+			); // Right-padded
 
 			expect(evmAddress.length).toBe(32);
-			expect(evmAddress.slice(0, 12).every(b => b === 0)).toBe(true);
+			expect(evmAddress.slice(0, 12).every((b) => b === 0)).toBe(true);
 		});
 	});
 
@@ -160,7 +167,9 @@ describe("SolanaClient", () => {
 				commitment: "confirmed",
 				keypair: Keypair.generate(),
 				bridgeProgramId: new PublicKey("11111111111111111111111111111111"),
-				evmLightClientProgramId: new PublicKey("11111111111111111111111111111112"),
+				evmLightClientProgramId: new PublicKey(
+					"11111111111111111111111111111112",
+				),
 			});
 			expect(client).toBeDefined();
 		});
@@ -215,4 +224,3 @@ describe("SolanaClient Integration Points", () => {
 		expect(usdtPubkey.toBytes().length).toBe(32);
 	});
 });
-

@@ -26,9 +26,12 @@
  * ```
  */
 
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+/** Maximum config file size (10MB) - prevents DoS via large files */
+const MAX_CONFIG_FILE_SIZE = 10 * 1024 * 1024;
 import {
   ContractsConfigSchema,
   ServicesConfigSchema,
@@ -79,6 +82,13 @@ type NetworkContracts = ContractsConfig['localnet'];
 function loadJsonRaw(filename: string): unknown {
   const path = resolve(CONFIG_DIR, filename);
   if (!existsSync(path)) throw new Error(`Config not found: ${path}`);
+  
+  // Check file size to prevent DoS via large config files
+  const stats = statSync(path);
+  if (stats.size > MAX_CONFIG_FILE_SIZE) {
+    throw new Error(`Config file ${filename} exceeds maximum size limit (${MAX_CONFIG_FILE_SIZE} bytes)`);
+  }
+  
   return JSON.parse(readFileSync(path, 'utf-8'));
 }
 
@@ -139,15 +149,18 @@ export function getContract(
   
   // Check VITE_ format (for Vite apps)
   const viteKey = `VITE_${envName}_ADDRESS`;
-  if (process.env[viteKey]) return process.env[viteKey]!;
+  const viteVal = process.env[viteKey];
+  if (viteVal) return viteVal;
   
   // Check NEXT_PUBLIC_ format (for Next.js apps)
   const nextKey = `NEXT_PUBLIC_${envName}_ADDRESS`;
-  if (process.env[nextKey]) return process.env[nextKey]!;
+  const nextVal = process.env[nextKey];
+  if (nextVal) return nextVal;
   
   // Check category-prefixed format (for scripts)
   const categoryKey = `${category.toUpperCase()}_${envName}`;
-  if (process.env[categoryKey]) return process.env[categoryKey]!;
+  const categoryVal = process.env[categoryKey];
+  if (categoryVal) return categoryVal;
   
   const net = network ?? getCurrentNetwork();
   const contracts = loadContracts();
@@ -223,10 +236,16 @@ export function getPoCConfig(network?: NetworkType): PoCConfig {
   if (!chainConfig.rpcUrl) {
     throw new Error(`RPC URL not configured for ${chain}`);
   }
+
+  const validatorAddress = pocContracts.validator;
+  const identityRegistryAddress = pocContracts.identityRegistry;
+  if (!validatorAddress || !identityRegistryAddress) {
+    throw new Error(`PoC validator or identityRegistry not configured for ${chain}`);
+  }
   
   return {
-    validatorAddress: pocContracts.validator,
-    identityRegistryAddress: pocContracts.identityRegistry,
+    validatorAddress,
+    identityRegistryAddress,
     rpcUrl: chainConfig.rpcUrl,
     chainId: chainConfig.chainId,
   };

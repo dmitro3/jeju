@@ -7,7 +7,7 @@
  * - Transport via Jeju relay nodes
  */
 
-import type { Address, Hex, WalletClient } from 'viem';
+import type { Address, Hex } from 'viem';
 import type {
   MLSClientConfig,
   MLSClientState,
@@ -19,6 +19,11 @@ import type {
 } from './types';
 import { JejuGroup } from './group';
 import { randomBytes } from 'node:crypto';
+
+// ============ Limits ============
+
+const MAX_GROUPS = 1000; // Maximum groups per client
+const MAX_EVENT_HANDLERS = 100; // Maximum event handlers
 
 // ============ Types ============
 
@@ -135,6 +140,11 @@ export class JejuMLSClient {
     
     await group.initialize();
     
+    // Check groups limit to prevent memory exhaustion
+    if (this.groups.size >= MAX_GROUPS) {
+      throw new Error(`Cannot create group: maximum groups limit (${MAX_GROUPS}) reached`);
+    }
+    
     this.groups.set(groupId, group);
     
     console.log(`[MLS Client] Created group ${groupId} with ${config.members.length} members`);
@@ -166,6 +176,11 @@ export class JejuMLSClient {
     });
     
     await group.join(inviteCode);
+    
+    // Check groups limit to prevent memory exhaustion
+    if (this.groups.size >= MAX_GROUPS) {
+      throw new Error(`Cannot join group: maximum groups limit (${MAX_GROUPS}) reached`);
+    }
     
     this.groups.set(groupId, group);
     
@@ -263,8 +278,9 @@ export class JejuMLSClient {
     
     try {
       while (true) {
-        if (messageQueue.length > 0) {
-          yield messageQueue.shift()!;
+        const nextMessage = messageQueue.shift();
+        if (nextMessage) {
+          yield nextMessage;
         } else {
           // Wait for next message
           yield await new Promise<MLSMessage>(resolve => {
@@ -340,9 +356,12 @@ export class JejuMLSClient {
    * Get devices for this identity
    */
   async getDevices(): Promise<DeviceInfo[]> {
+    if (!this.installationId) {
+      throw new Error('Client not initialized');
+    }
     // In production, query from relay/registry
     return [{
-      installationId: this.installationId!,
+      installationId: this.installationId,
       deviceType: 'desktop',
       lastActiveAt: Date.now(),
     }];
@@ -363,7 +382,7 @@ export class JejuMLSClient {
   /**
    * Derive MLS keys from wallet signature
    */
-  private async deriveMLSKeys(signature: Hex): Promise<void> {
+  private async deriveMLSKeys(_signature: Hex): Promise<void> {
     // In production, use proper key derivation
     // Derives identity key and pre-keys from signature
     console.log(`[MLS Client] Derived MLS keys from signature`);
@@ -406,7 +425,7 @@ export class JejuMLSClient {
   /**
    * Validate invite code
    */
-  private async validateInvite(groupId: string, code: string): Promise<{
+  private async validateInvite(_groupId: string, _code: string): Promise<{
     groupName: string;
     inviterAddress: string;
   } | null> {
@@ -424,10 +443,18 @@ export class JejuMLSClient {
    * Subscribe to events
    */
   on<T extends keyof MLSClientEvents>(event: T, handler: MLSClientEvents[T]): void {
-    if (!this.eventHandlers.has(event)) {
-      this.eventHandlers.set(event, new Set());
+    let handlers = this.eventHandlers.get(event);
+    if (!handlers) {
+      handlers = new Set();
+      this.eventHandlers.set(event, handlers);
     }
-    this.eventHandlers.get(event)!.add(handler);
+    
+    // Check handlers limit to prevent handler accumulation
+    if (handlers.size >= MAX_EVENT_HANDLERS) {
+      throw new Error(`Cannot add handler: maximum handlers limit (${MAX_EVENT_HANDLERS}) reached for event ${event}`);
+    }
+    
+    handlers.add(handler);
   }
   
   /**

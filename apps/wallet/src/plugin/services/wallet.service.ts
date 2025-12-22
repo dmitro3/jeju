@@ -426,8 +426,13 @@ export class WalletService {
     
     const chain = SUPPORTED_CHAINS[options.chainId];
     
+    const account = walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client has no account configured');
+    }
+    
     const hash = await walletClient.sendTransaction({
-      account: walletClient.account!,
+      account,
       chain,
       to: options.to,
       value: options.value || BigInt(0),
@@ -451,10 +456,15 @@ export class WalletService {
       throw new Error('No account selected');
     }
     
+    const account = walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client has no account configured');
+    }
+    
     this.runtime?.logger.info(`[WalletService] Signing message`);
     
     const signature = await walletClient.signMessage({
-      account: walletClient.account!,
+      account,
       message,
     });
     
@@ -478,10 +488,15 @@ export class WalletService {
     expectDefined(typedData.primaryType, 'typedData.primaryType');
     expectDefined(typedData.message, 'typedData.message');
 
+    const account = walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client has no account configured');
+    }
+    
     this.runtime?.logger.info(`[WalletService] Signing typed data`);
     
     const signature = await walletClient.signTypedData({
-      account: walletClient.account!,
+      account,
       domain: typedData.domain as Parameters<typeof walletClient.signTypedData>[0]['domain'],
       types: typedData.types,
       primaryType: typedData.primaryType,

@@ -17,9 +17,9 @@ interface TestResult {
 
 const tests: TestResult[] = []
 
-async function runTest(name: string, fn: () => Promise<void>): Promise<void> {
+async function runTest(name: string, fn: () => Promise<{ stdout: string; stderr: string }>): Promise<void> {
     console.log(`\n🧪 Running: ${name}`)
-    const { stdout, stderr } = await fn()
+    const { stderr } = await fn()
     if (stderr && !stderr.includes('warning')) {
         throw new Error(stderr)
     }
@@ -70,7 +70,7 @@ async function startDatabase(): Promise<boolean> {
                     // Create database if it doesn't exist
                     try {
                         await execAsync('docker exec squid-db-1 psql -U postgres -c "CREATE DATABASE indexer;" 2>&1')
-                    } catch (error) {
+                    } catch {
                         // Database might already exist, check if we can connect
                         try {
                             await execAsync('docker exec squid-db-1 psql -U postgres -d indexer -c "SELECT 1;" 2>&1')

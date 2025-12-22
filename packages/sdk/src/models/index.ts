@@ -272,7 +272,9 @@ export function createModelsModule(
   return {
     get UPLOAD_FEE(): bigint {
       if (cachedUploadFee === null) {
-        throw new Error("Upload fee not yet loaded. Call any write method first.");
+        throw new Error(
+          "Upload fee not yet loaded. Call any write method first.",
+        );
       }
       return cachedUploadFee;
     },

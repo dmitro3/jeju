@@ -18,9 +18,23 @@
  */
 
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+
+/** Maximum config file size (10MB) - prevents DoS via large files */
+const MAX_CONFIG_FILE_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Safely read a file with size limit protection
+ */
+function safeReadFile(path: string): string {
+  const stats = statSync(path);
+  if (stats.size > MAX_CONFIG_FILE_SIZE) {
+    throw new Error(`Config file exceeds maximum size limit (${MAX_CONFIG_FILE_SIZE} bytes): ${path}`);
+  }
+  return readFileSync(path, 'utf-8');
+}
 import { 
   ContractsConfigSchema, 
   ServicesConfigSchema, 
@@ -79,7 +93,7 @@ export type TerraformOutputs = z.infer<typeof TerraformOutputsSchema>;
 // Helper to load and parse contracts.json with type safety
 function loadContractsFile(): ContractsConfig & { lastUpdated?: string } {
   const contractsPath = join(CONFIG_DIR, 'contracts.json');
-  const raw = JSON.parse(readFileSync(contractsPath, 'utf-8')) as ContractsConfig & { lastUpdated?: string };
+  const raw = JSON.parse(safeReadFile(contractsPath)) as ContractsConfig & { lastUpdated?: string };
   // Validate structure matches expected schema
   ContractsConfigSchema.parse(raw);
   return raw;
@@ -190,7 +204,7 @@ const UrlSchema = z.string().url('Invalid URL format');
 // Helper to load and parse services.json with type safety
 function loadServicesFile(): ServicesConfig {
   const servicesPath = join(CONFIG_DIR, 'services.json');
-  const raw = JSON.parse(readFileSync(servicesPath, 'utf-8')) as ServicesConfig;
+  const raw = JSON.parse(safeReadFile(servicesPath)) as ServicesConfig;
   ServicesConfigSchema.parse(raw);
   return raw;
 }
@@ -259,7 +273,7 @@ export function updateExternalRpc(chainName: string, url: string, network: Netwo
 // Helper to load and parse eil.json with type safety
 function loadEILFile(): EILConfig & { lastUpdated?: string } {
   const eilPath = join(CONFIG_DIR, 'eil.json');
-  const raw = JSON.parse(readFileSync(eilPath, 'utf-8')) as EILConfig & { lastUpdated?: string };
+  const raw = JSON.parse(safeReadFile(eilPath)) as EILConfig & { lastUpdated?: string };
   EILConfigSchema.parse(raw);
   return raw;
 }
@@ -347,7 +361,7 @@ export function loadLatestArtifact(network: NetworkType): DeploymentArtifact | n
     return null;
   }
   
-  const raw = JSON.parse(readFileSync(latestPath, 'utf-8'));
+  const raw = JSON.parse(safeReadFile(latestPath));
   return DeploymentArtifactSchema.parse(raw);
 }
 
@@ -418,7 +432,7 @@ export function applyTerraformOutputsFile(
     throw new Error(`Terraform outputs file not found: ${outputsPath}`);
   }
   
-  const raw = JSON.parse(readFileSync(outputsPath, 'utf-8'));
+  const raw = JSON.parse(safeReadFile(outputsPath));
   const outputs = TerraformOutputsSchema.parse(raw);
   applyTerraformOutputs(outputs, network);
 }
@@ -448,7 +462,7 @@ export function updateChainConfig(
   if (updates.l2) validateAddresses(updates.l2);
   
   const chainPath = join(CONFIG_DIR, `chain/${network}.json`);
-  const chain = ChainConfigSchema.parse(JSON.parse(readFileSync(chainPath, 'utf-8')));
+  const chain = ChainConfigSchema.parse(JSON.parse(safeReadFile(chainPath)));
   
   if (updates.l1) {
     chain.contracts.l1 = { ...chain.contracts.l1, ...updates.l1 };
@@ -479,7 +493,7 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
   
   for (const [file, schema] of Object.entries(CONFIG_VALIDATORS)) {
     const path = join(CONFIG_DIR, file);
-    const raw = JSON.parse(readFileSync(path, 'utf-8'));
+    const raw = JSON.parse(safeReadFile(path));
     const result = schema.safeParse(raw);
     if (!result.success) {
       errors.push(`Schema validation failed for ${file}: ${result.error.message}`);
@@ -488,7 +502,7 @@ export function validateConfig(): { valid: boolean; errors: string[] } {
   
   // Also validate federation.json exists and is valid JSON
   const federationPath = join(CONFIG_DIR, 'federation.json');
-  JSON.parse(readFileSync(federationPath, 'utf-8'));
+  JSON.parse(safeReadFile(federationPath));
   
   return { valid: errors.length === 0, errors };
 }

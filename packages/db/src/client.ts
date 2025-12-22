@@ -140,11 +140,17 @@ class CQLConnectionImpl implements CQLConnection {
       signal: AbortSignal.timeout(this.timeout),
     });
 
-    if (!response.ok) throw new Error(`CQL ${type} failed: ${response.status} - ${await response.text()}`);
+    if (!response.ok) {
+      // Log full error for debugging, but don't expose to callers to prevent info leak
+      const errorText = await response.text();
+      if (this.debug) console.error(`[CQL] ${type} error: ${response.status} - ${errorText}`);
+      throw new Error(`CQL ${type} failed: ${response.status}`);
+    }
 
     const rawResult = await response.json();
     const executionTime = Date.now() - startTime;
-    if (this.debug) console.log(`[CQL] ${type}: ${sql.slice(0, 100)}... (${executionTime}ms)`);
+    // Log query type and timing without exposing potentially sensitive SQL content
+    if (this.debug) console.log(`[CQL] ${type}: query executed (${executionTime}ms, params: ${params?.length ?? 0})`);
 
     if (type === 'query') {
       const result = QueryResponseSchema.parse(rawResult);

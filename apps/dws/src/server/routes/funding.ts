@@ -12,8 +12,7 @@
  */
 
 import { Hono } from 'hono';
-import { createPublicClient, createWalletClient, http, parseAbi } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, http, parseAbi } from 'viem';
 import type { Address, Hex } from 'viem';
 
 // ============ Contract ABIs ============

@@ -9,7 +9,7 @@ import type {
   ChainId, ChainConfig, StrategyConfig, Opportunity, ProfitSource, Metrics 
 } from './autocrat-types';
 import type { 
-  TradingBotStrategy, TradingBotChain, TradingBotState, TradingBotConfig as TradingBotConfigType 
+  TradingBotStrategy, TradingBotChain 
 } from '../types';
 import { EventCollector } from './engine/collector';
 import { TransactionExecutor } from './engine/executor';
@@ -292,13 +292,14 @@ export class TradingBot {
     await Promise.allSettled(
       topOpportunities.map(async ({ opportunity, source }) => {
         this.metrics.opportunitiesDetected++;
-        this.metrics.byStrategy[source]!.detected++;
+        const sourceMetrics = this.metrics.byStrategy[source];
+        if (sourceMetrics) sourceMetrics.detected++;
 
         const result = await this.executor.execute(opportunity);
 
         if (result.success) {
           this.metrics.opportunitiesExecuted++;
-          this.metrics.byStrategy[source]!.executed++;
+          if (sourceMetrics) sourceMetrics.executed++;
           if (result.actualProfit && result.txHash && this.treasury) {
             await this.treasury.depositProfit(
               '0x0000000000000000000000000000000000000000',
@@ -309,7 +310,7 @@ export class TradingBot {
           }
         } else {
           this.metrics.opportunitiesFailed++;
-          this.metrics.byStrategy[source]!.failed++;
+          if (sourceMetrics) sourceMetrics.failed++;
         }
       })
     );
@@ -321,14 +322,15 @@ export class TradingBot {
         if (!evaluation.profitable) continue;
 
         this.metrics.opportunitiesDetected++;
-        this.metrics.byStrategy.SOLVER!.detected++;
+        const solverMetrics = this.metrics.byStrategy.SOLVER;
+        if (solverMetrics) solverMetrics.detected++;
         const result = await this.solver.fill(intent);
         if (result.success) {
           this.metrics.opportunitiesExecuted++;
-          this.metrics.byStrategy.SOLVER!.executed++;
+          if (solverMetrics) solverMetrics.executed++;
         } else {
           this.metrics.opportunitiesFailed++;
-          this.metrics.byStrategy.SOLVER!.failed++;
+          if (solverMetrics) solverMetrics.failed++;
         }
       }
     }

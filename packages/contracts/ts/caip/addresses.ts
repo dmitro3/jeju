@@ -10,7 +10,6 @@
 import { PublicKey } from '@solana/web3.js';
 import { isAddress as isEvmAddress, getAddress as checksumAddress } from 'viem';
 import { 
-  parseChainId, 
   formatChainId, 
   isEvmChain, 
   isSolanaChain, 

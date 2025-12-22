@@ -17,7 +17,6 @@ import {
   calculateOptimalTriangularArbitrage,
   calculateOptimalMultiHopArbitrage,
   calculateNetProfit,
-  bigintSqrt,
   bigintMin,
   bigintMax,
 } from '../lib/math';
@@ -51,7 +50,6 @@ interface PoolEdge {
   isToken0ToToken1: boolean;
 }
 
-const FEE_BPS = 30;
 const MIN_LIQUIDITY = BigInt(1e18);
 const OPPORTUNITY_TTL_MS = 2000;
 const MAX_PATH_LENGTH = 4;
@@ -190,7 +188,8 @@ export class DexArbitrageStrategy {
       });
     }
 
-    const node = this.tokenGraph.get(from)!;
+    const node = this.tokenGraph.get(from);
+    if (!node) throw new Error(`Token node not found for ${from}`);
     node.pools.set(to, {
       pool: poolState,
       otherToken: to,
@@ -432,7 +431,8 @@ export class DexArbitrageStrategy {
     }
 
     while (queue.length > 0) {
-      const state = queue.shift()!;
+      const state = queue.shift();
+      if (!state) break;
 
       // Check if path length exceeded
       if (state.pools.length >= MAX_PATH_LENGTH) continue;

@@ -107,10 +107,6 @@ export class MempoolStreamer extends EventEmitter {
     lastTxTime: 0,
   };
 
-  constructor() {
-    super();
-  }
-
   /**
    * Add a chain to monitor
    */
@@ -239,6 +235,19 @@ export class MempoolStreamer extends EventEmitter {
   }
 
   private async startWebSocketStream(chainId: ChainId, wsUrl: string): Promise<void> {
+    // Clean up existing connection before creating new one to prevent memory leaks
+    const existingWs = this.wsConnections.get(chainId);
+    if (existingWs) {
+      existingWs.onopen = null;
+      existingWs.onmessage = null;
+      existingWs.onerror = null;
+      existingWs.onclose = null;
+      if (existingWs.readyState === WebSocket.OPEN || existingWs.readyState === WebSocket.CONNECTING) {
+        existingWs.close();
+      }
+      this.wsConnections.delete(chainId);
+    }
+
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
@@ -263,6 +272,11 @@ export class MempoolStreamer extends EventEmitter {
 
     ws.onclose = () => {
       log.warn('WebSocket disconnected', { chainId });
+      // Clean up event listeners to prevent memory leaks
+      ws.onopen = null;
+      ws.onmessage = null;
+      ws.onerror = null;
+      ws.onclose = null;
       if (this.running) {
         setTimeout(() => this.startWebSocketStream(chainId, wsUrl), 5000);
       }

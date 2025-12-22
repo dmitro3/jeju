@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import { captureScreenshot, captureUserFlow } from '@jejunetwork/tests/playwright-only';
 
 test.describe('Token Creation Page', () => {
   test('should display create token form', async ({ page }) => {

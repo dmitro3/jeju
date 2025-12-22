@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { formatEther } from 'viem';
-import type { FundingEpoch, ContributorShare, DependencyShare, WeightVote } from '../../types/funding';
+import type { FundingEpoch, WeightVote } from '../../types/funding';
 import { DEFAULT_FEE_CONFIG } from '../../types/funding';
 import {
   useDAOPool,
@@ -11,12 +11,10 @@ import {
   useEpochVotes,
   useDAOFundingConfig,
   useVoteOnWeight,
-  useFinalizeEpoch,
   useClaimContributorRewards,
   usePendingContributorRewards,
 } from '../../hooks/useFunding';
 import { useContributorByWallet } from '../../hooks/useContributor';
-import { RegisteredBadge } from '../../components/shared/StatusBadge';
 
 // Hardcoded DAO ID for demo
 const DEFAULT_DAO_ID = '0x' + '0'.repeat(63) + '1';

@@ -4,7 +4,7 @@
  * Tests the full DA layer integration with DWS server
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import { app } from '../src/server';
 import type { Hex, Address } from 'viem';
 import { toHex, keccak256, toBytes } from 'viem';

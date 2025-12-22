@@ -37,7 +37,7 @@ const TEST_PHASES: TestPhase[] = [
   {
     name: 'unit',
     description: 'TypeScript unit tests',
-    command: 'bun test scripts/shared/',
+    command: 'bun test packages/deployment/scripts/shared/',
     timeout: 60000,
     required: false,
   },

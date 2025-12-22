@@ -129,7 +129,7 @@ export class GasAbstractionService {
 
     // Check token options via EIL
     const eilClient = this.eilClients.get(chainId);
-    let availableTokens: GasOption[] = [];
+    const availableTokens: GasOption[] = [];
 
     if (eilClient && tokenBalances.length > 0) {
       const chainBalances = tokenBalances.filter((tb) => tb.token.chainId === chainId);

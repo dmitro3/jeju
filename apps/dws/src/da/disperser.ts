@@ -11,7 +11,6 @@
 import type { Address, Hex } from 'viem';
 import { keccak256, toBytes, toHex } from 'viem';
 import type {
-  Blob,
   BlobCommitment,
   Chunk,
   ChunkAssignment,
@@ -19,8 +18,6 @@ import type {
   OperatorSignature,
   AvailabilityAttestation,
   BlobSubmissionRequest,
-  BlobSubmissionResult,
-  DAConfig,
 } from './types';
 import { BlobManager } from './blob';
 import { DASampler } from './sampling';
@@ -112,7 +109,7 @@ export class Disperser {
    */
   async disperse(request: BlobSubmissionRequest): Promise<DispersalResult> {
     // Prepare blob
-    const { blob, chunks, commitment, metadata } = this.blobManager.submit(request);
+    const { blob, chunks, commitment } = this.blobManager.submit(request);
     
     // Update status
     this.blobManager.updateStatus(blob.id, 'dispersing');

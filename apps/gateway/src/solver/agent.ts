@@ -165,7 +165,8 @@ export class SolverAgent {
 
     console.log(`   🔄 Filling ${opp.type} opportunity: ${opp.id.slice(0, 20)}...`);
     
-    const result = await this.externalAggregator!.fill(opp);
+    if (!this.externalAggregator) throw new Error('External aggregator not initialized');
+    const result = await this.externalAggregator.fill(opp);
     
     if (result.success) {
       console.log(`   ✅ ${opp.type} fill success: ${result.txHash}`);
@@ -269,9 +270,10 @@ export class SolverAgent {
     }
 
     const chain = getChain(settlement.sourceChain);
+    if (!client.wallet.account) throw new Error('Wallet has no account');
     const settleTx = await client.wallet.writeContract({
       chain,
-      account: client.wallet.account!,
+      account: client.wallet.account,
       address: inputSettler,
       abi: INPUT_SETTLER_ABI,
       functionName: 'settle',
@@ -365,7 +367,7 @@ export class SolverAgent {
         sourceChain: e.sourceChain,
         destChain: e.destinationChain,
         inputAmount: BigInt(e.inputAmount),
-        fillTxHash: fill.txHash!,
+        fillTxHash: fill.txHash ?? '',
         filledAt: now,
         retryCount: 0,
         nextRetryAt: now + BASE_RETRY_DELAY_MS, // First retry after 30s
@@ -391,10 +393,12 @@ export class SolverAgent {
     const chain = getChain(e.destinationChain);
     const native = isNativeToken(e.outputToken);
 
+    if (!client.wallet.account) throw new Error('Wallet has no account');
+    
     if (!native) {
       const approveTx = await client.wallet.writeContract({
         chain,
-        account: client.wallet.account!,
+        account: client.wallet.account,
         address: e.outputToken as `0x${string}`,
         abi: ERC20_APPROVE_ABI,
         functionName: 'approve',
@@ -405,7 +409,7 @@ export class SolverAgent {
 
     const fillTx = await client.wallet.writeContract({
       chain,
-      account: client.wallet.account!,
+      account: client.wallet.account,
       address: settler,
       abi: OUTPUT_SETTLER_ABI,
       functionName: 'fillDirect',

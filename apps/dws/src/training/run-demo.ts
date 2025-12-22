@@ -238,7 +238,7 @@ async function main() {
             choices: Array<{ text: string }>;
           };
           completions.push(data.choices[0].text);
-        } catch (e) {
+        } catch (_e) {
           console.log(`   Warning: Completion ${i} failed, using placeholder`);
           completions.push('Unable to generate prediction.');
         }

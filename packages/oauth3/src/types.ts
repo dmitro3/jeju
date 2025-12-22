@@ -70,14 +70,29 @@ export interface IdentityMetadata {
 
 // ============ Session Types ============
 
+/**
+ * Public session data that can be safely exposed to clients.
+ * SECURITY: The signing key is intentionally excluded and kept only in the TEE.
+ */
 export interface OAuth3Session {
   sessionId: Hex;
   identityId: Hex;
   smartAccount: Address;
   expiresAt: number;
   capabilities: SessionCapability[];
-  signingKey: Hex;
+  /** Public key derived from the signing key - can be used to verify signatures */
+  signingPublicKey: Hex;
   attestation: TEEAttestation;
+}
+
+/**
+ * Internal session data used only within the TEE.
+ * SECURITY: This type should NEVER be exposed to clients or stored in localStorage.
+ * @internal
+ */
+export interface OAuth3InternalSession extends OAuth3Session {
+  /** Private signing key - MUST stay within the TEE */
+  signingKey: Hex;
 }
 
 export enum SessionCapability {

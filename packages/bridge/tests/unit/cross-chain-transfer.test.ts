@@ -13,10 +13,10 @@ import { describe, expect, it } from "bun:test";
 import {
 	ChainId,
 	type CrossChainTransfer,
-	toHash32,
-	TransferStatus,
 	isEVMChain,
 	isSolanaChain,
+	TransferStatus,
+	toHash32,
 } from "../../src/index.js";
 
 describe("CrossChainTransfer Structure", () => {
@@ -30,23 +30,23 @@ describe("CrossChainTransfer Structure", () => {
 		it("should generate unique IDs for different inputs", () => {
 			const input1 = new Uint8Array(32).fill(0x01);
 			const input2 = new Uint8Array(32).fill(0x02);
-			
+
 			const hash1 = toHash32(input1);
 			const hash2 = toHash32(input2);
-			
+
 			expect(hash1).not.toEqual(hash2);
 		});
 
 		it("should handle all zero ID", () => {
 			const zeroId = new Uint8Array(32).fill(0);
 			const hash = toHash32(zeroId);
-			expect(hash.every(b => b === 0)).toBe(true);
+			expect(hash.every((b) => b === 0)).toBe(true);
 		});
 
 		it("should handle all max ID", () => {
 			const maxId = new Uint8Array(32).fill(0xff);
 			const hash = toHash32(maxId);
-			expect(hash.every(b => b === 0xff)).toBe(true);
+			expect(hash.every((b) => b === 0xff)).toBe(true);
 		});
 	});
 
@@ -94,7 +94,9 @@ describe("CrossChainTransfer Structure", () => {
 		});
 
 		it("should handle max uint256", () => {
-			const maxUint256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+			const maxUint256 = BigInt(
+				"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+			);
 			const transfer = createTransfer({ amount: maxUint256 });
 			expect(transfer.amount).toBe(maxUint256);
 		});
@@ -155,8 +157,13 @@ describe("CrossChainTransfer Structure", () => {
 		it("should handle 32-byte EVM recipient (padded)", () => {
 			const evmRecipient = new Uint8Array(32);
 			// 20-byte address right-aligned in 32 bytes
-			evmRecipient.set([0xf3, 0x9F, 0xd6, 0xe5, 0x1a, 0xad, 0x88, 0xF6, 0xF4, 0xce,
-				0x6a, 0xB8, 0x82, 0x72, 0x79, 0xcf, 0xff, 0xb9, 0x22, 0x66], 12);
+			evmRecipient.set(
+				[
+					0xf3, 0x9f, 0xd6, 0xe5, 0x1a, 0xad, 0x88, 0xf6, 0xf4, 0xce, 0x6a,
+					0xb8, 0x82, 0x72, 0x79, 0xcf, 0xff, 0xb9, 0x22, 0x66,
+				],
+				12,
+			);
 
 			const transfer = createTransfer({ recipient: evmRecipient });
 			expect(transfer.recipient.length).toBe(32);
@@ -170,7 +177,7 @@ describe("CrossChainTransfer Structure", () => {
 
 		it("should detect empty recipient", () => {
 			const emptyRecipient = new Uint8Array(32).fill(0);
-			const isValid = emptyRecipient.some(b => b !== 0);
+			const isValid = emptyRecipient.some((b) => b !== 0);
 			expect(isValid).toBe(false);
 		});
 	});
@@ -310,7 +317,9 @@ describe("Cross-Chain Route Types", () => {
 });
 
 // Helper to create test transfers
-function createTransfer(overrides: Partial<CrossChainTransfer> = {}): CrossChainTransfer {
+function createTransfer(
+	overrides: Partial<CrossChainTransfer> = {},
+): CrossChainTransfer {
 	return {
 		transferId: toHash32(new Uint8Array(32).fill(0x01)),
 		sourceChain: ChainId.ETHEREUM_MAINNET,
@@ -325,4 +334,3 @@ function createTransfer(overrides: Partial<CrossChainTransfer> = {}): CrossChain
 		...overrides,
 	};
 }
-

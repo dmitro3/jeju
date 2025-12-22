@@ -65,12 +65,12 @@ export interface FarcasterVerification {
 
 export interface UserData {
   fid: number;
-  type: UserDataType;
+  type: UserDataTypeName;
   value: string;
   timestamp: number;
 }
 
-export type UserDataType = 
+export type UserDataTypeName = 
   | 'pfp'
   | 'display'
   | 'bio'

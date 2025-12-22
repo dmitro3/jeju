@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { formatEther, parseEther } from "viem";
+import { parseEther } from "viem";
 import {
   calculateSharePercent,
   parsePositionFromTuple,

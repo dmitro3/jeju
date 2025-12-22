@@ -22,13 +22,10 @@ interface MarketConfig {
 }
 
 const POSITION_CHECK_INTERVAL_MS = 5000;
-const HEALTH_FACTOR_THRESHOLD = BigInt(1e18);
 const MIN_LIQUIDATION_PROFIT = BigInt(1e16);
 
 // Cascade detection thresholds
 const CASCADE_PRICE_DROP_THRESHOLD = 0.05; // 5% price drop triggers cascade check
-const CASCADE_VOLUME_RATIO_THRESHOLD = 2; // Liquidation volume > 2x normal triggers cascade
-const NEAR_LIQUIDATION_MARGIN = BigInt(12e17); // Health factor < 1.2 = near liquidation
 
 interface CascadeAnalysis {
   marketId: string;
@@ -251,7 +248,8 @@ export class LiquidationStrategy {
 
     // Estimate gas cost
     const gasEstimate = 500000n; // Liquidation is gas-intensive
-    const gasPrice = await this.client!.getGasPrice();
+    if (!this.client) throw new Error('Client not initialized');
+    const gasPrice = await this.client.getGasPrice();
     const gasCost = gasEstimate * gasPrice;
 
     // Net profit

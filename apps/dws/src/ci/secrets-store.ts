@@ -2,6 +2,7 @@
  * CI Secrets Store - MPC-backed secrets for CI/CD
  */
 
+import { createHash, createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 import type { Address, Hex } from 'viem';
 import { getMPCCoordinator } from '@jejunetwork/kms';
 import type { CISecret, Environment, EnvironmentSecret, ProtectionRules } from './types';
@@ -19,7 +20,49 @@ export class CISecretsStore {
   private mpc = getMPCCoordinator();
   private partyCounter = 0;
 
-  constructor(_config: SecretsStoreConfig = {}) {}
+  /**
+   * Derive encryption key from server secret + secretId
+   * SECURITY: CI_ENCRYPTION_SECRET MUST be set in production
+   */
+  private deriveKey(secretId: string): Buffer {
+    const serverSecret = process.env.CI_ENCRYPTION_SECRET;
+    const isProduction = process.env.NODE_ENV === 'production';
+    
+    if (!serverSecret) {
+      if (isProduction) {
+        throw new Error('CRITICAL: CI_ENCRYPTION_SECRET must be set in production. CI secrets cannot be secured without it.');
+      }
+      console.warn('[CISecretsStore] WARNING: CI_ENCRYPTION_SECRET not set. Secrets are NOT properly secured.');
+    }
+    return createHash('sha256').update(`${serverSecret ?? 'INSECURE_CI_SECRET'}:${secretId}`).digest();
+  }
+
+  /**
+   * Encrypt a secret value with AES-256-GCM
+   */
+  private encryptSecret(value: string, secretId: string): string {
+    const key = this.deriveKey(secretId);
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    // Format: iv (12) + authTag (16) + ciphertext, base64 encoded
+    return Buffer.concat([iv, authTag, encrypted]).toString('base64');
+  }
+
+  /**
+   * Decrypt a secret value with AES-256-GCM
+   */
+  private decryptSecret(encryptedValue: string, secretId: string): string {
+    const key = this.deriveKey(secretId);
+    const data = Buffer.from(encryptedValue, 'base64');
+    const iv = data.subarray(0, 12);
+    const authTag = data.subarray(12, 28);
+    const ciphertext = data.subarray(28);
+    const decipher = createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  }
 
   async createSecret(
     repoId: Hex,
@@ -54,9 +97,8 @@ export class CISecretsStore {
       curve: 'secp256k1',
     });
 
-    const encoder = new TextEncoder();
-    const valueBytes = encoder.encode(value);
-    const encryptedValue = Buffer.from(valueBytes).toString('base64');
+    // Encrypt the value with AES-256-GCM using server secret
+    const encryptedValue = this.encryptSecret(value, secretId);
 
     const secret: CISecret = {
       secretId,
@@ -84,8 +126,8 @@ export class CISecretsStore {
     const encryptedValue = secretStorage.get(storageKey);
     if (!encryptedValue) throw new Error(`Secret value not found: ${secretId}`);
 
-    const decrypted = Buffer.from(encryptedValue, 'base64').toString('utf8');
-    return decrypted;
+    // Decrypt the value with AES-256-GCM
+    return this.decryptSecret(encryptedValue, secretId);
   }
 
   async getSecretsForRun(
@@ -120,9 +162,8 @@ export class CISecretsStore {
 
     await this.mpc.rotateKey({ keyId: secret.mpcKeyId, preserveAddress: true });
 
-    const encoder = new TextEncoder();
-    const valueBytes = encoder.encode(value);
-    const encryptedValue = Buffer.from(valueBytes).toString('base64');
+    // Encrypt the value with AES-256-GCM using server secret
+    const encryptedValue = this.encryptSecret(value, secretId);
 
     const storageKey = `secret:${secretId}:value`;
     secretStorage.set(storageKey, encryptedValue);

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useReadContract } from 'wagmi';
-import { formatEther, type Address } from 'viem';
+import { formatEther } from 'viem';
 import {
   CHAINLINK_CONTRACTS,
   VRF_COORDINATOR_ABI,

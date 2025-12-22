@@ -15,13 +15,20 @@ import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { z } from 'zod';
 import { expectJson } from '@jejunetwork/types';
 
+// NOTE: This must match the program ID in Anchor.toml
 export const X402_FACILITATOR_PROGRAM_ID = new PublicKey(
-  'x4o2Faci11111111111111111111111111111111111'
+  'FEsMtN2PfdzMPYCFLDLth3VxjfrozuzHodV24znt22B7'
 );
 
 // ============================================================================
 // Zod Schemas for External Data Validation
 // ============================================================================
+
+// Maximum resource length to prevent oversized messages
+const MAX_RESOURCE_LENGTH = 256;
+
+// Maximum payment age in seconds (5 minutes, matches on-chain MAX_PAYMENT_AGE)
+const MAX_PAYMENT_AGE_SECONDS = 300;
 
 /**
  * Schema for validating encoded payment JSON from external sources
@@ -31,8 +38,8 @@ const X402EncodedPaymentSchema = z.object({
   recipient: z.string().min(32).max(50),
   token: z.string().min(32).max(50),
   amount: z.string().regex(/^\d+$/, 'Amount must be numeric string'),
-  resource: z.string(),
-  nonce: z.string().min(1),
+  resource: z.string().min(1).max(MAX_RESOURCE_LENGTH, `Resource must be <= ${MAX_RESOURCE_LENGTH} characters`),
+  nonce: z.string().min(1).max(64, 'Nonce must be <= 64 characters'),
   timestamp: z.number().int().positive(),
   signature: z.string().regex(/^[0-9a-fA-F]+$/, 'Signature must be hex string'),
 });
@@ -73,6 +80,14 @@ export class SolanaX402Client {
   ) {}
 
   async createPayment(params: X402PaymentParams, payer: Keypair): Promise<X402Payment> {
+    // Validate resource length to prevent oversized messages
+    if (params.resource.length > MAX_RESOURCE_LENGTH) {
+      throw new Error(`Resource must be <= ${MAX_RESOURCE_LENGTH} characters`);
+    }
+    if (params.resource.length === 0) {
+      throw new Error('Resource cannot be empty');
+    }
+
     const recipient = new PublicKey(params.recipient);
     const token = new PublicKey(params.token);
     const amount = BigInt(params.amount);
@@ -106,6 +121,13 @@ export class SolanaX402Client {
   decodePayment(encoded: string): X402Payment {
     const jsonString = Buffer.from(encoded, 'base64').toString('utf-8');
     const json = expectJson(jsonString, X402EncodedPaymentSchema, 'x402 encoded payment');
+
+    // Validate timestamp is not too old
+    const now = Math.floor(Date.now() / 1000);
+    if (json.timestamp < now - MAX_PAYMENT_AGE_SECONDS) {
+      throw new Error(`Payment expired: timestamp ${json.timestamp} is older than ${MAX_PAYMENT_AGE_SECONDS} seconds`);
+    }
+
     return {
       payer: new PublicKey(json.payer),
       recipient: new PublicKey(json.recipient),

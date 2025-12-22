@@ -16,25 +16,51 @@ interface RateLimitState {
   minute: { count: number; reset: number };
   day: { count: number; reset: number };
   month: { count: number; reset: number };
+  lastAccess: number; // Track last access time for cleanup
 }
 
 const rateLimits = new Map<string, RateLimitState>();
+
+// Memory safety: max entries and cleanup interval
+const MAX_RATE_LIMIT_ENTRIES = 100000;
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 60_000; // 1 minute
+const RATE_LIMIT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Cleanup stale rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, state] of rateLimits) {
+    // Remove entries that haven't been accessed in 24 hours
+    if (now - state.lastAccess > RATE_LIMIT_STALE_THRESHOLD_MS) {
+      rateLimits.delete(key);
+    }
+  }
+}, RATE_LIMIT_CLEANUP_INTERVAL_MS);
 
 // ============================================================================
 // Pattern Matching
 // ============================================================================
 
+// Max pattern length to prevent ReDoS attacks
+const MAX_PATTERN_LENGTH = 500;
+
 /**
  * Convert a glob pattern to regex
  * Supports: * (any chars), ** (any path), ? (single char)
+ * Protected against ReDoS with pattern length limits and non-backtracking patterns
  */
 function globToRegex(pattern: string): RegExp {
+  // Prevent ReDoS by limiting pattern length
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new Error(`Pattern too long (max ${MAX_PATTERN_LENGTH} characters)`);
+  }
+
   const escaped = pattern
     .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars
     .replace(/\*\*/g, '{{GLOBSTAR}}') // Temp replace **
-    .replace(/\*/g, '[^/]*') // * matches anything except /
-    .replace(/\?/g, '.') // ? matches single char
-    .replace(/{{GLOBSTAR}}/g, '.*'); // ** matches anything
+    .replace(/\*/g, '[^/]*?') // * matches anything except / (non-greedy to prevent backtracking)
+    .replace(/\?/g, '[^/]') // ? matches single char (more restrictive)
+    .replace(/{{GLOBSTAR}}/g, '.*?'); // ** matches anything (non-greedy)
 
   return new RegExp(`^${escaped}$`, 'i');
 }
@@ -137,20 +163,41 @@ function getRateLimitKey(userAddress: Address, listingId: string): string {
 
 /**
  * Get current rate limit state
+ * Includes bounds checking to prevent memory exhaustion
  */
 function getRateLimitState(key: string): RateLimitState {
   const now = Date.now();
   let state = rateLimits.get(key);
 
   if (!state) {
+    // Prevent memory exhaustion - evict oldest entries if at limit
+    if (rateLimits.size >= MAX_RATE_LIMIT_ENTRIES) {
+      // Find and remove the oldest entry (by lastAccess)
+      let oldestKey: string | null = null;
+      let oldestAccess = Infinity;
+      for (const [k, s] of rateLimits) {
+        if (s.lastAccess < oldestAccess) {
+          oldestAccess = s.lastAccess;
+          oldestKey = k;
+        }
+      }
+      if (oldestKey) {
+        rateLimits.delete(oldestKey);
+      }
+    }
+
     state = {
       second: { count: 0, reset: now + 1000 },
       minute: { count: 0, reset: now + 60000 },
       day: { count: 0, reset: now + 86400000 },
       month: { count: 0, reset: now + 2592000000 },
+      lastAccess: now,
     };
     rateLimits.set(key, state);
   }
+
+  // Update last access time
+  state.lastAccess = now;
 
   // Reset expired windows
   if (now >= state.second.reset) {

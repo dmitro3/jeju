@@ -11,12 +11,9 @@ import { solverState, initializeState } from './state.js';
 import {
   ListSolversQuerySchema,
   SolverLeaderboardQuerySchema,
-  SolverAddressSchema,
   expect,
   expectChainId,
   expectAddress,
-  type ListSolversQuery,
-  type SolverLeaderboardQuery,
 } from '../lib/validation.js';
 
 const KNOWN_SOLVER_ADDRESSES: string[] = (process.env.OIF_DEV_SOLVER_ADDRESSES || '')

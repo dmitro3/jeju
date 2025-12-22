@@ -11,11 +11,11 @@
 
 import { describe, expect, it } from "bun:test";
 import {
-	createTEEBatcher,
 	ChainId,
 	type CrossChainTransfer,
-	toHash32,
+	createTEEBatcher,
 	LOCAL_TEE_CONFIG,
+	toHash32,
 } from "../../src/index.js";
 
 describe("Concurrent Transfer Processing", () => {
@@ -28,15 +28,17 @@ describe("Concurrent Transfer Processing", () => {
 		await batcher.initialize();
 
 		const numTransfers = 50;
-		const transfers = Array.from({ length: numTransfers }, (_, i) => createTransfer(i));
+		const transfers = Array.from({ length: numTransfers }, (_, i) =>
+			createTransfer(i),
+		);
 
 		const results = await Promise.all(
-			transfers.map(t => batcher.addTransfer(t))
+			transfers.map((t) => batcher.addTransfer(t)),
 		);
 
 		// All should succeed
 		expect(results.length).toBe(numTransfers);
-		
+
 		// All should have valid batch IDs
 		for (const result of results) {
 			expect(result.batchId).toBeDefined();
@@ -44,7 +46,7 @@ describe("Concurrent Transfer Processing", () => {
 		}
 
 		// Positions should be unique
-		const positions = results.map(r => r.position);
+		const positions = results.map((r) => r.position);
 		const uniquePositions = new Set(positions);
 		expect(uniquePositions.size).toBe(numTransfers);
 	});
@@ -58,7 +60,7 @@ describe("Concurrent Transfer Processing", () => {
 		await batcher.initialize();
 
 		const transfers = Array.from({ length: 10 }, (_, i) => createTransfer(i));
-		
+
 		// Add sequentially to ensure order
 		const results = [];
 		for (const t of transfers) {
@@ -87,7 +89,7 @@ describe("Concurrent Transfer Processing", () => {
 		}
 
 		const elapsed = Date.now() - startTime;
-		
+
 		// Should complete within reasonable time
 		expect(elapsed).toBeLessThan(5000);
 	});
@@ -137,7 +139,7 @@ describe("Batch Boundary Conditions", () => {
 		}
 
 		// Should have multiple batches
-		const batchIds = new Set(results.map(r => r.batchId));
+		const batchIds = new Set(results.map((r) => r.batchId));
 		expect(batchIds.size).toBeGreaterThanOrEqual(1);
 	});
 
@@ -156,12 +158,14 @@ describe("Batch Boundary Conditions", () => {
 		}
 
 		// All should be in the same batch
-		const batchIds = new Set(results.map(r => r.batchId));
+		const batchIds = new Set(results.map((r) => r.batchId));
 		expect(batchIds.size).toBe(1);
 
 		// Positions should be 0 to maxBatchSize-1
-		const positions = results.map(r => r.position).sort((a, b) => a - b);
-		expect(positions).toEqual(Array.from({ length: maxBatchSize }, (_, i) => i));
+		const positions = results.map((r) => r.position).sort((a, b) => a - b);
+		expect(positions).toEqual(
+			Array.from({ length: maxBatchSize }, (_, i) => i),
+		);
 	});
 
 	it("should handle single transfer batch", async () => {
@@ -190,7 +194,8 @@ describe("Async Operation Ordering", () => {
 
 		const numTransfers = 100;
 		const insertionOrder: number[] = [];
-		const results: Array<{ batchId: string; position: number; nonce: number }> = [];
+		const results: Array<{ batchId: string; position: number; nonce: number }> =
+			[];
 
 		// Use Promise.all to maximize concurrency
 		const promises = Array.from({ length: numTransfers }, async (_, i) => {
@@ -283,8 +288,8 @@ describe("Resource Contention", () => {
 		}
 
 		// Each batcher should have independent positions
-		expect(results1.map(r => r.position)).toEqual([0, 1, 2]);
-		expect(results2.map(r => r.position)).toEqual([0, 1, 2]);
+		expect(results1.map((r) => r.position)).toEqual([0, 1, 2]);
+		expect(results2.map((r) => r.position)).toEqual([0, 1, 2]);
 	});
 });
 
@@ -306,7 +311,9 @@ describe("Error Recovery Under Concurrency", () => {
 		invalidTransfer.amount = BigInt(0);
 
 		// Invalid transfers are rejected immediately with validation error
-		await expect(batcher.addTransfer(invalidTransfer)).rejects.toThrow('Transfer amount must be positive');
+		await expect(batcher.addTransfer(invalidTransfer)).rejects.toThrow(
+			"Transfer amount must be positive",
+		);
 
 		// Add another valid transfer - should still work after rejection
 		const result3 = await batcher.addTransfer(createTransfer(3));
@@ -332,4 +339,3 @@ function createTransfer(nonce: number): CrossChainTransfer {
 		payload: new Uint8Array(0),
 	};
 }
-

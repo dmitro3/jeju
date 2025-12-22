@@ -9,12 +9,11 @@
  * 5. Clean up
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, afterAll } from 'bun:test';
 import { Hono } from 'hono';
 import type { Address } from 'viem';
 import { createAgentRouter } from './routes';
-import * as registry from './registry';
-import { AgentExecutor, initExecutor } from './executor';
+import { initExecutor } from './executor';
 import type { AgentCharacter, AgentMessage, AgentResponse } from './types';
 
 // ============================================================================
@@ -27,7 +26,9 @@ class MockWorkerdWithInference {
     character: AgentCharacter;
   }>();
 
-  async initialize() {}
+  async initialize(): Promise<void> {
+    // No-op for mock
+  }
 
   async deployWorker(worker: { id: string; bindings?: Array<{ name: string; value: string }> }) {
     // Extract character from bindings

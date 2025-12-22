@@ -14,6 +14,7 @@ import {
   createReedSolomonCodec,
   defaultCodec,
 } from '../src/da/erasure';
+import { keccak256 } from 'viem';
 import type { Hex } from 'viem';
 
 const TEST_BLOB_ID = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as Hex;
@@ -375,7 +376,6 @@ describe('ReedSolomonCodec.verifyMerkleProof', () => {
     const shards = codec.encode(data, 2);
 
     // Compute the Merkle root from all leaves
-    const { keccak256 } = require('viem');
     const leaves = shards.map(s => keccak256(s));
     
     // Build tree to get root
@@ -405,7 +405,6 @@ describe('ReedSolomonCodec.verifyMerkleProof', () => {
     const data = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
     const chunks = codec.createChunks(data, TEST_BLOB_ID);
 
-    const { keccak256 } = require('viem');
     const wrongRoot = keccak256('0xwrong') as Hex;
     const leaf = keccak256(chunks[0].data);
 

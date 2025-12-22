@@ -639,7 +639,10 @@ export class TrainingSDK {
     args: readonly unknown[]
   ): Promise<Hash> {
     const account = this.getAccount();
-    const hash = await this.walletClient!.writeContract({
+    if (!this.walletClient) {
+      throw new Error('WalletClient required for write operations');
+    }
+    const hash = await this.walletClient.writeContract({
       address,
       abi: abi as never,
       functionName,

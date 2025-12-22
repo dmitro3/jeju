@@ -4,7 +4,7 @@
  * Tests for rate limiting calculations and tier logic
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import { RATE_LIMITS, type RateTier } from '../../src/rpc/middleware/rate-limiter';
 
 // Re-implement the pure function to test its logic

@@ -124,7 +124,7 @@ const BAN_MANAGER_ABI = [
   },
 ] as const;
 
-const MODERATION_MARKETPLACE_ABI = [
+const _MODERATION_MARKETPLACE_ABI = [
   {
     type: 'event',
     name: 'CaseCreated',
@@ -223,15 +223,18 @@ export async function processNetworkBanApplied(
 
   // Update agent ban status
   const agent = await store.get(RegisteredAgent, { where: { agentId } });
-  if (agent) {
-    agent.isBanned = true;
-    await store.save(agent);
+  if (!agent) {
+    console.warn(`Agent ${agentId} not found for NetworkBanApplied event`);
+    return;
   }
+  
+  agent.isBanned = true;
+  await store.save(agent);
 
   // Create ban event
   const banEvent = new AgentBanEvent();
   banEvent.id = `${txHash}-${log.logIndex}`;
-  banEvent.agent = agent!;
+  banEvent.agent = agent;
   banEvent.isBan = true;
   banEvent.banType = 'network';
   banEvent.reason = reason;
@@ -262,15 +265,18 @@ export async function processNetworkBanRemoved(
 
   // Update agent ban status
   const agent = await store.get(RegisteredAgent, { where: { agentId } });
-  if (agent) {
-    agent.isBanned = false;
-    await store.save(agent);
+  if (!agent) {
+    console.warn(`Agent ${agentId} not found for NetworkBanRemoved event`);
+    return;
   }
+  
+  agent.isBanned = false;
+  await store.save(agent);
 
   // Create unban event
   const banEvent = new AgentBanEvent();
   banEvent.id = `${txHash}-${log.logIndex}`;
-  banEvent.agent = agent!;
+  banEvent.agent = agent;
   banEvent.isBan = false;
   banEvent.banType = 'network';
   banEvent.timestamp = timestamp;
@@ -303,10 +309,14 @@ export async function processAppBanApplied(
   };
 
   const agent = await store.get(RegisteredAgent, { where: { agentId } });
+  if (!agent) {
+    console.warn(`Agent ${agentId} not found for AppBanApplied event`);
+    return;
+  }
 
   const banEvent = new AgentBanEvent();
   banEvent.id = `${txHash}-${log.logIndex}`;
-  banEvent.agent = agent!;
+  banEvent.agent = agent;
   banEvent.isBan = true;
   banEvent.banType = 'app';
   banEvent.appId = appId;

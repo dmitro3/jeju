@@ -191,12 +191,8 @@ export class SandwichStrategy {
       }
 
       // swapExactETHForTokens(uint amountOutMin, address[] path, address to, uint deadline)
+      // amountIn would be msg.value - not available in this context
       if (selector === SWAP_SELECTORS.swapExactETHForTokens) {
-        const decoded = decodeAbiParameters(
-          parseAbiParameters('uint256 amountOutMin, address[] path, address to, uint256 deadline'),
-          `0x${input.slice(10)}` as Hex
-        );
-        // amountIn would be msg.value - not available here
         return null;
       }
 
@@ -211,7 +207,7 @@ export class SandwichStrategy {
   private calculateSandwichParams(
     decoded: DecodedSwap,
     pool: Pool,
-    victimGasPrice: bigint
+    _victimGasPrice: bigint
   ): SandwichParams | null {
     const reserve0 = BigInt(pool.reserve0 ?? '0');
     const reserve1 = BigInt(pool.reserve1 ?? '0');

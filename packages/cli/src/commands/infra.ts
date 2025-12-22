@@ -369,7 +369,7 @@ infraCommand
   .option('--network <network>', 'Network: localnet | testnet | mainnet')
   .action(async (options: { network?: string }) => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/auto-update/update-manager.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/infrastructure/update-manager.ts');
     
     if (!existsSync(scriptPath)) {
       logger.error('Auto-update manager script not found');
@@ -395,7 +395,7 @@ infraCommand
   .option('--chart <chart>', 'Validate specific chart only')
   .action(async (options: { chart?: string }) => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/test-helm-charts.ts');
+    const scriptPath = join(rootDir, 'packages/tests/scripts/test-helm-charts.ts');
     
     if (!existsSync(scriptPath)) {
       logger.error('Helm charts validation script not found');

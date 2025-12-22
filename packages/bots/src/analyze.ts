@@ -151,7 +151,10 @@ async function analyzeStrategies(): Promise<void> {
       };
 
       const result = await backtester.run(config);
-      results.get(scenario.name)!.set(strategy, result);
+      const scenarioMap = results.get(scenario.name);
+      if (scenarioMap) {
+        scenarioMap.set(strategy, result);
+      }
     }
 
     // Print results table
@@ -159,7 +162,9 @@ async function analyzeStrategies(): Promise<void> {
     console.log('──────────────────────────────────────────────────────────────────────────');
 
     for (const strategy of STRATEGIES) {
-      const result = results.get(scenario.name)!.get(strategy)!;
+      const scenarioMap = results.get(scenario.name);
+      const result = scenarioMap?.get(strategy);
+      if (!result) continue;
       const returnStr = `${(result.totalReturn * 100).toFixed(2)}%`.padStart(8);
       const sharpeStr = result.sharpeRatio.toFixed(2).padStart(6);
       const ddStr = `${(result.maxDrawdown * 100).toFixed(2)}%`.padStart(7);
@@ -175,7 +180,8 @@ async function analyzeStrategies(): Promise<void> {
   console.log('━'.repeat(60));
 
   for (const scenario of scenarios) {
-    const scenarioResults = results.get(scenario.name)!;
+    const scenarioResults = results.get(scenario.name);
+    if (!scenarioResults) continue;
     let bestStrategy = '';
     let bestSharpe = -Infinity;
 
@@ -340,7 +346,8 @@ async function analyzeRiskMetrics(): Promise<void> {
   const stressResults = riskAnalyzer.stressTest(snapshots, stressScenarios);
 
   for (const scenario of stressScenarios) {
-    const stressedValue = stressResults.get(scenario.name)!;
+    const stressedValue = stressResults.get(scenario.name);
+    if (stressedValue === undefined) continue;
     const loss = ((snapshots[snapshots.length - 1].valueUsd - stressedValue) / snapshots[snapshots.length - 1].valueUsd * 100);
     console.log(`  ${scenario.name.padEnd(25)}: $${stressedValue.toFixed(0).padStart(8)} (-${loss.toFixed(1)}%)`);
   }

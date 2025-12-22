@@ -4,7 +4,7 @@
  * Type definitions for XMTP integration with Jeju relay infrastructure.
  */
 
-import type { Hex, Address } from 'viem';
+import type { Address } from 'viem';
 
 // ============ Identity Types ============
 

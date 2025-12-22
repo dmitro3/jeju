@@ -9,7 +9,7 @@ import type { Page } from "@playwright/test";
 import { testWithSynpress } from '@synthetixio/synpress'
 import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
 import { basicSetup } from '../../synpress.config'
-import { createPublicClient, http, parseAbi, formatEther } from 'viem'
+import { createPublicClient, http, formatEther } from 'viem'
 
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
 const { expect } = test
@@ -676,13 +676,13 @@ test.describe('13. Hyperscape Page', () => {
 // SECTION 14: ON-CHAIN VALIDATION
 // =============================================================================
 test.describe('14. On-Chain Validation', () => {
-  test('should verify block number is advancing', async ({ page }) => {
+  test('should verify block number is advancing', async ({ page: _page }) => {
     const blockNumber = await publicClient.getBlockNumber()
     expect(blockNumber > 0n).toBe(true)
     console.log(`✅ Current block number: ${blockNumber}`)
   })
 
-  test('should verify test account has balance', async ({ page }) => {
+  test('should verify test account has balance', async ({ page: _page }) => {
     const balance = await publicClient.getBalance({
       address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
     })
@@ -690,13 +690,13 @@ test.describe('14. On-Chain Validation', () => {
     console.log(`✅ Test account balance: ${formatEther(balance)} ETH`)
   })
 
-  test('should verify chain ID matches', async ({ page }) => {
+  test('should verify chain ID matches', async ({ page: _page }) => {
     const chainId = await publicClient.getChainId()
     expect(chainId).toBe(CHAIN_ID)
     console.log(`✅ Chain ID: ${chainId}`)
   })
 
-  test('should read contract state (if deployed)', async ({ page }) => {
+  test('should read contract state (if deployed)', async ({ page: _page }) => {
     const MARKETPLACE_ADDRESS = process.env.NEXT_PUBLIC_NFT_MARKETPLACE_ADDRESS
     
     if (MARKETPLACE_ADDRESS && MARKETPLACE_ADDRESS !== '0x0') {
@@ -722,7 +722,7 @@ test.describe('15. Error Handling', () => {
     await page.waitForTimeout(1000)
     
     const body = await page.textContent('body')
-    const hasError = body?.includes('Not Found') || body?.includes('doesn\'t exist')
+    const _hasError = body?.includes('Not Found') || body?.includes('doesn\'t exist')
     expect(body).toBeTruthy()
   })
 

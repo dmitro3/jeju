@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 
 // Test the contract interaction logic in stake-rate-limiter.ts
 // We mock contract calls to verify:

@@ -10,6 +10,7 @@
  */
 
 import { describe, expect, it } from "bun:test";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import type { Address } from "viem";
 import {
 	ChainId,
@@ -17,11 +18,11 @@ import {
 	createSolanaClient,
 	toHash32,
 } from "../../src/index.js";
-import { Keypair, PublicKey } from "@solana/web3.js";
 
 // Mock addresses
 const MOCK_BRIDGE = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0" as Address;
-const MOCK_LIGHT_CLIENT = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
+const MOCK_LIGHT_CLIENT =
+	"0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
 
 describe("Invalid Input Handling", () => {
 	describe("toHash32 Validation", () => {
@@ -58,12 +59,14 @@ describe("Invalid Input Handling", () => {
 
 		it("should handle empty RPC URL", () => {
 			// Empty RPC URL should throw UrlRequiredError from viem
-			expect(() => createEVMClient({
-				chainId: ChainId.LOCAL_EVM,
-				rpcUrl: "",
-				bridgeAddress: MOCK_BRIDGE,
-				lightClientAddress: MOCK_LIGHT_CLIENT,
-			})).toThrow();
+			expect(() =>
+				createEVMClient({
+					chainId: ChainId.LOCAL_EVM,
+					rpcUrl: "",
+					bridgeAddress: MOCK_BRIDGE,
+					lightClientAddress: MOCK_LIGHT_CLIENT,
+				}),
+			).toThrow();
 		});
 
 		it("should fail on operation with unreachable RPC", async () => {
@@ -81,13 +84,17 @@ describe("Invalid Input Handling", () => {
 	describe("Solana Client Error Handling", () => {
 		it("should handle malformed RPC URL", () => {
 			// Malformed RPC URL should throw TypeError from @solana/web3.js
-			expect(() => createSolanaClient({
-				rpcUrl: "not-a-valid-url",
-				commitment: "confirmed",
-				keypair: Keypair.generate(),
-				bridgeProgramId: new PublicKey("11111111111111111111111111111111"),
-				evmLightClientProgramId: new PublicKey("11111111111111111111111111111111"),
-			})).toThrow();
+			expect(() =>
+				createSolanaClient({
+					rpcUrl: "not-a-valid-url",
+					commitment: "confirmed",
+					keypair: Keypair.generate(),
+					bridgeProgramId: new PublicKey("11111111111111111111111111111111"),
+					evmLightClientProgramId: new PublicKey(
+						"11111111111111111111111111111111",
+					),
+				}),
+			).toThrow();
 		});
 
 		it("should fail on operation with unreachable RPC", async () => {
@@ -96,7 +103,9 @@ describe("Invalid Input Handling", () => {
 				commitment: "confirmed",
 				keypair: Keypair.generate(),
 				bridgeProgramId: new PublicKey("11111111111111111111111111111111"),
-				evmLightClientProgramId: new PublicKey("11111111111111111111111111111111"),
+				evmLightClientProgramId: new PublicKey(
+					"11111111111111111111111111111111",
+				),
 			});
 
 			await expect(client.getLatestSlot()).rejects.toThrow();
@@ -105,29 +114,35 @@ describe("Invalid Input Handling", () => {
 });
 
 describe("Network Failure Handling", () => {
-	it("should timeout on unresponsive endpoints", async () => {
-		const client = createEVMClient({
-			chainId: ChainId.LOCAL_EVM,
-			rpcUrl: "http://10.255.255.1:8545", // Non-routable IP
-			bridgeAddress: MOCK_BRIDGE,
-			lightClientAddress: MOCK_LIGHT_CLIENT,
-		});
+	it(
+		"should timeout on unresponsive endpoints",
+		async () => {
+			const client = createEVMClient({
+				chainId: ChainId.LOCAL_EVM,
+				rpcUrl: "http://10.255.255.1:8545", // Non-routable IP
+				bridgeAddress: MOCK_BRIDGE,
+				lightClientAddress: MOCK_LIGHT_CLIENT,
+			});
 
-		const startTime = Date.now();
-		
-		try {
-			await Promise.race([
-				client.getLatestVerifiedSlot(),
-				new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3000)),
-			]);
-		} catch {
-			// Expected to fail
-		}
+			const startTime = Date.now();
 
-		const elapsed = Date.now() - startTime;
-		// Should have timed out within our 3 second window (or failed sooner)
-		expect(elapsed).toBeLessThan(5000);
-	}, { timeout: 10000 }); // Increase test timeout to 10 seconds
+			try {
+				await Promise.race([
+					client.getLatestVerifiedSlot(),
+					new Promise((_, reject) =>
+						setTimeout(() => reject(new Error("Timeout")), 3000),
+					),
+				]);
+			} catch {
+				// Expected to fail
+			}
+
+			const elapsed = Date.now() - startTime;
+			// Should have timed out within our 3 second window (or failed sooner)
+			expect(elapsed).toBeLessThan(5000);
+		},
+		{ timeout: 10000 },
+	); // Increase test timeout to 10 seconds
 });
 
 describe("Invalid Transfer Parameters", () => {
@@ -140,16 +155,23 @@ describe("Invalid Transfer Parameters", () => {
 
 		it("should identify negative-like bigint (wrapping)", () => {
 			// BigInt doesn't have negative, but max uint256 + 1 would wrap
-			const overflow = BigInt("0x10000000000000000000000000000000000000000000000000000000000000000");
+			const overflow = BigInt(
+				"0x10000000000000000000000000000000000000000000000000000000000000000",
+			);
 			// This would overflow uint256
-			expect(overflow > BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")).toBe(true);
+			expect(
+				overflow >
+					BigInt(
+						"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+					),
+			).toBe(true);
 		});
 	});
 
 	describe("Recipient Validation", () => {
 		it("should identify zero recipient as invalid", () => {
 			const recipient = new Uint8Array(32).fill(0);
-			const isValid = recipient.some(b => b !== 0);
+			const isValid = recipient.some((b) => b !== 0);
 			expect(isValid).toBe(false);
 		});
 
@@ -179,7 +201,7 @@ describe("Invalid Transfer Parameters", () => {
 			const oldTimestamp = BigInt(1000000000000); // Year 2001
 			const now = BigInt(Date.now());
 			const maxAge = BigInt(365 * 24 * 60 * 60 * 1000); // 1 year
-			
+
 			const isValid = now - oldTimestamp < maxAge;
 			expect(isValid).toBe(false);
 		});
@@ -188,7 +210,7 @@ describe("Invalid Transfer Parameters", () => {
 			const futureTimestamp = BigInt(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year ahead
 			const now = BigInt(Date.now());
 			const maxFuture = BigInt(60 * 60 * 1000); // 1 hour
-			
+
 			const isValid = futureTimestamp - now < maxFuture;
 			expect(isValid).toBe(false);
 		});
@@ -283,7 +305,9 @@ describe("Graceful Degradation", () => {
 
 describe("Edge Cases", () => {
 	it("should handle maximum values without overflow", () => {
-		const maxUint256 = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+		const maxUint256 = BigInt(
+			"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		);
 		const maxUint64 = BigInt("18446744073709551615");
 
 		// Operations should not overflow
@@ -306,4 +330,3 @@ describe("Edge Cases", () => {
 		expect(urlWithSpecialChars.includes("&")).toBe(true);
 	});
 });
-

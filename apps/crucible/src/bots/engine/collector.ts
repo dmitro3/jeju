@@ -1,7 +1,7 @@
 import { createPublicClient, http, webSocket, type PublicClient, type Chain, parseAbiItem, type Log, decodeEventLog } from 'viem';
 import { mainnet, arbitrum, optimism, base, bsc, sepolia } from 'viem/chains';
 import { EventEmitter } from 'events';
-import type { ChainConfig, ChainId, Pool, Token } from '../autocrat-types';
+import type { ChainConfig, ChainId, Pool } from '../autocrat-types';
 import { XLP_V2_PAIR_ABI, XLP_V2_FACTORY_ABI } from '../lib/contracts';
 import { createLogger } from '../../sdk/logger';
 

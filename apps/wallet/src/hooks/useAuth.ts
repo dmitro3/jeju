@@ -18,6 +18,10 @@ import {
   type OAuth3Client,
   type OAuth3Session,
 } from '@jejunetwork/oauth3';
+import { secureStorage } from '../platform/secure-storage';
+
+// Key for storing private key in secure storage
+const PRIVATE_KEY_STORAGE_KEY = 'jeju_local_private_key';
 
 export type AuthProvider = 
   | 'wallet'
@@ -184,11 +188,12 @@ export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
     localStorage.setItem('jeju_auth_provider', provider);
   }, []);
 
-  const clearSession = useCallback(() => {
+  const clearSession = useCallback(async () => {
     setSession(null);
     setCurrentProvider(null);
     localStorage.removeItem('jeju_auth_provider');
-    localStorage.removeItem('jeju_private_key');
+    // Use secure storage for private key removal
+    await secureStorage.remove(PRIVATE_KEY_STORAGE_KEY);
   }, []);
 
   // Login with any provider using OAuth3 SDK
@@ -218,7 +223,7 @@ export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
       // Log but don't throw - session may already be invalidated on server
       console.warn('OAuth3 logout error (session may already be invalidated):', logoutError);
     }
-    clearSession();
+    await clearSession();
   }, [client, clearSession]);
 
   // Link additional provider
@@ -268,8 +273,8 @@ export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
     const privateKey = generatePrivateKey();
     const account = privateKeyToAccount(privateKey);
     
-    // Store encrypted in local storage
-    localStorage.setItem('jeju_private_key', privateKey);
+    // Store in secure storage (encrypted, not plain localStorage)
+    await secureStorage.set(PRIVATE_KEY_STORAGE_KEY, privateKey);
 
     return { address: account.address, privateKey };
   }, []);
@@ -277,7 +282,8 @@ export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
   // Import existing wallet
   const importWallet = useCallback(async (privateKey: Hex) => {
     const account = privateKeyToAccount(privateKey);
-    localStorage.setItem('jeju_private_key', privateKey);
+    // Store in secure storage (encrypted, not plain localStorage)
+    await secureStorage.set(PRIVATE_KEY_STORAGE_KEY, privateKey);
     return account.address;
   }, []);
 
@@ -289,7 +295,7 @@ export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
       return await client.signMessage({ message });
     } catch (signError) {
       // Fall back to local key if available (for offline-first or testing)
-      const storedKey = localStorage.getItem('jeju_private_key');
+      const storedKey = await secureStorage.get(PRIVATE_KEY_STORAGE_KEY);
       if (storedKey) {
         // Validate stored key is a valid hex string
         if (!/^0x[0-9a-fA-F]{64}$/.test(storedKey)) {

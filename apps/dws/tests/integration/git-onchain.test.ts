@@ -27,7 +27,7 @@ const SKIP = process.env.SKIP_INTEGRATION === 'true';
 
 describe.skipIf(SKIP)('Git Registry On-Chain Integration', () => {
   let publicClient: ReturnType<typeof createPublicClient>;
-  let walletClient: ReturnType<typeof createWalletClient>;
+  let _walletClient: ReturnType<typeof createWalletClient>;
   let repoManager: GitRepoManager;
   let repoRegistryAddress: Address;
   let testAccount: Address;
@@ -48,7 +48,7 @@ describe.skipIf(SKIP)('Git Registry On-Chain Integration', () => {
       transport: http(RPC_URL),
     });
 
-    walletClient = createWalletClient({
+    _walletClient = createWalletClient({
       account,
       chain,
       transport: http(RPC_URL),

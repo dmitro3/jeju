@@ -37,7 +37,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
             decentralized: true,
           }}
           autoConnect={true}
-          persistSession={true}
         >
           {children}
         </OAuth3Provider>

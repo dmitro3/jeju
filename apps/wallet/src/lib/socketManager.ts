@@ -7,7 +7,35 @@ import { io, Socket } from 'socket.io-client';
 
 const SOCKET_URL = import.meta.env.VITE_ELIZA_WS_URL || 'http://localhost:3000';
 
+// Allowed socket server origins (whitelist for security)
+const ALLOWED_SOCKET_ORIGINS = [
+  'http://localhost:3000',
+  'https://eliza.jejunetwork.org',
+  'https://agent.jejunetwork.org',
+];
+
+// Maximum reconnection attempts to prevent infinite retries
+const MAX_RECONNECTION_ATTEMPTS = 5;
+
+// Maximum message handlers to prevent memory exhaustion
+const MAX_MESSAGE_HANDLERS = 50;
+
 type MessageHandler = (data: MessageData) => void;
+
+/**
+ * Validate that a URL is an allowed socket origin
+ */
+function isAllowedOrigin(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const origin = `${parsed.protocol}//${parsed.host}`;
+    return ALLOWED_SOCKET_ORIGINS.includes(origin) || 
+           parsed.hostname === 'localhost' || 
+           parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
 
 interface MessageData {
   id?: string;
@@ -36,6 +64,11 @@ class SocketManager {
       return this.socket;
     }
 
+    // Validate the socket URL before connecting
+    if (!isAllowedOrigin(SOCKET_URL)) {
+      throw new Error(`Socket connection refused: ${SOCKET_URL} is not an allowed origin`);
+    }
+
     this.userId = userId;
     this.userName = userName || null;
 
@@ -48,7 +81,7 @@ class SocketManager {
       auth: { userId, userName },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 5,
+      reconnectionAttempts: MAX_RECONNECTION_ATTEMPTS,
       reconnectionDelay: 1000,
     });
 
@@ -149,6 +182,11 @@ class SocketManager {
   }
 
   onMessage(handler: MessageHandler): () => void {
+    // Prevent too many handlers (memory protection)
+    if (this.messageHandlers.size >= MAX_MESSAGE_HANDLERS) {
+      throw new Error('Too many message handlers registered');
+    }
+    
     this.messageHandlers.add(handler);
     return () => {
       this.messageHandlers.delete(handler);

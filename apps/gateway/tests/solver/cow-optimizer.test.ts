@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'bun:test';
-import { type Address, parseUnits, parseEther } from 'viem';
+import { type Address } from 'viem';
 
 import { 
   CowSolverOptimizer,

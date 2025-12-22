@@ -8,11 +8,9 @@
 import type {
   XMTPEnvelope,
   SyncState,
-  SyncOptions,
   XMTPConversation,
   XMTPMessage,
 } from './types';
-import type { Address } from 'viem';
 
 // ============ Types ============
 
@@ -39,7 +37,12 @@ export interface SyncServiceConfig {
   persistencePath?: string;
   /** IPFS URL for backup */
   ipfsUrl?: string;
+  /** Max buffer size */
+  maxBufferSize?: number;
 }
+
+// Maximum event buffer size to prevent memory exhaustion
+const DEFAULT_MAX_BUFFER_SIZE = 50000;
 
 // ============ Sync Service Class ============
 
@@ -60,6 +63,7 @@ export class XMTPSyncService {
       batchSize: config?.batchSize ?? 100,
       persistencePath: config?.persistencePath,
       ipfsUrl: config?.ipfsUrl,
+      maxBufferSize: config?.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE,
     };
     
     this.state = {
@@ -147,12 +151,20 @@ export class XMTPSyncService {
       const events = await this.fetchEventsFromPeer(peer);
       
       for (const event of events) {
+        // Check buffer size limit to prevent memory exhaustion
+        if (this.eventBuffer.length >= (this.config.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE)) {
+          console.warn('[XMTP Sync] Event buffer full, dropping oldest events');
+          // Remove oldest 10% to make room
+          const toRemove = Math.ceil(this.eventBuffer.length * 0.1);
+          this.eventBuffer.splice(0, toRemove);
+        }
         this.eventBuffer.push(event);
       }
       
-      if (events.length > 0) {
+      const lastEvent = events[events.length - 1];
+      if (lastEvent) {
         peer.lastSyncedAt = Date.now();
-        peer.cursor = events[events.length - 1]!.id;
+        peer.cursor = lastEvent.id;
       }
     } catch (error) {
       console.error(`[XMTP Sync] Failed to sync with peer ${peer.nodeId}:`, error);
@@ -273,6 +285,13 @@ export class XMTPSyncService {
       timestamp: Date.now(),
     };
     
+    // Check buffer size limit to prevent memory exhaustion
+    if (this.eventBuffer.length >= (this.config.maxBufferSize ?? DEFAULT_MAX_BUFFER_SIZE)) {
+      console.warn('[XMTP Sync] Event buffer full, dropping oldest events');
+      const toRemove = Math.ceil(this.eventBuffer.length * 0.1);
+      this.eventBuffer.splice(0, toRemove);
+    }
+    
     this.eventBuffer.push(fullEvent);
     
     // Broadcast to peers
@@ -364,7 +383,14 @@ export class XMTPSyncService {
   async restoreFromIPFS(hash: string): Promise<void> {
     if (!this.config.ipfsUrl) return;
     
-    const response = await fetch(`${this.config.ipfsUrl}/ipfs/${hash}`);
+    // Validate IPFS hash format to prevent SSRF
+    // CIDv0: starts with Qm, 46 chars total
+    // CIDv1: starts with b (base32) or z (base58), variable length
+    if (!/^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58}|z[1-9A-HJ-NP-Za-km-z]{48,})$/.test(hash)) {
+      throw new Error('Invalid IPFS hash format');
+    }
+    
+    const response = await fetch(`${this.config.ipfsUrl}/ipfs/${encodeURIComponent(hash)}`);
     if (!response.ok) return;
     
     const data = await response.json() as { state: SyncState; peers: SyncPeer[] };

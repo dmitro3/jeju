@@ -128,7 +128,7 @@ test.describe('Wallet Account Switching', () => {
     if (await balanceSection.isVisible()) {
       // Capture balance text before switch
       const balancesContainer = page.locator('[data-testid="balances"], .balances, div:has-text("elizaOS")').first();
-      const beforeSwitch = await balancesContainer.textContent();
+      const _beforeSwitch = await balancesContainer.textContent();
 
       // Switch to different account
       await metamask.switchAccount('Account 2');
@@ -313,7 +313,7 @@ test.describe('Connection Error Handling', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('should handle connection rejection', async ({ page, metamask }) => {
+  test('should handle connection rejection', async ({ page, metamask: _metamask }) => {
     await page.goto(GATEWAY_URL);
 
     // Click connect

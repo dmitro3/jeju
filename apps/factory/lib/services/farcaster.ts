@@ -377,15 +377,50 @@ class MessagingClient {
 
   /**
    * Subscribe to new messages via WebSocket
+   * 
+   * Security considerations:
+   * - Message size is validated to prevent DoS attacks
+   * - Origin is validated server-side (Origin header)
+   * - Messages are parsed with schema validation before processing
    */
   subscribeToMessages(onMessage: (msg: DirectMessage) => void): WebSocket {
-    const ws = new WebSocket(`${MESSAGING_API.replace('http', 'ws')}/ws/messages`);
+    // Maximum message size (100KB) to prevent memory exhaustion attacks
+    const MAX_MESSAGE_SIZE = 100 * 1024;
+    
+    // Safely construct WebSocket URL from HTTP URL
+    const wsUrl = (() => {
+      const url = new URL(MESSAGING_API);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      url.pathname = '/ws/messages';
+      return url.toString();
+    })();
+    
+    const ws = new WebSocket(wsUrl);
+    
     ws.onmessage = (event) => {
-      const msg = parseWebSocketMessage(event.data as string);
-      if (msg.type === 'message') {
-        onMessage(msg.data);
+      // Validate message size to prevent DoS
+      const data = event.data as string;
+      if (data.length > MAX_MESSAGE_SIZE) {
+        console.warn('WebSocket message exceeded size limit, ignoring');
+        return;
+      }
+      
+      // Parse with schema validation (parseWebSocketMessage uses Zod)
+      const parseResult = safeParseWebSocketMessage(data);
+      if (!parseResult.success) {
+        console.warn('Invalid WebSocket message format:', parseResult.error);
+        return;
+      }
+      
+      if (parseResult.data.type === 'message') {
+        onMessage(parseResult.data.data);
       }
     };
+    
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
     return ws;
   }
 }
@@ -407,10 +442,26 @@ const webSocketMessageSchema = z.object({
 
 type WebSocketMessage = z.infer<typeof webSocketMessageSchema>;
 
-function parseWebSocketMessage(data: string): WebSocketMessage {
-  const parsed: unknown = JSON.parse(data);
-  return webSocketMessageSchema.parse(parsed);
+type SafeParseResult<T> = 
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+function safeParseWebSocketMessage(data: string): SafeParseResult<WebSocketMessage> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(data);
+  } catch {
+    return { success: false, error: 'Invalid JSON' };
+  }
+  
+  const result = webSocketMessageSchema.safeParse(parsed);
+  if (!result.success) {
+    return { success: false, error: result.error.message };
+  }
+  
+  return { success: true, data: result.data };
 }
+
 
 export const messagingClient = new MessagingClient();
 

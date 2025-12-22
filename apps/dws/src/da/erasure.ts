@@ -9,7 +9,7 @@
 
 import type { Hex } from 'viem';
 import { keccak256, toBytes } from 'viem';
-import type { ErasureConfig, Chunk, ChunkProof } from './types';
+import type { ErasureConfig, Chunk } from './types';
 
 // ============================================================================
 // Galois Field GF(2^8) Implementation
@@ -49,7 +49,7 @@ function gfMul(a: number, b: number): number {
   return gfExp[gfLog[a] + gfLog[b]];
 }
 
-function gfDiv(a: number, b: number): number {
+function _gfDiv(a: number, b: number): number {
   if (b === 0) throw new Error('Division by zero in GF');
   if (a === 0) return 0;
   return gfExp[gfLog[a] + GF_SIZE - 1 - gfLog[b]];
@@ -241,11 +241,22 @@ export class ReedSolomonCodec {
     const allDataAvailable = usedIndices.every(i => i < this.dataShards);
     if (allDataAvailable) {
       // Just concatenate data shards
-      const shardSize = shards[usedIndices[0]]!.length;
+      const firstIndex = usedIndices[0];
+      if (firstIndex === undefined) {
+        throw new Error('No available shard indices');
+      }
+      const firstShard = shards[firstIndex];
+      if (!firstShard) {
+        throw new Error('First shard not found');
+      }
+      const shardSize = firstShard.length;
       const result = new Uint8Array(originalSize);
       let offset = 0;
       for (let i = 0; i < this.dataShards && offset < originalSize; i++) {
-        const shard = shards[i]!;
+        const shard = shards[i];
+        if (!shard) {
+          throw new Error(`Data shard ${i} not found`);
+        }
         const copyLen = Math.min(shardSize, originalSize - offset);
         result.set(shard.slice(0, copyLen), offset);
         offset += copyLen;
@@ -264,7 +275,13 @@ export class ReedSolomonCodec {
     const invMatrix = invertMatrix(subMatrix);
     
     // Collect available shards
-    const availableShards: Uint8Array[] = usedIndices.map(i => shards[i]!);
+    const availableShards: Uint8Array[] = usedIndices.map(i => {
+      const shard = shards[i];
+      if (!shard) {
+        throw new Error(`Shard at index ${i} not found`);
+      }
+      return shard;
+    });
     
     // Reconstruct data shards
     const reconstructed = matrixMul(invMatrix, availableShards, this.dataShards);

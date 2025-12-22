@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'bun:test';
 import type { Address, Hex } from 'viem';
+import { encodeFunctionData, concat } from 'viem';
 
 // Create a test-only SafeService that doesn't depend on rpcService for pure methods
 class TestSafeService {
@@ -26,7 +27,6 @@ class TestSafeService {
   }
 
   createTokenTransfer(token: Address, to: Address, amount: bigint) {
-    const { encodeFunctionData } = require('viem');
     const data = encodeFunctionData({
       abi: [{ name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'value', type: 'uint256' }] }],
       functionName: 'transfer',
@@ -48,7 +48,6 @@ class TestSafeService {
   }
 
   buildSignatures(confirmations: Array<{ owner: Address; signature: Hex; submissionDate: string }>) {
-    const { concat } = require('viem');
     const sorted = [...confirmations].sort((a, b) => 
       a.owner.toLowerCase().localeCompare(b.owner.toLowerCase())
     );

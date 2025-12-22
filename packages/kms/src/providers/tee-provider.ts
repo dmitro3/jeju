@@ -41,10 +41,22 @@ interface EnclaveKey {
   address: Address;
 }
 
+/** Safe recovery ID extraction from signature with bounds validation */
+function extractRecoveryId(signature: string): number {
+  if (signature.length < 132) return 0;
+  const vHex = signature.slice(130, 132);
+  const v = parseInt(vHex, 16);
+  // Recovery ID must be 0 or 1 (v is 27/28 for legacy, or 0/1 for EIP-155)
+  if (v >= 27 && v <= 28) return v - 27;
+  if (v === 0 || v === 1) return v;
+  return 0; // Default to 0 for invalid values
+}
+
 export class TEEProvider implements KMSProvider {
   type = KMSProviderType.TEE;
   private config: TEEConfig;
   private connected = false;
+  private connectPromise: Promise<void> | null = null;
   private remoteMode = false;
   private enclaveKey: Uint8Array;
   private keys = new Map<string, EnclaveKey>();
@@ -227,7 +239,7 @@ export class TEEProvider implements KMSProvider {
     const hash = request.hashAlgorithm === 'none' ? messageBytes : toBytes(keccak256(messageBytes));
     const signature = await account.signMessage({ message: { raw: hash } });
 
-    return { message: toHex(messageBytes), signature, recoveryId: parseInt(signature.slice(130, 132), 16) - 27, keyId: request.keyId, signedAt: Date.now() };
+    return { message: toHex(messageBytes), signature, recoveryId: extractRecoveryId(signature), keyId: request.keyId, signedAt: Date.now() };
   }
 
   async getAttestation(_keyId?: string): Promise<TEEAttestation> {

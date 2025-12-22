@@ -135,7 +135,7 @@ export const serviceCommand = new Command('service')
 
 async function startAutoUpdate(options: { network: string; checkInterval: string; auto: boolean }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/auto-update/update-manager.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/infrastructure/update-manager.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Auto-update script not found');
@@ -178,7 +178,7 @@ async function startAutoUpdate(options: { network: string; checkInterval: string
 
 async function startBridgeMonitor(options: { network: string; l1Rpc?: string; monitorKey?: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/bridge/forced-inclusion-monitor.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/packages/deployment/scripts/sequencer/forced-inclusion-monitor.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Bridge monitor script not found');
@@ -221,7 +221,7 @@ async function startBridgeMonitor(options: { network: string; l1Rpc?: string; mo
 
 async function startChallenger(options: { network: string; l1Rpc?: string; l2Rpc?: string; challengerKey?: string; challengerKeyFile?: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/dispute/run-challenger.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/dispute/run-challenger.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Challenger script not found');
@@ -267,7 +267,7 @@ async function startChallenger(options: { network: string; l1Rpc?: string; l2Rpc
 
 async function startSequencer(options: { network: string; l1Rpc?: string; blockInterval?: string; voteRatio?: string; signerUrls?: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/sequencer/run-consensus.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/sequencer/run-consensus.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Sequencer script not found');
@@ -358,7 +358,7 @@ async function startZKBridge(options: { mode: string; relayerOnly?: boolean; pro
 
 async function startForcedInclusionMonitor(options: { network: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/sequencer/forced-inclusion-monitor.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/sequencer/forced-inclusion-monitor.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Forced inclusion monitor script not found');
@@ -401,7 +401,7 @@ async function startForcedInclusionMonitor(options: { network: string }) {
 
 async function startConsensusCoordinator(options: { network: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/sequencer/run-consensus.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/sequencer/run-consensus.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Consensus coordinator script not found');
@@ -444,7 +444,7 @@ async function startConsensusCoordinator(options: { network: string }) {
 
 async function startThresholdSigner(options: { network: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/sequencer/run-signer.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/sequencer/run-signer.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Threshold signer script not found');
@@ -487,7 +487,7 @@ async function startThresholdSigner(options: { network: string }) {
 
 async function startThresholdBatcher(options: { network: string }) {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/sequencer/threshold-batcher.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/sequencer/threshold-batcher.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Threshold batcher script not found');

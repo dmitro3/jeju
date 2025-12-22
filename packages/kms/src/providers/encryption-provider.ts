@@ -36,6 +36,7 @@ import {
   decryptFromPayload,
   deriveKeyForEncryption,
   parseCiphertextPayload,
+  constantTimeCompare,
 } from '../crypto.js';
 
 interface EncryptionKey {
@@ -63,9 +64,21 @@ interface Session {
   createdAt: number;
 }
 
+/** Safe recovery ID extraction from signature with bounds validation */
+function extractRecoveryId(signature: string): number {
+  if (signature.length < 132) return 0;
+  const vHex = signature.slice(130, 132);
+  const v = parseInt(vHex, 16);
+  // Recovery ID must be 0 or 1 (v is 27/28 for legacy, or 0/1 for EIP-155)
+  if (v >= 27 && v <= 28) return v - 27;
+  if (v === 0 || v === 1) return v;
+  return 0; // Default to 0 for invalid values
+}
+
 export class EncryptionProvider implements KMSProvider {
   type = KMSProviderType.ENCRYPTION;
   private connected = false;
+  private connectPromise: Promise<void> | null = null;
   private masterKey: Uint8Array;
   private keys = new Map<string, EncryptionKey>();
   private keyVersions = new Map<string, KeyVersionRecord[]>();
@@ -178,12 +191,10 @@ export class EncryptionProvider implements KMSProvider {
   async decrypt(request: DecryptRequest): Promise<string> {
     await this.ensureConnected();
 
-    const { payload, authSig } = request;
+    const { payload } = request;
     
-    if (authSig) {
-      const allowed = await this.checkAccessControl(payload.policy, authSig);
-      if (!allowed) throw new Error('Access denied: policy conditions not met');
-    }
+    const allowed = await this.checkAccessControl(payload.policy);
+    if (!allowed) throw new Error('Access denied: policy conditions not met');
 
     const parsed = parseCiphertextPayload(payload.ciphertext);
     const version = parsed.version ?? 1;
@@ -226,7 +237,7 @@ export class EncryptionProvider implements KMSProvider {
     const hash = request.hashAlgorithm === 'none' ? messageBytes : toBytes(keccak256(messageBytes));
     const signature = await account.signMessage({ message: { raw: hash } });
 
-    return { message: toHex(messageBytes), signature, recoveryId: parseInt(signature.slice(130, 132), 16) - 27, keyId: request.keyId, signedAt: Date.now() };
+    return { message: toHex(messageBytes), signature, recoveryId: extractRecoveryId(signature), keyId: request.keyId, signedAt: Date.now() };
   }
 
   async createSession(authSig: AuthSignature, capabilities: string[], expirationHours = 24): Promise<SessionKey> {
@@ -244,10 +255,22 @@ export class EncryptionProvider implements KMSProvider {
 
   validateSession(session: SessionKey): boolean {
     if (session.expiration <= Date.now()) return false;
+    
+    // Iterate over ALL sessions to prevent timing-based session enumeration
+    let found = false;
+    let valid = false;
+    
     for (const s of this.sessions.values()) {
-      if (s.sessionKey.publicKey === session.publicKey) return s.sessionKey.expiration > Date.now();
+      // Use constant-time comparison to prevent timing attacks
+      const matches = constantTimeCompare(s.sessionKey.publicKey, session.publicKey);
+      // Only set found/valid on first match, but continue iterating
+      if (matches && !found) {
+        found = true;
+        valid = s.sessionKey.expiration > Date.now();
+      }
     }
-    return false;
+    
+    return found && valid;
   }
 
   async rotateKey(keyId: string): Promise<EncryptionKey> {
@@ -282,35 +305,35 @@ export class EncryptionProvider implements KMSProvider {
     return existingKey;
   }
 
-  private async checkAccessControl(policy: AccessControlPolicy, authSig: AuthSignature): Promise<boolean> {
+  private async checkAccessControl(policy: AccessControlPolicy): Promise<boolean> {
     for (const condition of policy.conditions) {
-      const result = await this.evaluateCondition(condition, authSig);
+      const result = await this.evaluateCondition(condition);
       if (policy.operator === 'and' && !result) return false;
       if (policy.operator === 'or' && result) return true;
     }
     return policy.operator === 'and';
   }
 
-  private async evaluateCondition(condition: AccessCondition, authSig: AuthSignature): Promise<boolean> {
+  private async evaluateCondition(condition: AccessCondition): Promise<boolean> {
     switch (condition.type) {
       case 'timestamp':
         return this.compare(Math.floor(Date.now() / 1000), condition.comparator, condition.value);
       case 'balance':
         if (condition.value === '0') return true;
-        log.warn('Balance condition requires on-chain check', { address: authSig.address });
+        log.debug('Balance condition requires on-chain check');
         return false;
       case 'stake':
         if (condition.minStakeUSD === 0) return true;
-        log.warn('Stake condition requires on-chain check');
+        log.debug('Stake condition requires on-chain check');
         return false;
       case 'role':
-        log.warn('Role condition requires on-chain check', { role: condition.role });
+        log.debug('Role condition requires on-chain check');
         return false;
       case 'agent':
-        log.warn('Agent condition requires on-chain check', { agentId: condition.agentId });
+        log.debug('Agent condition requires on-chain check');
         return false;
       case 'contract':
-        log.warn('Contract condition requires on-chain check');
+        log.debug('Contract condition requires on-chain check');
         return false;
       default:
         return false;

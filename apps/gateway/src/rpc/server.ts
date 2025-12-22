@@ -3,10 +3,11 @@
  * Multi-chain RPC proxy with stake-based rate limiting and X402 payments
  */
 
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
+import { bodyLimit } from 'hono/body-limit';
 import { isAddress, type Address } from 'viem';
 
 import { CHAINS, getChain, isChainSupported, getMainnetChains, getTestnetChains } from './config/chains.js';
@@ -22,14 +23,12 @@ import {
   KeyIdSchema,
   PurchaseCreditsRequestSchema,
   PaymentRequirementQuerySchema,
-  ChainIdSchema,
   JsonObjectSchema,
   expect,
   expectChainId,
   expectAddress,
   validateBody,
   validateQuery,
-  type JsonObject,
 } from '../lib/validation.js';
 
 // ============================================================================
@@ -98,7 +97,12 @@ type RpcMcpToolResult =
 
 export const rpcApp = new Hono();
 
-const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',') || ['*'];
+// SECURITY: Configure CORS based on environment
+// In production, require explicit origin whitelist
+const CORS_ORIGINS_ENV = process.env.CORS_ORIGINS?.split(',').filter(Boolean);
+const isProduction = process.env.NODE_ENV === 'production';
+const CORS_ORIGINS = isProduction && CORS_ORIGINS_ENV?.length ? CORS_ORIGINS_ENV : ['*'];
+
 const MAX_API_KEYS_PER_ADDRESS = 10;
 
 // Middleware
@@ -111,10 +115,22 @@ rpcApp.use('*', cors({
   maxAge: 86400,
 }));
 rpcApp.use('*', logger());
+
+// SECURITY: Limit request body size to prevent DoS attacks
+const MAX_BODY_SIZE = 512 * 1024; // 512KB for RPC batch requests
+rpcApp.use('*', bodyLimit({
+  maxSize: MAX_BODY_SIZE,
+  onError: (c: Context) => {
+    return c.json({ error: 'Request body too large', maxSize: MAX_BODY_SIZE }, 413);
+  },
+}));
+
 rpcApp.use('/v1/*', rateLimiter());
 
 rpcApp.onError((err, c) => {
+  // Log full error details server-side only
   console.error(`[RPC Gateway Error] ${err.message}`, err.stack);
+  // SECURITY: Never expose error details to clients
   return c.json({ error: 'Internal server error' }, 500);
 });
 

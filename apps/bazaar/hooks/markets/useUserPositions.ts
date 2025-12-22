@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { request, gql } from 'graphql-request';
 import { AddressSchema } from '@jejunetwork/types';
 import { expect } from '@/lib/validation';
+import { calculateTotalValue, calculateTotalPnL } from '@/lib/portfolio';
 import type { Position } from '@/types/markets';
 import { INDEXER_URL } from '@/config';
 
@@ -24,6 +25,38 @@ const POSITIONS_QUERY = gql`
   }
 `;
 
+interface RawPosition {
+  id: string;
+  yesShares: string;
+  noShares: string;
+  totalSpent: string;
+  totalReceived: string;
+  hasClaimed: boolean;
+  market: {
+    sessionId: string;
+    question: string;
+    resolved: boolean;
+    outcome: boolean | null;
+  };
+}
+
+function transformPosition(raw: RawPosition): Position {
+  return {
+    id: raw.id,
+    market: {
+      sessionId: raw.market.sessionId,
+      question: raw.market.question,
+      resolved: raw.market.resolved,
+      outcome: raw.market.outcome ?? undefined,
+    },
+    yesShares: BigInt(raw.yesShares),
+    noShares: BigInt(raw.noShares),
+    totalSpent: BigInt(raw.totalSpent),
+    totalReceived: BigInt(raw.totalReceived),
+    hasClaimed: raw.hasClaimed,
+  };
+}
+
 export function useUserPositions(address?: `0x${string}`) {
   const [positions, setPositions] = useState<Position[]>([]);
   const [totalValue, setTotalValue] = useState<bigint>(0n);
@@ -41,53 +74,16 @@ export function useUserPositions(address?: `0x${string}`) {
       const validatedAddress = expect(address, 'Address is required');
       AddressSchema.parse(validatedAddress);
       const endpoint = expect(INDEXER_URL, 'INDEXER_URL is not configured');
-      
+
       const data = await request(endpoint, POSITIONS_QUERY, {
-        user: validatedAddress.toLowerCase()
-      }) as {
-        marketPositions: Array<{
-          id: string;
-          yesShares: string;
-          noShares: string;
-          totalSpent: string;
-          totalReceived: string;
-          hasClaimed: boolean;
-          market: {
-            sessionId: string;
-            question: string;
-            resolved: boolean;
-            outcome: boolean | null;
-          };
-        }>
-      };
+        user: validatedAddress.toLowerCase(),
+      }) as { marketPositions: RawPosition[] };
 
-      const transformedPositions: Position[] = data.marketPositions.map((p) => ({
-        id: p.id,
-        market: {
-          sessionId: p.market.sessionId,
-          question: p.market.question,
-          resolved: p.market.resolved,
-          outcome: p.market.outcome ?? undefined
-        },
-        yesShares: BigInt(p.yesShares),
-        noShares: BigInt(p.noShares),
-        totalSpent: BigInt(p.totalSpent),
-        totalReceived: BigInt(p.totalReceived),
-        hasClaimed: p.hasClaimed
-      }));
-
-      let value = 0n;
-      let pnl = 0n;
-
-      for (const pos of transformedPositions) {
-        const posValue = pos.yesShares + pos.noShares;
-        value += posValue;
-        pnl += posValue + pos.totalReceived - pos.totalSpent;
-      }
+      const transformedPositions = data.marketPositions.map(transformPosition);
 
       setPositions(transformedPositions);
-      setTotalValue(value);
-      setTotalPnL(pnl);
+      setTotalValue(calculateTotalValue(transformedPositions));
+      setTotalPnL(calculateTotalPnL(transformedPositions));
       setLoading(false);
     }
 
@@ -98,6 +94,3 @@ export function useUserPositions(address?: `0x${string}`) {
 
   return { positions, totalValue, totalPnL, loading };
 }
-
-
-

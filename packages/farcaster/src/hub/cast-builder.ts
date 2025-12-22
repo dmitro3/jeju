@@ -11,7 +11,6 @@ import {
   createCastId,
   hexToMessageBytes,
   type CastAddBody,
-  type CastId,
   type Embed,
   type Message,
   type FarcasterNetwork,
@@ -166,7 +165,7 @@ export class CastBuilder {
     for (let i = 0; i < texts.length; i++) {
       const text = texts[i];
       
-      let castOptions: CastOptions = {};
+      const castOptions: CastOptions = {};
       
       // First cast can have channel
       if (i === 0 && options?.channelUrl) {

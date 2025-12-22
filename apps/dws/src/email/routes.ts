@@ -135,7 +135,7 @@ async function getAuthenticatedUser(c: { req: { header: (name: string) => string
   const registryAddress = process.env.EMAIL_REGISTRY_ADDRESS as Address | undefined;
 
   let tier: EmailTier = 'free';
-  let email = `${address.slice(0, 8).toLowerCase()}@jeju.mail`;
+  const email = `${address.slice(0, 8).toLowerCase()}@jeju.mail`;
 
   if (registryAddress) {
     const publicClient = createPublicClient({ transport: http(rpcUrl) });
@@ -456,7 +456,7 @@ export function createEmailRouter(): Hono {
     }
 
     index.inbox.push(...index.folders[name]);
-    delete index.folders[name];
+    Reflect.deleteProperty(index.folders, name);
     
     await storage.saveIndex(user.address, index);
 

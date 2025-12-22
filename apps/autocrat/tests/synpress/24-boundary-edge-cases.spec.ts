@@ -401,7 +401,7 @@ test.describe('Data Verification - Actual Output Inspection', () => {
     const data = await response.json();
 
     // Verify all criteria are 0-100
-    for (const [key, value] of Object.entries(data.criteria)) {
+    for (const [, value] of Object.entries(data.criteria)) {
       expect(value).toBeGreaterThanOrEqual(0);
       expect(value).toBeLessThanOrEqual(100);
     }

@@ -256,13 +256,13 @@ describe('Token Address Configuration', () => {
   };
 
   test('WETH addresses are valid checksummed addresses', () => {
-    for (const [chainId, address] of Object.entries(TOKEN_ADDRESSES.WETH)) {
+    for (const address of Object.values(TOKEN_ADDRESSES.WETH)) {
       expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/);
     }
   });
 
   test('USDC addresses are valid checksummed addresses', () => {
-    for (const [chainId, address] of Object.entries(TOKEN_ADDRESSES.USDC)) {
+    for (const address of Object.values(TOKEN_ADDRESSES.USDC)) {
       expect(address).toMatch(/^0x[a-fA-F0-9]{40}$/);
     }
   });

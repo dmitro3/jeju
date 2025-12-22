@@ -49,7 +49,7 @@ export type ChromeMessageCallback = (
   message: ChromeMessage,
   sender: ChromeMessageSender,
   sendResponse: (response: ChromeMessageResponse) => void
-) => boolean | void;
+) => boolean | undefined;
 
 // ============================================================================
 // Chrome Storage Types
@@ -90,35 +90,40 @@ export interface ChromeAlarmOptions {
   periodInMinutes?: number;
 }
 
+/** Stub implementation for non-extension environments */
+function noop(): void {
+  // Stub implementation - no-op
+}
+
 export const chrome = {
   runtime: {
     id: '' as string | undefined,
     onMessage: {
-      addListener: (_callback: ChromeMessageCallback) => {},
-      removeListener: (_callback: ChromeMessageCallback) => {},
+      addListener: (_callback: ChromeMessageCallback): void => noop(),
+      removeListener: (_callback: ChromeMessageCallback): void => noop(),
     },
-    sendMessage: async (_message: ChromeMessage): Promise<ChromeMessageResponse> => { return null; },
+    sendMessage: async (_message: ChromeMessage): Promise<ChromeMessageResponse> => null,
     getURL: (_path: string): string => '',
   },
   storage: {
     local: {
-      get: (_key: string | string[] | null, _callback: (result: ChromeStorageResult) => void) => {},
-      set: (_items: Record<string, EIP1193Param>, _callback?: () => void) => {},
-      remove: (_key: string | string[], _callback?: () => void) => {},
-      clear: (_callback?: () => void) => {},
+      get: (_key: string | string[] | null, _callback: (result: ChromeStorageResult) => void): void => noop(),
+      set: (_items: Record<string, EIP1193Param>, _callback?: () => void): void => noop(),
+      remove: (_key: string | string[], _callback?: () => void): void => noop(),
+      clear: (_callback?: () => void): void => noop(),
     },
   },
   tabs: {
-    query: (_queryInfo: ChromeTabsQueryInfo, _callback: (tabs: ChromeTab[]) => void) => {},
-    sendMessage: async (_tabId: number, _message: ChromeMessage): Promise<ChromeMessageResponse> => { return null; },
+    query: (_queryInfo: ChromeTabsQueryInfo, _callback: (tabs: ChromeTab[]) => void): void => noop(),
+    sendMessage: async (_tabId: number, _message: ChromeMessage): Promise<ChromeMessageResponse> => null,
   },
   windows: {
     create: async (_options: ChromeWindowOptions): Promise<ChromeWindow> => ({ focused: false }),
   },
   alarms: {
-    create: (_name: string, _options: ChromeAlarmOptions) => {},
+    create: (_name: string, _options: ChromeAlarmOptions): void => noop(),
     onAlarm: {
-      addListener: (_callback: () => void) => {},
+      addListener: (_callback: () => void): void => noop(),
     },
   },
 };
@@ -127,7 +132,7 @@ export const browser = {
   runtime: {
     id: '' as string | undefined,
     onMessage: {
-      addListener: (_callback: (message: ChromeMessage) => void) => {},
+      addListener: (_callback: (message: ChromeMessage) => void): void => noop(),
     },
   },
 };

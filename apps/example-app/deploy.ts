@@ -15,7 +15,7 @@ import { signMessage } from 'viem/accounts';
 import type { PrivateKeyAccount } from 'viem/accounts';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import type { Address, Hex } from 'viem';
+import type { Hex } from 'viem';
 import type { DeployResult } from './src/types';
 
 const NETWORK = process.env.NETWORK || 'localnet';
@@ -25,21 +25,25 @@ const STORAGE_API = process.env.STORAGE_API || `${DWS_URL}/storage`;
 const COMPUTE_API = process.env.COMPUTE_API || `${DWS_URL}/compute`;
 const CQL_ENDPOINT = process.env.CQL_ENDPOINT || 'http://localhost:4300';
 
-interface DeployConfig {
-  jnsName: string;
-  owner: Address;
-  network: string;
-}
-
 async function getDeployerWallet(): Promise<PrivateKeyAccount> {
   const privateKey = process.env.DEPLOYER_PRIVATE_KEY;
   if (!privateKey) {
-    // Use well-known dev key for localnet
+    // Only allow default dev key in localnet - this is Anvil account #0
+    // WARNING: This key is publicly known - NEVER use in production
     if (NETWORK === 'localnet') {
-      return privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`);
+      console.warn('[Deploy] Using default Anvil dev key - DO NOT USE IN PRODUCTION');
+      // Anvil account #0 - well-known test key
+      const ANVIL_DEV_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+      return privateKeyToAccount(ANVIL_DEV_KEY as `0x${string}`);
     }
-    throw new Error('DEPLOYER_PRIVATE_KEY required for non-localnet deployment');
+    throw new Error('DEPLOYER_PRIVATE_KEY environment variable is required for non-localnet deployment');
   }
+  
+  // Validate the provided key format
+  if (!privateKey.startsWith('0x') || privateKey.length !== 66) {
+    throw new Error('DEPLOYER_PRIVATE_KEY must be a valid 32-byte hex string starting with 0x');
+  }
+  
   return privateKeyToAccount(privateKey as `0x${string}`);
 }
 

@@ -9,7 +9,6 @@ import {
   getTokenLaunchpad,
   bazaarMarketplaceDeployments,
   erc20FactoryDeployments,
-  launchpadDeployments,
   ZERO_ADDRESS,
   isValidAddress,
   type ChainId,

@@ -677,8 +677,8 @@ async function getRunInfo(runId: string, network: string): Promise<void> {
 
     logger.subheader('Status');
     logger.table([
-      { label: 'State', value: stateLabel, status: state === 3 ? 'ok' : state === 6 ? 'ok' : 'warning' },
-      { label: 'Clients', value: String(clientCount), status: Number(clientCount) >= config.minClients ? 'ok' : 'warning' },
+      { label: 'State', value: stateLabel, status: state === 3 ? 'ok' : state === 6 ? 'ok' : 'warn' },
+      { label: 'Clients', value: String(clientCount), status: Number(clientCount) >= config.minClients ? 'ok' : 'warn' },
       { label: 'Epoch', value: String(epoch), status: 'ok' },
       { label: 'Step', value: `${step} / ${config.totalSteps} (${progress}%)`, status: 'ok' },
     ]);
@@ -1109,7 +1109,7 @@ async function getRLAIFStatus(runId: string, _network: string): Promise<void> {
 
     logger.subheader('Status');
     logger.table([
-      { label: 'State', value: stateLabel, status: run.state === 7 ? 'ok' : run.state === 6 ? 'warning' : 'ok' },
+      { label: 'State', value: stateLabel, status: run.state === 7 ? 'ok' : run.state === 6 ? 'warn' : 'ok' },
       { label: 'Iteration', value: `${run.currentIteration} / ${run.config.targetIterations} (${progress}%)`, status: 'ok' },
       { label: 'Current Policy', value: run.currentPolicyCID.slice(0, 30) + '...', status: 'ok' },
     ]);

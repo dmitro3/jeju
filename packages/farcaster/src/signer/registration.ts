@@ -16,7 +16,6 @@ import {
   toBytes,
 } from 'viem';
 import { optimism } from 'viem/chains';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { ed25519 } from '@noble/curves/ed25519';
 
 // ============ Contract Addresses ============
@@ -114,26 +113,6 @@ export interface KeyData {
   keyType: number;
 }
 
-// ============ Signed Key Request ============
-
-/**
- * EIP-712 domain for signed key requests
- */
-const SIGNED_KEY_REQUEST_DOMAIN = {
-  name: 'Farcaster SignedKeyRequestValidator',
-  version: '1',
-  chainId: 10, // Optimism
-  verifyingContract: FARCASTER_CONTRACTS.SIGNED_KEY_REQUEST_VALIDATOR,
-};
-
-const SIGNED_KEY_REQUEST_TYPES = {
-  SignedKeyRequest: [
-    { name: 'requestFid', type: 'uint256' },
-    { name: 'key', type: 'bytes' },
-    { name: 'deadline', type: 'uint256' },
-  ],
-};
-
 // ============ Signer Registration Class ============
 
 export class SignerRegistration {
@@ -143,7 +122,7 @@ export class SignerRegistration {
     this.publicClient = createPublicClient({
       chain: optimism,
       transport: http(config?.rpcUrl ?? 'https://mainnet.optimism.io'),
-    });
+    }) as PublicClient;
   }
   
   /**
@@ -293,13 +272,6 @@ export class SignerRegistration {
     requestFid: number;
     deadline: number;
   }): Hex {
-    // Create EIP-712 typed data hash
-    const domainSeparator = keccak256(
-      toBytes(
-        `${SIGNED_KEY_REQUEST_DOMAIN.name}${SIGNED_KEY_REQUEST_DOMAIN.version}${SIGNED_KEY_REQUEST_DOMAIN.chainId}${SIGNED_KEY_REQUEST_DOMAIN.verifyingContract}`
-      )
-    );
-    
     // For now, return a simple hash - in production use proper EIP-712
     return keccak256(
       toBytes(

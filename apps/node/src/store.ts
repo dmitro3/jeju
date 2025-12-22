@@ -45,6 +45,9 @@ interface AppStore {
   isLoading: boolean;
   loadingMessage: string;
   setLoading: (loading: boolean, message?: string) => void;
+  
+  // Operation locking to prevent race conditions
+  pendingOperation: string | null;
 
   // Hardware
   hardware: HardwareInfo | null;
@@ -101,6 +104,24 @@ interface AppStore {
   initialize: () => Promise<void>;
 }
 
+/** Helper to execute operations with locking to prevent race conditions */
+function withOperationLock<T>(
+  operationName: string,
+  get: () => AppStore,
+  set: (state: Partial<AppStore>) => void,
+  fn: () => Promise<T>
+): Promise<T> {
+  const currentOp = get().pendingOperation;
+  if (currentOp !== null) {
+    throw new Error(`Operation "${operationName}" blocked: "${currentOp}" is already in progress`);
+  }
+  set({ pendingOperation: operationName, isLoading: true, loadingMessage: `${operationName}...` });
+  return fn()
+    .finally(() => {
+      set({ pendingOperation: null, isLoading: false, loadingMessage: '' });
+    });
+}
+
 export const useAppStore = create<AppStore>((set, get) => ({
   // Navigation
   currentView: 'dashboard',
@@ -113,6 +134,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   isLoading: true,
   loadingMessage: 'Initializing...',
   setLoading: (loading, message = '') => set({ isLoading: loading, loadingMessage: message }),
+  
+  // Operation locking
+  pendingOperation: null,
 
   // Hardware
   hardware: null,
@@ -177,20 +201,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       custom_settings: null,
     });
     
-    set({ isLoading: true, loadingMessage: `Starting ${serviceId}...` });
-    await invoke('start_service', { request });
-    await get().fetchServices();
-    set({ isLoading: false });
+    return withOperationLock(`Starting ${serviceId}`, get, set, async () => {
+      await invoke('start_service', { request });
+      await get().fetchServices();
+    });
   },
   stopService: async (serviceId) => {
     if (!serviceId || typeof serviceId !== 'string' || serviceId.length === 0) {
       throw new Error('Invalid serviceId: must be a non-empty string');
     }
     
-    set({ isLoading: true, loadingMessage: `Stopping ${serviceId}...` });
-    await invoke('stop_service', { service_id: serviceId });
-    await get().fetchServices();
-    set({ isLoading: false });
+    return withOperationLock(`Stopping ${serviceId}`, get, set, async () => {
+      await invoke('stop_service', { service_id: serviceId });
+      await get().fetchServices();
+    });
   },
 
   // Bots
@@ -210,20 +234,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       capital_allocation_wei: capitalWei,
     });
     
-    set({ isLoading: true, loadingMessage: `Starting ${botId}...` });
-    await invoke('start_bot', { request });
-    await get().fetchBots();
-    set({ isLoading: false });
+    return withOperationLock(`Starting ${botId}`, get, set, async () => {
+      await invoke('start_bot', { request });
+      await get().fetchBots();
+    });
   },
   stopBot: async (botId) => {
     if (!botId || typeof botId !== 'string' || botId.length === 0) {
       throw new Error('Invalid botId: must be a non-empty string');
     }
     
-    set({ isLoading: true, loadingMessage: `Stopping ${botId}...` });
-    await invoke('stop_bot', { bot_id: botId });
-    await get().fetchBots();
-    set({ isLoading: false });
+    return withOperationLock(`Stopping ${botId}`, get, set, async () => {
+      await invoke('stop_bot', { bot_id: botId });
+      await get().fetchBots();
+    });
   },
 
   // Earnings
@@ -254,10 +278,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       token_address: null,
     });
     
-    set({ isLoading: true, loadingMessage: 'Staking...' });
-    await invoke('stake', { request });
-    await get().fetchStaking();
-    set({ isLoading: false });
+    return withOperationLock('Staking', get, set, async () => {
+      await invoke('stake', { request });
+      await get().fetchStaking();
+    });
   },
   unstake: async (serviceId, amountWei) => {
     const request = UnstakeRequestSchema.parse({
@@ -265,17 +289,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
       amount_wei: amountWei,
     });
     
-    set({ isLoading: true, loadingMessage: 'Unstaking...' });
-    await invoke('unstake', { request });
-    await get().fetchStaking();
-    set({ isLoading: false });
+    return withOperationLock('Unstaking', get, set, async () => {
+      await invoke('unstake', { request });
+      await get().fetchStaking();
+    });
   },
   claimRewards: async (serviceId) => {
-    set({ isLoading: true, loadingMessage: 'Claiming rewards...' });
-    await invoke('claim_rewards', { service_id: serviceId });
-    await get().fetchStaking();
-    await get().fetchEarnings();
-    set({ isLoading: false });
+    return withOperationLock('Claiming rewards', get, set, async () => {
+      await invoke('claim_rewards', { service_id: serviceId });
+      await get().fetchStaking();
+      await get().fetchEarnings();
+    });
   },
 
   // Config
@@ -299,10 +323,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
       throw new Error('Invalid network: must be a non-empty string');
     }
     
-    set({ isLoading: true, loadingMessage: `Switching to ${network}...` });
-    await invoke('set_network', { network });
-    await get().fetchConfig();
-    set({ isLoading: false });
+    return withOperationLock(`Switching to ${network}`, get, set, async () => {
+      await invoke('set_network', { network });
+      await get().fetchConfig();
+    });
   },
 
   // Error handling
@@ -311,24 +335,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // Initialize
   initialize: async () => {
-    set({ isLoading: true, loadingMessage: 'Initializing Network Node...' });
-    
-    await get().fetchHardware();
-    await get().fetchConfig();
-    await get().fetchWallet();
-    await get().fetchServices();
-    await get().fetchBots();
-    await get().fetchProjectedEarnings();
-    
-    if (get().wallet) {
-      await get().fetchBalance();
-      await get().fetchAgent();
-      await get().fetchBanStatus();
-      await get().fetchEarnings();
-      await get().fetchStaking();
-    }
-    
-    set({ isLoading: false, loadingMessage: '' });
+    return withOperationLock('Initializing', get, set, async () => {
+      await get().fetchHardware();
+      await get().fetchConfig();
+      await get().fetchWallet();
+      await get().fetchServices();
+      await get().fetchBots();
+      await get().fetchProjectedEarnings();
+      
+      if (get().wallet) {
+        await get().fetchBalance();
+        await get().fetchAgent();
+        await get().fetchBanStatus();
+        await get().fetchEarnings();
+        await get().fetchStaking();
+      }
+    });
   },
 }));
 

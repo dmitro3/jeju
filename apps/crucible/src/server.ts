@@ -45,6 +45,26 @@ import { banCheckMiddleware } from './middleware/ban-check';
 
 const log = createLogger('Server');
 
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Returns true only if both strings are identical.
+ */
+function constantTimeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Still do a comparison to avoid timing leak on length check
+    let xor = 0;
+    for (let i = 0; i < a.length; i++) {
+      xor |= a.charCodeAt(i) ^ (b.charCodeAt(i % b.length) || 0);
+    }
+    return xor === 0 && false; // Always false for length mismatch, but use xor to prevent optimization
+  }
+  let xor = 0;
+  for (let i = 0; i < a.length; i++) {
+    xor |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return xor === 0;
+}
+
 // Metrics tracking
 const metrics = {
   requests: { total: 0, success: 0, error: 0 },
@@ -53,6 +73,27 @@ const metrics = {
   latency: { sum: 0, count: 0 },
   startTime: Date.now(),
 };
+
+// Rate limiting configuration
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60_000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX_REQUESTS ?? '100', 10);
+
+// CORS configuration - restrict to allowed origins
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? 'http://localhost:3000,http://localhost:4000')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+// API key for authenticated endpoints
+const API_KEY = process.env.API_KEY;
+const REQUIRE_AUTH = process.env.REQUIRE_AUTH === 'true';
+
+// Paths that don't require authentication
+const PUBLIC_PATHS = ['/health', '/metrics', '/.well-known'];
+
+// Paths that don't require rate limiting
+const RATE_LIMIT_EXEMPT_PATHS = ['/health', '/metrics'];
 
 function getRequiredEnv(key: string): string {
   const value = process.env[key];
@@ -158,8 +199,108 @@ if (config.privateKey && walletClient) {
 const app = new Hono();
 
 // Middleware
-app.use('*', cors());
+// CORS - restrict to configured origins in production
+// SECURITY: Wildcard '*' is ONLY honored in localnet to prevent misconfiguration
+app.use('*', cors({
+  origin: (origin) => {
+    // In development (localnet), allow all origins including wildcard
+    if (config.network === 'localnet') return origin;
+    // In production/testnet, NEVER allow wildcard - explicit origins only
+    if (!origin) return null;
+    if (ALLOWED_ORIGINS.includes(origin)) return origin;
+    // Log rejected origins for debugging (but don't expose in response)
+    if (origin && !ALLOWED_ORIGINS.includes('*')) {
+      log.debug('CORS rejected origin', { origin, allowed: ALLOWED_ORIGINS });
+    }
+    return null;
+  },
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Wallet-Address'],
+  maxAge: 86400,
+}));
+
 app.use('*', logger());
+
+// Rate limiting middleware with atomic increment pattern
+app.use('*', async (c, next) => {
+  const path = c.req.path;
+  
+  // Skip rate limiting for exempt paths
+  if (RATE_LIMIT_EXEMPT_PATHS.some(p => path.startsWith(p))) {
+    return next();
+  }
+  
+  // Use IP or wallet address as rate limit key
+  const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() 
+    ?? c.req.header('x-real-ip') 
+    ?? 'unknown';
+  const walletAddress = c.req.header('x-wallet-address') ?? '';
+  const key = walletAddress || clientIp;
+  
+  const now = Date.now();
+  
+  // Clean up old entries periodically (limit cleanup frequency)
+  if (rateLimitStore.size > 10000) {
+    const keysToDelete: string[] = [];
+    for (const [k, v] of rateLimitStore) {
+      if (v.resetAt < now) keysToDelete.push(k);
+      if (keysToDelete.length >= 5000) break; // Limit cleanup batch size
+    }
+    for (const k of keysToDelete) {
+      rateLimitStore.delete(k);
+    }
+  }
+  
+  // Atomic check-and-increment pattern
+  let record = rateLimitStore.get(key);
+  
+  if (!record || record.resetAt < now) {
+    // Create new record atomically
+    record = { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitStore.set(key, record);
+  } else {
+    // Increment count atomically before checking limit
+    record.count++;
+    
+    if (record.count > RATE_LIMIT_MAX_REQUESTS) {
+      c.header('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS.toString());
+      c.header('X-RateLimit-Remaining', '0');
+      c.header('X-RateLimit-Reset', Math.ceil(record.resetAt / 1000).toString());
+      return c.json({ error: 'Rate limit exceeded' }, 429);
+    }
+  }
+  
+  c.header('X-RateLimit-Limit', RATE_LIMIT_MAX_REQUESTS.toString());
+  c.header('X-RateLimit-Remaining', Math.max(0, RATE_LIMIT_MAX_REQUESTS - record.count).toString());
+  c.header('X-RateLimit-Reset', Math.ceil(record.resetAt / 1000).toString());
+  
+  return next();
+});
+
+// API Key authentication middleware (when enabled)
+app.use('*', async (c, next) => {
+  const path = c.req.path;
+  
+  // Skip auth for public paths
+  if (PUBLIC_PATHS.some(p => path.startsWith(p))) {
+    return next();
+  }
+  
+  // Skip auth if not required
+  if (!REQUIRE_AUTH || !API_KEY) {
+    return next();
+  }
+  
+  const providedKey = c.req.header('x-api-key') ?? c.req.header('authorization')?.replace('Bearer ', '');
+  
+  if (!providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  
+  return next();
+});
+
 app.use('*', banCheckMiddleware()); // Ban check - blocks banned users
 app.use('*', async (c, next) => {
   const start = Date.now();
@@ -182,16 +323,31 @@ app.get('/health', (c) => c.json({
 
 app.get('/info', async (c) => {
   const dwsAvailable = await checkDWSHealth();
-  return c.json({
+  
+  // Check if request is authenticated (has valid API key)
+  const providedKey = c.req.header('x-api-key') ?? c.req.header('authorization')?.replace('Bearer ', '');
+  const isAuthenticated = API_KEY && providedKey === API_KEY;
+  
+  // Basic info for unauthenticated requests
+  const basicInfo = {
     service: 'crucible',
     version: '1.0.0',
     network: config.network,
-    contracts: config.contracts,
-    services: config.services,
     hasWallet: !!walletClient,
     dwsAvailable,
     runtimes: runtimeManager.getAllRuntimes().length,
-  });
+  };
+  
+  // Return full info only for authenticated requests
+  if (isAuthenticated) {
+    return c.json({
+      ...basicInfo,
+      contracts: config.contracts,
+      services: config.services,
+    });
+  }
+  
+  return c.json(basicInfo);
 });
 
 // ============================================================================
@@ -595,6 +751,10 @@ if (isNaN(port) || port <= 0 || port > 65535) {
   throw new Error(`Invalid PORT: ${portStr}. Must be a valid port number`);
 }
 
-log.info('Starting server', { port, network: config.network, wallet: account?.address ?? 'not configured' });
+// Mask wallet address in logs (show first 6 and last 4 chars)
+const maskedWallet = account?.address 
+  ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}`
+  : 'not configured';
+log.info('Starting server', { port, network: config.network, wallet: maskedWallet });
 
 export default { port, fetch: app.fetch };

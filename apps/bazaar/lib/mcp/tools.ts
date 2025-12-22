@@ -355,7 +355,7 @@ export async function callMCPTool(
       const typedArgs = args as GetModerationCaseArgs;
       expect(typedArgs.caseId, 'caseId is required');
       const caseData = await getModerationCase(typedArgs.caseId);
-      const validatedCaseData = expect(caseData, `Case not found: ${typedArgs.caseId}`);
+      const validatedCaseData = expect(caseData, 'Case not found');
       return makeResult({
         ...validatedCaseData,
         summary: `Case ${validatedCaseData.status}: ${validatedCaseData.target} reported by ${validatedCaseData.reporter}`,

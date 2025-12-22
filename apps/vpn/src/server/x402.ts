@@ -10,7 +10,7 @@
  */
 
 import { Hono } from 'hono';
-import { verifyMessage, getAddress, type Address, type Hex } from 'viem';
+import { getAddress, type Address, type Hex } from 'viem';
 import type { VPNServerConfig, VPNServiceContext } from './types';
 import {
   X402PaymentPayloadSchema,
@@ -46,8 +46,72 @@ export interface X402Receipt {
   verified: boolean;
 }
 
-// Track used nonces to prevent replay
-const usedNonces = new Set<string>();
+// Track used nonces with expiration to prevent replay attacks
+// Map stores nonce -> expiration timestamp
+const usedNonces = new Map<string, number>();
+
+// Nonce expiration time in seconds (10 minutes - double the max age for safety margin)
+const NONCE_EXPIRATION_SECONDS = 600;
+
+// Cleanup interval in milliseconds (every minute for more aggressive cleanup)
+const NONCE_CLEANUP_INTERVAL_MS = 60 * 1000;
+
+// Maximum nonces to store before forcing cleanup
+const MAX_NONCES = 100000;
+
+// Warning threshold (80% of max) - start warning when approaching capacity
+const NONCE_WARNING_THRESHOLD = 80000;
+
+// Cleanup expired nonces
+function cleanupExpiredNonces(): void {
+  const now = Math.floor(Date.now() / 1000);
+  let cleanedCount = 0;
+  
+  for (const [nonce, expiration] of usedNonces.entries()) {
+    if (now > expiration) {
+      usedNonces.delete(nonce);
+      cleanedCount++;
+    }
+  }
+  
+  if (cleanedCount > 0) {
+    console.log(`Cleaned up ${cleanedCount} expired nonces. Remaining: ${usedNonces.size}`);
+  }
+  
+  // SECURITY: Log warning when approaching capacity (potential attack indicator)
+  if (usedNonces.size > NONCE_WARNING_THRESHOLD) {
+    console.warn(`SECURITY WARNING: Nonce storage at ${usedNonces.size}/${MAX_NONCES} - possible replay attack in progress`);
+  }
+}
+
+// Start periodic cleanup
+setInterval(cleanupExpiredNonces, NONCE_CLEANUP_INTERVAL_MS);
+
+// Check if nonce is used and mark it as used with expiration
+function checkAndUseNonce(nonce: string): boolean {
+  // SECURITY: Force aggressive cleanup if approaching capacity
+  if (usedNonces.size >= MAX_NONCES * 0.9) {
+    cleanupExpiredNonces();
+  }
+  
+  // SECURITY: Reject if still at capacity after cleanup (under attack)
+  if (usedNonces.size >= MAX_NONCES) {
+    console.error('SECURITY: Nonce storage full after cleanup - rejecting request');
+    return true; // Treat as already used to reject the request
+  }
+  
+  // Check if nonce already exists and is not expired
+  const existingExpiration = usedNonces.get(nonce);
+  const now = Math.floor(Date.now() / 1000);
+  
+  if (existingExpiration !== undefined && now <= existingExpiration) {
+    return true; // Nonce is still valid (already used)
+  }
+  
+  // Mark nonce as used with expiration
+  usedNonces.set(nonce, now + NONCE_EXPIRATION_SECONDS);
+  return false; // Nonce was not used
+}
 
 // ============================================================================
 // Middleware
@@ -137,7 +201,8 @@ export function createX402Middleware(ctx: VPNServiceContext): Hono {
     expect(ctx.config.pricing.supportedTokens.length > 0, 'No supported tokens configured');
     
     const timestamp = Math.floor(Date.now() / 1000);
-    const nonce = `${body.payer}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
+    // SECURITY: Use cryptographically secure random generation for nonces
+    const nonce = `${body.payer}-${timestamp}-${crypto.randomUUID()}`;
 
     const payload: X402PaymentPayload = {
       scheme: 'exact',
@@ -236,37 +301,41 @@ export async function verifyX402Payment(
     return { valid: false, error: `Wrong payment recipient. Expected: ${expectedRecipient}, got: ${payToAddress}` };
   }
 
-  // Check nonce hasn't been used
-  const nonceKey = payload.nonce;
-  if (usedNonces.has(nonceKey)) {
+  // SECURITY: Validate network/chain ID to prevent cross-chain replay attacks
+  // The network field in payload must match expected network
+  const expectedNetwork = 'jeju'; // Could be made configurable via config.network
+  if (payload.network !== expectedNetwork) {
+    return { valid: false, error: `Invalid network. Expected: ${expectedNetwork}, got: ${payload.network}` };
+  }
+
+  // Check nonce hasn't been used (with automatic expiration handling)
+  if (checkAndUseNonce(payload.nonce)) {
     return { valid: false, error: 'Nonce already used' };
   }
 
-  // Verify signature
+  // SECURITY FIX: The signature must be from the payer, not the recipient (payTo)
+  // We need to recover the signer address from the signature
   const message = `x402:${payload.scheme}:${payload.network}:${payload.payTo}:${payload.amount}:${payload.asset}:${payload.resource}:${payload.nonce}:${payload.timestamp}`;
   
+  let payerAddress: Address;
   try {
-    const valid = await verifyMessage({
-      address: payToAddress,
+    // Use recoverMessageAddress to get the actual signer
+    const { recoverMessageAddress } = await import('viem');
+    payerAddress = await recoverMessageAddress({
       message,
       signature: payload.signature,
     });
-    
-    if (!valid) {
-      return { valid: false, error: 'Invalid signature' };
-    }
   } catch (err) {
     return { valid: false, error: `Signature verification failed: ${err instanceof Error ? err.message : 'Unknown error'}` };
   }
 
-  // Mark nonce as used
-  usedNonces.add(nonceKey);
+  // Nonce is already marked as used in checkAndUseNonce above
 
-  // Create receipt
+  // Create receipt with the actual payer address
   const receipt: X402Receipt = {
     paymentId: `pay-${payload.nonce}`,
     amount: paymentAmount,
-    payer: payToAddress,
+    payer: payerAddress,
     recipient: expectedRecipient,
     resource: payload.resource,
     timestamp: payload.timestamp,

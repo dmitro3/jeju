@@ -536,15 +536,20 @@ export class FarcasterAdapter implements PlatformAdapter {
 
     if (!response.ok) return null;
 
-    const data = await response.json() as {
-      valid: boolean;
-      action: {
-        interactor: { fid: number };
-        button_index: number;
-        input?: { text: string };
-        cast?: { hash: string };
-      };
-    };
+    const rawData = await response.json();
+    
+    // Validate the response schema to prevent insecure deserialization
+    const FrameValidationResponseSchema = z.object({
+      valid: z.boolean(),
+      action: z.object({
+        interactor: z.object({ fid: z.number().int().positive() }),
+        button_index: z.number().int().positive(),
+        input: z.object({ text: z.string() }).optional(),
+        cast: z.object({ hash: z.string().min(1) }).optional(),
+      }),
+    });
+    
+    const data = expectValid(FrameValidationResponseSchema, rawData, 'Farcaster frame validation response');
 
     return {
       valid: data.valid,

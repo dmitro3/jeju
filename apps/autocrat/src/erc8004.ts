@@ -1,10 +1,8 @@
 /** ERC-8004 Agent Identity & Reputation */
 
 import { z } from 'zod';
-import { createPublicClient, createWalletClient, http, keccak256, stringToHex, zeroAddress, zeroHash, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, keccak256, stringToHex, zeroAddress, zeroHash, parseAbi, type Address, type PublicClient, type WalletClient, type Chain, type Transport } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
-import { readContract, waitForTransactionReceipt } from 'viem/actions';
-import { parseAbi } from 'viem';
 import { base, baseSepolia, localhost } from 'viem/chains';
 
 // Schema for tokenURI JSON
@@ -58,8 +56,8 @@ export interface AgentReputation { agentId: bigint; feedbackCount: number; avera
 export interface ERC8004Config { rpcUrl: string; identityRegistry: string; reputationRegistry: string; validationRegistry: string; operatorKey?: string }
 
 export class ERC8004Client {
-  private readonly client: ReturnType<typeof createPublicClient>;
-  private readonly walletClient: ReturnType<typeof createWalletClient>;
+  private readonly client: PublicClient<Transport, Chain>;
+  private readonly walletClient: WalletClient<Transport, Chain>;
   private readonly account: PrivateKeyAccount | null;
   private readonly chain: ReturnType<typeof inferChainFromRpcUrl>;
   private readonly identityAddress: Address;
@@ -76,7 +74,7 @@ export class ERC8004Client {
     this.client = createPublicClient({
       chain,
       transport: http(config.rpcUrl),
-    });
+    }) as PublicClient<Transport, Chain>;
     
     this.identityAddress = config.identityRegistry as Address;
     this.reputationAddress = config.reputationRegistry as Address;
@@ -92,13 +90,13 @@ export class ERC8004Client {
         account: this.account,
         chain,
         transport: http(config.rpcUrl),
-      });
+      }) as WalletClient<Transport, Chain>;
     } else {
       this.account = null;
       this.walletClient = createWalletClient({
         chain,
         transport: http(config.rpcUrl),
-      });
+      }) as WalletClient<Transport, Chain>;
     }
   }
 
@@ -119,7 +117,7 @@ export class ERC8004Client {
       args: [tokenURI],
       account: this.account,
     });
-    const receipt = await waitForTransactionReceipt(this.client, { hash });
+    const receipt = await this.client.waitForTransactionReceipt({ hash });
     
     const transferEventSig = keccak256(stringToHex('Transfer(address,address,uint256)'));
     const transferEvent = receipt.logs.find((log) => log.topics[0] === transferEventSig);
@@ -170,10 +168,10 @@ export class ERC8004Client {
     ]);
     
     await Promise.all([
-      waitForTransactionReceipt(this.client, { hash: hash1 }),
-      waitForTransactionReceipt(this.client, { hash: hash2 }),
-      waitForTransactionReceipt(this.client, { hash: hash3 }),
-      waitForTransactionReceipt(this.client, { hash: hash4 }),
+      this.client.waitForTransactionReceipt({ hash: hash1 }),
+      this.client.waitForTransactionReceipt({ hash: hash2 }),
+      this.client.waitForTransactionReceipt({ hash: hash3 }),
+      this.client.waitForTransactionReceipt({ hash: hash4 }),
     ]);
     
     return agentId;
@@ -181,7 +179,7 @@ export class ERC8004Client {
 
   async getAgentIdentity(agentId: bigint): Promise<AgentIdentity | null> {
     if (!this.identityDeployed) return null;
-    const exists = await readContract(this.client, {
+    const exists = await this.client.readContract({
       address: this.identityAddress,
       abi: IDENTITY_ABI,
       functionName: 'agentExists',
@@ -190,25 +188,25 @@ export class ERC8004Client {
     if (!exists) return null;
 
     const [tokenURI, a2aEndpoint, mcpEndpoint, owner] = await Promise.all([
-      readContract(this.client, {
+      this.client.readContract({
         address: this.identityAddress,
         abi: IDENTITY_ABI,
         functionName: 'tokenURI',
         args: [agentId],
       }),
-      readContract(this.client, {
+      this.client.readContract({
         address: this.identityAddress,
         abi: IDENTITY_ABI,
         functionName: 'getA2AEndpoint',
         args: [agentId],
       }),
-      readContract(this.client, {
+      this.client.readContract({
         address: this.identityAddress,
         abi: IDENTITY_ABI,
         functionName: 'getMCPEndpoint',
         args: [agentId],
       }),
-      readContract(this.client, {
+      this.client.readContract({
         address: this.identityAddress,
         abi: IDENTITY_ABI,
         functionName: 'ownerOf',
@@ -229,7 +227,7 @@ export class ERC8004Client {
   async getAgentReputation(agentId: bigint): Promise<AgentReputation> {
     if (!this.reputationDeployed) return { agentId, feedbackCount: 0, averageScore: 0, recentFeedback: [] };
 
-    const [count, averageScore] = await readContract(this.client, {
+    const [count, averageScore] = await this.client.readContract({
       address: this.reputationAddress,
       abi: REPUTATION_ABI,
       functionName: 'getSummary',
@@ -238,7 +236,7 @@ export class ERC8004Client {
     const recentFeedback: AgentReputation['recentFeedback'] = [];
 
     if (count > 0n) {
-      const result = await readContract(this.client, {
+      const result = await this.client.readContract({
         address: this.reputationAddress,
         abi: REPUTATION_ABI,
         functionName: 'readAllFeedback',
@@ -275,7 +273,7 @@ export class ERC8004Client {
       ],
       account: this.account,
     });
-    await waitForTransactionReceipt(this.client, { hash });
+    await this.client.waitForTransactionReceipt({ hash });
     return hash;
   }
 
@@ -295,13 +293,13 @@ export class ERC8004Client {
       args: [validator, agentId, requestUri, requestHash],
       account: this.account,
     });
-    await waitForTransactionReceipt(this.client, { hash });
+    await this.client.waitForTransactionReceipt({ hash });
     return requestHash;
   }
 
   async getValidationSummary(agentId: bigint): Promise<{ count: number; avgScore: number }> {
     if (!this.validationDeployed) return { count: 0, avgScore: 0 };
-    const [count, avg] = await readContract(this.client, {
+    const [count, avg] = await this.client.readContract({
       address: this.validationAddress,
       abi: VALIDATION_ABI,
       functionName: 'getSummary',
@@ -312,7 +310,7 @@ export class ERC8004Client {
 
   async getTotalAgents(): Promise<number> {
     if (!this.identityDeployed) return 0;
-    return Number(await readContract(this.client, {
+    return Number(await this.client.readContract({
       address: this.identityAddress,
       abi: IDENTITY_ABI,
       functionName: 'totalAgents',

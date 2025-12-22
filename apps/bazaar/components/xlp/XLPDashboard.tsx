@@ -12,12 +12,12 @@ import { INDEXER_URL } from '@/config';
 // Stub hooks that need to be implemented
 function useXLPLiquidity(_paymasterAddress: Address | undefined) {
   return {
-    addLiquidity: async () => {},
-    removeLiquidity: async () => {},
+    addLiquidity: async (): Promise<void> => { /* stub */ },
+    removeLiquidity: async (): Promise<void> => { /* stub */ },
     ethBalance: 0n,
-    depositETH: async (_amount: bigint) => {},
-    withdrawETH: async (_amount: bigint) => {},
-    depositToken: async (_token: Address, _amount: bigint) => {},
+    depositETH: async (_amount: bigint): Promise<void> => { /* stub */ },
+    withdrawETH: async (_amount: bigint): Promise<void> => { /* stub */ },
+    depositToken: async (_token: Address, _amount: bigint): Promise<void> => { /* stub */ },
     isLoading: false,
     isAddSuccess: false,
     isRemoveSuccess: false,
@@ -27,11 +27,11 @@ function useXLPLiquidity(_paymasterAddress: Address | undefined) {
 
 function useXLPRegistration(_paymasterAddress: Address | undefined) {
   return {
-    register: async (_chains: number[], _amount: bigint) => {},
-    unregister: async () => {},
-    addStake: async (_amount: bigint) => {},
-    startUnbonding: async (_amount: bigint) => {},
-    completeUnbonding: async () => {},
+    register: async (_chains: number[], _amount: bigint): Promise<void> => { /* stub */ },
+    unregister: async (): Promise<void> => { /* stub */ },
+    addStake: async (_amount: bigint): Promise<void> => { /* stub */ },
+    startUnbonding: async (_amount: bigint): Promise<void> => { /* stub */ },
+    completeUnbonding: async (): Promise<void> => { /* stub */ },
     isLoading: false,
     isRegistered: false,
     isSuccess: false,
@@ -643,7 +643,10 @@ function VoucherHistory() {
   
   const { data: history = [], isLoading, error } = useQuery({
     queryKey: ['xlp-voucher-history', address],
-    queryFn: () => fetchXLPVoucherHistory(address!),
+    queryFn: () => {
+      if (!address) throw new Error('Address required');
+      return fetchXLPVoucherHistory(address);
+    },
     enabled: !!address,
     refetchInterval: 30000,
   });

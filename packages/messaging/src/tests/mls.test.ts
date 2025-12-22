@@ -19,17 +19,7 @@ import {
   deserializeContent,
   getContentPreview,
 } from '../mls/content-types';
-import type { MLSMessage, GroupInvite } from '../mls/types';
 import type { Address, Hex } from 'viem';
-
-// ============ Test Helpers ============
-
-function createTestWallet(address: Address): { address: Address; signMessage: () => Promise<Hex> } {
-  return {
-    address,
-    signMessage: async () => '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12' as Hex,
-  };
-}
 
 // ============ Client Tests ============
 

@@ -10,9 +10,18 @@ export function OIFStats() {
   const { stats, solvers, routes, loading, error, refetch } = useOIFStats()
   const [activeTab, setActiveTab] = useState<Tab>('overview')
 
+  // Safely format large token amounts using BigInt to avoid precision loss
   const formatVolume = (amount: string | undefined) => {
     if (!amount) return '-'
-    const value = parseFloat(amount) / 1e18
+    // Use BigInt division for precision with large token amounts
+    const bigValue = BigInt(amount)
+    const divisor = BigInt(1e18)
+    const wholePart = bigValue / divisor
+    const remainder = bigValue % divisor
+    
+    // Convert to number only after scaling down (safe after division by 1e18)
+    const value = Number(wholePart) + Number(remainder) / 1e18
+    
     if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`
     if (value >= 1000) return `${(value / 1000).toFixed(2)}K`
     return value.toFixed(4)

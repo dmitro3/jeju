@@ -10,7 +10,7 @@
  * 6. Payment flows via x402 or prepaid vault
  */
 
-import { keccak256, toHex, type Address, type Hex } from 'viem';
+import { keccak256, type Address, type Hex } from 'viem';
 import type {
   WorkerConfig,
   DeployedWorker,
@@ -73,7 +73,7 @@ export class DecentralizedWorkerDeployer {
     console.log(`[WorkerDeployer] Deploying worker: ${config.name}`);
 
     // 1. Upload code to IPFS if not already
-    let codeCid = config.code.cid;
+    const codeCid = config.code.cid;
     let codeHash = config.code.hash;
 
     if (!codeCid) {

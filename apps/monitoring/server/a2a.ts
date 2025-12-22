@@ -21,7 +21,31 @@ import {
 const networkName = getNetworkName();
 
 const app = express();
-app.use(cors());
+
+// Configure CORS with allowed origins from environment
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3000', 'http://localhost:4020'];
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like server-to-server, curl, or tests) in development
+    if (!origin && isDevelopment) {
+      return callback(null, true);
+    }
+    // Allow configured origins
+    if (origin && CORS_ORIGINS.includes(origin)) {
+      return callback(null, true);
+    }
+    // In production, block unauthorized origins. In development, allow all.
+    if (isDevelopment) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
 app.use(express.json());
 
 const PROMETHEUS_URL = process.env.PROMETHEUS_URL;
@@ -37,11 +61,49 @@ if (!OIF_AGGREGATOR_URL) {
 const prometheusUrl = PROMETHEUS_URL ?? 'http://localhost:9090';
 const oifAggregatorUrl = OIF_AGGREGATOR_URL ?? 'http://localhost:4010';
 
+// Safely format volume using BigInt to handle large token amounts without precision loss
 function formatVolume(amount: string): string {
-  const value = parseFloat(amount) / 1e18;
+  // Validate input is a valid numeric string
+  if (!/^-?\d+$/.test(amount)) {
+    return '0.0000'; // Return safe default for invalid input
+  }
+  
+  // Use BigInt for precision with large numbers
+  const bigValue = BigInt(amount);
+  const divisor = BigInt(1e18);
+  const wholePart = bigValue / divisor;
+  const remainder = bigValue % divisor;
+  
+  // Convert to number only after scaling down (safe after division by 1e18)
+  const value = Number(wholePart) + Number(remainder) / 1e18;
+  
   if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
   if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
   return value.toFixed(4);
+}
+
+// Maximum allowed query length to prevent DoS via extremely long queries
+const MAX_QUERY_LENGTH = 2000;
+
+// Dangerous PromQL patterns that could be expensive
+const DANGEROUS_PATTERNS = [
+  /count\s*\(\s*count\s*\(/i,  // Nested aggregations
+  /\{[^}]*=~"\.{100,}/i,       // Very long regex patterns
+  /\[\d{4,}[smhdwy]\]/i,       // Very long time ranges (>999 units)
+];
+
+function validatePromQLQuery(query: string): { valid: boolean; error?: string } {
+  if (query.length > MAX_QUERY_LENGTH) {
+    return { valid: false, error: `Query too long (max ${MAX_QUERY_LENGTH} chars)` };
+  }
+  
+  for (const pattern of DANGEROUS_PATTERNS) {
+    if (pattern.test(query)) {
+      return { valid: false, error: 'Query contains potentially expensive patterns' };
+    }
+  }
+  
+  return { valid: true };
 }
 
 app.get('/.well-known/agent-card.json', (_req, res) => {
@@ -148,6 +210,13 @@ app.post('/api/a2a', async (req, res) => {
     case 'query-metrics': {
       if (!query) {
         result = { message: 'Missing PromQL query', data: { error: 'query required' } };
+        break;
+      }
+      
+      // Validate query to prevent DoS attacks via expensive queries
+      const validation = validatePromQLQuery(query);
+      if (!validation.valid) {
+        result = { message: 'Invalid query', data: { error: validation.error } };
         break;
       }
       

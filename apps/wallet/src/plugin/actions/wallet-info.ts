@@ -72,7 +72,7 @@ export const walletInfoAction = {
       } else {
         balanceInfo = '\n\nNo token balances found.';
       }
-    } catch (error) {
+    } catch (_error) {
       context.logger.warn('[WalletInfo] Failed to fetch balances');
       balanceInfo = '\n\nUnable to fetch balances.';
     }

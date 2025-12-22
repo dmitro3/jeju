@@ -4,7 +4,7 @@
  * Handles group creation, membership, and key rotation.
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 import type {
   GroupState,
   GroupMember,
@@ -19,9 +19,15 @@ import type { JejuMLSClient } from './client';
 import { MLSMessageSchema } from './types';
 import { randomBytes } from 'node:crypto';
 
+// ============ Limits ============
+
+const MAX_MESSAGES_PER_GROUP = 10000; // Maximum cached messages per group
+const MAX_MESSAGE_CONTENT_SIZE = 100000; // 100KB max message content
+const MAX_MEMBERS_PER_GROUP = 1000;
+
 // ============ Types ============
 
-export interface GroupConfig {
+export interface JejuGroupConfig {
   id: string;
   name: string;
   description?: string;
@@ -39,12 +45,12 @@ export interface GroupConfig {
  * Represents an MLS group conversation
  */
 export class JejuGroup {
-  private config: GroupConfig;
+  private config: JejuGroupConfig;
   private state: GroupState;
   private messages: Map<string, MLSMessage> = new Map();
   private lastReadAt: number = 0;
   
-  constructor(config: GroupConfig) {
+  constructor(config: JejuGroupConfig) {
     this.config = config;
     
     // Initialize state
@@ -96,7 +102,7 @@ export class JejuGroup {
   /**
    * Join an existing group
    */
-  async join(inviteCode: string): Promise<void> {
+  async join(_inviteCode: string): Promise<void> {
     console.log(`[MLS Group] Joining group ${this.state.id}`);
     
     // In production:
@@ -126,6 +132,11 @@ export class JejuGroup {
    * Send a message to the group
    */
   async send(content: string, options?: SendOptions): Promise<string> {
+    // Validate content size to prevent DoS
+    if (content.length > MAX_MESSAGE_CONTENT_SIZE) {
+      throw new Error(`Message content exceeds maximum size of ${MAX_MESSAGE_CONTENT_SIZE} bytes`);
+    }
+    
     const messageId = this.generateMessageId();
     const timestamp = Date.now();
     
@@ -144,6 +155,15 @@ export class JejuGroup {
     // Validate message
     MLSMessageSchema.parse(message);
     
+    // Enforce message cache limit with LRU eviction
+    if (this.messages.size >= MAX_MESSAGES_PER_GROUP) {
+      // Remove oldest message (first in Map iteration order)
+      const oldestKey = this.messages.keys().next().value;
+      if (oldestKey) {
+        this.messages.delete(oldestKey);
+      }
+    }
+    
     // Store locally
     this.messages.set(messageId, message);
     this.state.lastMessageAt = timestamp;
@@ -151,7 +171,8 @@ export class JejuGroup {
     // Encrypt with MLS and send via relay
     await this.sendToRelay(message);
     
-    console.log(`[MLS Group] Sent message ${messageId} to group ${this.state.id}`);
+    // Log truncated IDs only
+    console.log(`[MLS Group] Sent message ${messageId.slice(0, 12)}... to group ${this.state.id.slice(0, 12)}...`);
     
     return messageId;
   }
@@ -218,6 +239,12 @@ export class JejuGroup {
   async addMembers(addresses: Address[]): Promise<void> {
     this.ensureAdmin();
     
+    // Check member limit
+    const newMemberCount = addresses.filter(a => !this.isMember(a)).length;
+    if (this.state.members.length + newMemberCount > MAX_MEMBERS_PER_GROUP) {
+      throw new Error(`Cannot add members: would exceed maximum of ${MAX_MEMBERS_PER_GROUP} members`);
+    }
+    
     const actor = this.config.client.getAddress();
     
     for (const address of addresses) {
@@ -233,7 +260,8 @@ export class JejuGroup {
         installationIds: [],
       });
       
-      console.log(`[MLS Group] Added member ${address} to group ${this.state.id}`);
+      // Log truncated address only
+      console.log(`[MLS Group] Added member ${address.slice(0, 10)}... to group ${this.state.id.slice(0, 12)}...`);
     }
     
     this.state.metadata.memberCount = this.state.members.length;
@@ -403,7 +431,7 @@ export class JejuGroup {
   
   // ============ Internal Helpers ============
   
-  private async removeMemberInternal(address: Address, actor: Address): Promise<void> {
+  private async removeMemberInternal(address: Address, _actor: Address): Promise<void> {
     const index = this.state.members.findIndex(
       m => m.address.toLowerCase() === address.toLowerCase()
     );
@@ -413,7 +441,8 @@ export class JejuGroup {
     this.state.members.splice(index, 1);
     this.state.metadata.memberCount = this.state.members.length;
     
-    console.log(`[MLS Group] Removed member ${address} from group ${this.state.id}`);
+    // Log truncated address only
+    console.log(`[MLS Group] Removed member ${address.slice(0, 10)}... from group ${this.state.id.slice(0, 12)}...`);
   }
   
   private ensureAdmin(): void {
@@ -425,7 +454,7 @@ export class JejuGroup {
   
   private async sendToRelay(message: MLSMessage): Promise<void> {
     // In production, encrypt with MLS and send via WebSocket
-    const response = await fetch(`${this.config.relayUrl}/api/messages`, {
+    await fetch(`${this.config.relayUrl}/api/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -433,7 +462,6 @@ export class JejuGroup {
         message,
       }),
     }).catch(() => null);
-    
     // Ignore relay errors for now (would retry in production)
   }
   

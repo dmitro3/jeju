@@ -21,14 +21,15 @@ import { createPublicClient, createWalletClient, http, getContract, toEventSelec
 import { privateKeyToAccount } from 'viem/accounts';
 import { spawn } from 'child_process';
 import path from 'path';
-import { Logger } from '../../scripts/shared/logger';
+import { Logger } from '../../packages/deployment/scripts/shared/logger';
+import { TEST_ACCOUNTS } from '../shared/utils';
 import { 
   CloudIntegration, 
   ViolationType,
   defaultCloudServices,
   type CloudConfig,
   type AgentMetadata 
-} from '../../scripts/shared/cloud-integration';
+} from '../../packages/deployment/scripts/shared/cloud-integration';
 
 const logger = new Logger('cloud-e2e-test');
 
@@ -85,24 +86,25 @@ describe('Cloud Integration E2E - Setup', () => {
     // Setup provider
     publicClient = createPublicClient({ transport: http(TEST_CONFIG.rpcUrl) });
     
-    // Create test accounts
-    const privateKeys = [
-      '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // deployer
-      '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d', // cloud operator
-      '0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a', // user1
-      '0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6', // user2
-      '0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a', // ban approver 1
-      '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba', // ban approver 2
-      '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e'  // ban approver 3
+    // Create test accounts using shared constants (Anvil defaults)
+    // Note: Extended test accounts for multi-sig testing
+    const extendedPrivateKeys = [
+      TEST_ACCOUNTS.deployer.privateKey,  // deployer
+      TEST_ACCOUNTS.user1.privateKey,     // cloud operator
+      TEST_ACCOUNTS.user2.privateKey,     // user1
+      TEST_ACCOUNTS.user3.privateKey,     // user2
+      TEST_ACCOUNTS.operator.privateKey,  // ban approver 1
+      '0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba' as const, // ban approver 2 (Anvil account 6)
+      '0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e' as const  // ban approver 3 (Anvil account 7)
     ] as const;
     
-    deployer = privateKeyToAccount(privateKeys[0]);
-    cloudOperator = privateKeyToAccount(privateKeys[1]);
-    user1 = privateKeyToAccount(privateKeys[2]);
-    user2 = privateKeyToAccount(privateKeys[3]);
-    banApprover1 = privateKeyToAccount(privateKeys[4]);
-    banApprover2 = privateKeyToAccount(privateKeys[5]);
-    banApprover3 = privateKeyToAccount(privateKeys[6]);
+    deployer = privateKeyToAccount(extendedPrivateKeys[0]);
+    cloudOperator = privateKeyToAccount(extendedPrivateKeys[1]);
+    user1 = privateKeyToAccount(extendedPrivateKeys[2]);
+    user2 = privateKeyToAccount(extendedPrivateKeys[3]);
+    banApprover1 = privateKeyToAccount(extendedPrivateKeys[4]);
+    banApprover2 = privateKeyToAccount(extendedPrivateKeys[5]);
+    banApprover3 = privateKeyToAccount(extendedPrivateKeys[6]);
     
     cloudOperatorWallet = createWalletClient({ account: cloudOperator, transport: http(TEST_CONFIG.rpcUrl) });
     user1Wallet = createWalletClient({ account: user1, transport: http(TEST_CONFIG.rpcUrl) });
@@ -651,7 +653,7 @@ async function deployContracts(): Promise<{ success: boolean; addresses: Deploym
       'script/DeployAll.s.sol:DeployAll',
       '--rpc-url', TEST_CONFIG.rpcUrl,
       '--broadcast',
-      '--private-key', '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+      '--private-key', TEST_ACCOUNTS.deployer.privateKey
     ], {
       cwd: path.join(__dirname, '../../contracts'),
       stdio: 'pipe'

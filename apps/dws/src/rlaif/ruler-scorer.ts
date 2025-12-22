@@ -117,7 +117,9 @@ export class RulerScorer {
 
     const scores: JudgeScore[] = [];
     for (let i = 0; i < trajectories.length; i++) {
-      const trajectory = trajectories[i]!;
+      const trajectory = trajectories[i];
+      if (!trajectory) continue;
+      
       const expectedId = `trajectory-${i + 1}`;
       const scoreData = judgeResponse.scores.find((s) => s.trajectory_id === expectedId);
 
@@ -183,17 +185,19 @@ Reward: ${step.reward}`,
   private extractCommonPrefix(messageLists: TrajectoryMessage[][]): TrajectoryMessage[] {
     if (messageLists.length === 0) return [];
 
-    const first = messageLists[0]!;
+    const first = messageLists[0];
+    if (!first) return [];
+    
     const prefix: TrajectoryMessage[] = [];
 
     for (let i = 0; i < first.length; i++) {
-      const msg = first[i]!;
-      const allMatch = messageLists.every(
-        (msgs) =>
-          msgs[i] &&
-          msgs[i]!.role === msg.role &&
-          msgs[i]!.content === msg.content
-      );
+      const msg = first[i];
+      if (!msg) break;
+      
+      const allMatch = messageLists.every((msgs) => {
+        const m = msgs[i];
+        return m && m.role === msg.role && m.content === msg.content;
+      });
 
       if (allMatch) {
         prefix.push(msg);
@@ -215,7 +219,8 @@ Reward: ${step.reward}`,
     contextParts.push('Trajectory Performance Context:');
 
     for (let i = 0; i < trajectories.length; i++) {
-      const t = trajectories[i]!;
+      const t = trajectories[i];
+      if (!t) continue;
       const trajId = `trajectory-${i + 1}`;
 
       contextParts.push(`\n${trajId}:`);
@@ -233,7 +238,9 @@ Reward: ${step.reward}`,
     const trajectorySections: string[] = [];
     for (let i = 0; i < trajectories.length; i++) {
       const trajId = `trajectory-${i + 1}`;
-      const uniqueMessages = messages[i]!.slice(commonPrefix.length).slice(-20);
+      const messagesForTraj = messages[i];
+      if (!messagesForTraj) continue;
+      const uniqueMessages = messagesForTraj.slice(commonPrefix.length).slice(-20);
 
       trajectorySections.push(`<trajectory id="${trajId}">`);
       trajectorySections.push(JSON.stringify(uniqueMessages, null, 2));
@@ -336,10 +343,12 @@ ${rubric.description ? `Context: ${rubric.description}` : ''}`;
 
     for (const trajectory of trajectories) {
       const scenarioId = trajectory.metadata.scenarioId ?? 'default';
-      if (!groups.has(scenarioId)) {
-        groups.set(scenarioId, []);
+      const existing = groups.get(scenarioId);
+      if (existing) {
+        existing.push(trajectory);
+      } else {
+        groups.set(scenarioId, [trajectory]);
       }
-      groups.get(scenarioId)!.push(trajectory);
     }
 
     return Array.from(groups.entries()).map(([scenarioId, trajs]) => ({

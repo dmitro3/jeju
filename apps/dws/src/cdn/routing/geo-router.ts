@@ -169,12 +169,12 @@ export class GeoRouter {
 
     // Score and rank candidates
     const scored = candidates
-      .map(nodeId => ({
-        nodeId,
-        score: this.nodeScores.get(nodeId) ?? 0,
-        node: this.nodes.get(nodeId)!,
-      }))
-      .filter(c => c.node.metrics.status === 'healthy')
+      .map(nodeId => {
+        const node = this.nodes.get(nodeId);
+        return node ? { nodeId, score: this.nodeScores.get(nodeId) ?? 0, node } : null;
+      })
+      .filter((c): c is { nodeId: string; score: number; node: ConnectedEdgeNode } => 
+        c !== null && c.node.metrics.status === 'healthy')
       .sort((a, b) => b.score - a.score);
 
     if (scored.length === 0) {
@@ -202,12 +202,12 @@ export class GeoRouter {
     const candidates = this.getCandidateNodes(clientRegion, request.preferredRegion);
     
     return candidates
-      .map(nodeId => ({
-        nodeId,
-        score: this.nodeScores.get(nodeId) ?? 0,
-        node: this.nodes.get(nodeId)!,
-      }))
-      .filter(c => c.node.metrics.status === 'healthy')
+      .map(nodeId => {
+        const node = this.nodes.get(nodeId);
+        return node ? { nodeId, score: this.nodeScores.get(nodeId) ?? 0, node } : null;
+      })
+      .filter((c): c is { nodeId: string; score: number; node: ConnectedEdgeNode } => 
+        c !== null && c.node.metrics.status === 'healthy')
       .sort((a, b) => b.score - a.score)
       .slice(0, count)
       .map(c => ({
@@ -477,7 +477,9 @@ export class GeoRouter {
   getNodesByRegion(region: CDNRegion): ConnectedEdgeNode[] {
     const nodeIds = this.regionNodes.get(region);
     if (!nodeIds) return [];
-    return [...nodeIds].map(id => this.nodes.get(id)!).filter(Boolean);
+    return [...nodeIds]
+      .map(id => this.nodes.get(id))
+      .filter((n): n is ConnectedEdgeNode => n !== undefined);
   }
 
   /**

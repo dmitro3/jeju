@@ -79,17 +79,18 @@ class NFTService {
     for (const nft of nfts) {
       const key = `${nft.chainId}:${nft.contractAddress}`;
       
-      if (!collections.has(key)) {
+      const existing = collections.get(key);
+      if (existing) {
+        existing.nfts.push(nft);
+      } else {
         collections.set(key, {
           address: nft.contractAddress,
           chainId: nft.chainId,
           name: nft.collectionName || 'Unknown',
           symbol: '',
-          nfts: [],
+          nfts: [nft],
         });
       }
-      
-      collections.get(key)!.nfts.push(nft);
     }
 
     return Array.from(collections.values());

@@ -4,6 +4,7 @@
 
 import { randomBytes, createHash } from 'crypto';
 import type { Address } from 'viem';
+import { LRUCache } from 'lru-cache';
 import { registerApiKey, revokeApiKey, type RateTier } from '../middleware/rate-limiter.js';
 import { apiKeyState, initializeState } from '../../services/state.js';
 
@@ -22,8 +23,14 @@ export interface ApiKeyRecord {
 // Initialize state on module load
 initializeState().catch(console.error);
 
-// Local cache for key -> id mapping (for fast validation without async)
-const localKeyCache = new Map<string, string>();
+/**
+ * SECURITY: Use LRU cache to bound memory usage
+ * Prevents memory exhaustion from excessive API key creation
+ */
+const localKeyCache = new LRUCache<string, string>({
+  max: 10000, // Max 10k keys cached
+  ttl: 24 * 60 * 60 * 1000, // 24 hour TTL
+});
 
 function generateKey(): string {
   return `jrpc_${randomBytes(24).toString('base64url')}`;

@@ -10,12 +10,11 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
-import { createHash, randomBytes } from 'crypto';
+import { createHash } from 'crypto';
 import {
   runDistributedCeremony,
   requestThresholdSignature,
   type TeeProvider,
-  type DistributedCeremonyResult,
   type ThresholdSignatureRequest,
 } from './distributed-ceremony';
 
@@ -375,14 +374,13 @@ describe('DKG Protocol Security', () => {
   });
 
   test('aggregated commitment is deterministic for same shares', async () => {
-    // Create mock shares with known commitments
+    // Create mock shares with known commitments to verify hash computation
     const commitment1 = createHash('sha256').update('commitment1').digest('hex');
     const commitment2 = createHash('sha256').update('commitment2').digest('hex');
     
-    // Aggregated commitment = hash(commitment1:commitment2)
-    const expectedAggregated = createHash('sha256')
-      .update(`${commitment1}:${commitment2}`)
-      .digest('hex');
+    // Verify commitments are valid hex (aggregated commitment = hash(commitment1:commitment2))
+    expect(commitment1).toHaveLength(64);
+    expect(commitment2).toHaveLength(64);
     
     // Run ceremony and verify structure
     const providers = createTestProviders(3);

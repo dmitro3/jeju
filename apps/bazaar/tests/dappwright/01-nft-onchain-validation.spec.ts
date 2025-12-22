@@ -5,16 +5,15 @@
  */
 
 import { testWithSynpress } from '@synthetixio/synpress'
-import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
+import { metaMaskFixtures } from '@synthetixio/synpress/playwright'
 import { basicSetup } from '../../synpress.config'
-import { createPublicClient, http, parseAbi, parseEther } from 'viem'
+import { createPublicClient, http, parseAbi } from 'viem'
 
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
 const { expect } = test
 
 const RPC_URL = 'http://localhost:9545'
 const MARKETPLACE_ADDRESS = '0x537e697c7AB75A26f9ECF0Ce810e3154dFcaaf44'
-const TEST_NFT_ADDRESS = '0x1234567890123456789012345678901234567890' // Replace with actual deployed NFT
 
 // Create viem client for on-chain queries
 const publicClient = createPublicClient({
@@ -26,14 +25,6 @@ const publicClient = createPublicClient({
   },
   transport: http(RPC_URL)
 })
-
-const NFT_ABI = parseAbi([
-  'function ownerOf(uint256 tokenId) view returns (address)',
-  'function getApproved(uint256 tokenId) view returns (address)',
-  'function approve(address to, uint256 tokenId)',
-  'function mint(address to) returns (uint256)',
-  'function balanceOf(address owner) view returns (uint256)',
-])
 
 const MARKETPLACE_ABI = parseAbi([
   'function createListing(address nftContract, uint256 tokenId, uint256 price, uint256 duration)',

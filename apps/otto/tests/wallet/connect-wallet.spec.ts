@@ -19,7 +19,7 @@ test.describe('Otto Wallet Connection', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -51,7 +51,7 @@ test.describe('Otto Wallet Connection', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -76,7 +76,7 @@ test.describe('Otto Wallet Connection', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -111,7 +111,7 @@ test.describe('Otto Trading Flow with Wallet', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -143,7 +143,7 @@ test.describe('Otto Trading Flow with Wallet', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,
@@ -174,7 +174,7 @@ test.describe('Otto Trading Flow with Wallet', () => {
     metamaskPage,
     extensionId,
   }) => {
-    const metamask = new MetaMask(
+    const _metamask = new MetaMask(
       context,
       metamaskPage,
       basicSetup.walletPassword,

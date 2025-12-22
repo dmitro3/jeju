@@ -1,10 +1,10 @@
 /**
  * Jeju Email Client
- * 
+ *
  * High-level client for email operations
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address, Hex } from "viem";
 import type {
   EmailClientConfig,
   Email,
@@ -18,7 +18,13 @@ import type {
   EmailEventHandler,
   IMAPConfig,
   SMTPConfig,
-} from './types';
+} from "./types";
+
+// Maximum allowed WebSocket message size (1MB)
+const MAX_WS_MESSAGE_SIZE = 1024 * 1024;
+
+// Maximum number of event handlers to prevent memory leaks
+const MAX_EVENT_HANDLERS = 100;
 
 export class EmailClient {
   private config: EmailClientConfig;
@@ -52,15 +58,15 @@ export class EmailClient {
    */
   private getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     };
 
     if (this.config.sessionToken) {
-      headers['x-oauth3-session'] = this.config.sessionToken;
+      headers["x-oauth3-session"] = this.config.sessionToken;
     }
 
     if (this.config.address) {
-      headers['x-wallet-address'] = this.config.address;
+      headers["x-wallet-address"] = this.config.address;
     }
 
     return headers;
@@ -80,8 +86,12 @@ export class EmailClient {
       throw new Error(`Failed to get mailbox: ${response.status}`);
     }
 
-    const data = await response.json() as {
-      mailbox: { quotaUsedBytes: number; quotaLimitBytes: number; folders: string[] };
+    const data = (await response.json()) as {
+      mailbox: {
+        quotaUsedBytes: number;
+        quotaLimitBytes: number;
+        folders: string[];
+      };
       unreadCount: number;
     };
 
@@ -100,15 +110,15 @@ export class EmailClient {
    */
   async getFolder(
     folder: string,
-    options: { limit?: number; offset?: number } = {}
+    options: { limit?: number; offset?: number } = {},
   ): Promise<FolderContents> {
     const params = new URLSearchParams();
-    if (options.limit) params.set('limit', options.limit.toString());
-    if (options.offset) params.set('offset', options.offset.toString());
+    if (options.limit) params.set("limit", options.limit.toString());
+    if (options.offset) params.set("offset", options.offset.toString());
 
     const response = await fetch(
       `${this.config.apiEndpoint}/mailbox/${folder}?${params}`,
-      { headers: this.getAuthHeaders() }
+      { headers: this.getAuthHeaders() },
     );
 
     if (!response.ok) {
@@ -123,7 +133,7 @@ export class EmailClient {
    */
   async createFolder(name: string): Promise<void> {
     const response = await fetch(`${this.config.apiEndpoint}/folders`, {
-      method: 'POST',
+      method: "POST",
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ name }),
     });
@@ -138,7 +148,7 @@ export class EmailClient {
    */
   async deleteFolder(name: string): Promise<void> {
     const response = await fetch(`${this.config.apiEndpoint}/folders/${name}`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: this.getAuthHeaders(),
     });
 
@@ -154,7 +164,7 @@ export class EmailClient {
    */
   async send(params: SendEmailParams): Promise<{ messageId: Hex }> {
     const response = await fetch(`${this.config.apiEndpoint}/send`, {
-      method: 'POST',
+      method: "POST",
       headers: this.getAuthHeaders(),
       body: JSON.stringify({
         from: `${this.config.address}@jeju.mail`, // TODO: Use actual email from registry
@@ -163,11 +173,13 @@ export class EmailClient {
     });
 
     if (!response.ok) {
-      const error = await response.json() as { error: string };
-      throw new Error(error.error || `Failed to send email: ${response.status}`);
+      const error = (await response.json()) as { error: string };
+      throw new Error(
+        error.error || `Failed to send email: ${response.status}`,
+      );
     }
 
-    const data = await response.json() as { messageId: Hex };
+    const data = (await response.json()) as { messageId: Hex };
     return data;
   }
 
@@ -175,24 +187,42 @@ export class EmailClient {
    * Get email by ID
    */
   async getEmail(messageId: Hex): Promise<Email> {
-    const response = await fetch(`${this.config.apiEndpoint}/email/${messageId}`, {
-      headers: this.getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${this.config.apiEndpoint}/email/${messageId}`,
+      {
+        headers: this.getAuthHeaders(),
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to get email: ${response.status}`);
     }
 
-    const data = await response.json() as {
-      envelope: { id: Hex; from: { full: string }; to: { full: string }[]; timestamp: number };
-      content: { subject: string; bodyText: string; bodyHtml?: string; attachments: { filename: string; mimeType: string; size: number; cid: string }[] };
-      flags: Email['flags'];
+    const data = (await response.json()) as {
+      envelope: {
+        id: Hex;
+        from: { full: string };
+        to: { full: string }[];
+        timestamp: number;
+      };
+      content: {
+        subject: string;
+        bodyText: string;
+        bodyHtml?: string;
+        attachments: {
+          filename: string;
+          mimeType: string;
+          size: number;
+          cid: string;
+        }[];
+      };
+      flags: Email["flags"];
     };
 
     return {
       id: data.envelope.id,
       from: data.envelope.from.full,
-      to: data.envelope.to.map(t => t.full),
+      to: data.envelope.to.map((t) => t.full),
       subject: data.content.subject,
       bodyText: data.content.bodyText,
       bodyHtml: data.content.bodyHtml,
@@ -205,12 +235,18 @@ export class EmailClient {
   /**
    * Update email flags
    */
-  async updateFlags(messageId: Hex, flags: Partial<Email['flags']>): Promise<void> {
-    const response = await fetch(`${this.config.apiEndpoint}/email/${messageId}/flags`, {
-      method: 'PATCH',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify(flags),
-    });
+  async updateFlags(
+    messageId: Hex,
+    flags: Partial<Email["flags"]>,
+  ): Promise<void> {
+    const response = await fetch(
+      `${this.config.apiEndpoint}/email/${messageId}/flags`,
+      {
+        method: "PATCH",
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify(flags),
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to update flags: ${response.status}`);
@@ -221,11 +257,14 @@ export class EmailClient {
    * Move email to folder
    */
   async moveToFolder(messageId: Hex, targetFolder: string): Promise<void> {
-    const response = await fetch(`${this.config.apiEndpoint}/email/${messageId}/move`, {
-      method: 'POST',
-      headers: this.getAuthHeaders(),
-      body: JSON.stringify({ targetFolder }),
-    });
+    const response = await fetch(
+      `${this.config.apiEndpoint}/email/${messageId}/move`,
+      {
+        method: "POST",
+        headers: this.getAuthHeaders(),
+        body: JSON.stringify({ targetFolder }),
+      },
+    );
 
     if (!response.ok) {
       throw new Error(`Failed to move email: ${response.status}`);
@@ -239,9 +278,9 @@ export class EmailClient {
     const response = await fetch(
       `${this.config.apiEndpoint}/email/${messageId}?permanent=${permanent}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
         headers: this.getAuthHeaders(),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -288,10 +327,10 @@ export class EmailClient {
     hasMore: boolean;
   }> {
     const response = await fetch(`${this.config.apiEndpoint}/search`, {
-      method: 'POST',
+      method: "POST",
       headers: this.getAuthHeaders(),
       body: JSON.stringify({
-        query: params.query ?? '',
+        query: params.query ?? "",
         folder: params.folder,
         from: params.from,
         to: params.to,
@@ -307,7 +346,11 @@ export class EmailClient {
       throw new Error(`Search failed: ${response.status}`);
     }
 
-    return response.json() as Promise<{ results: EmailSummary[]; total: number; hasMore: boolean }>;
+    return response.json() as Promise<{
+      results: EmailSummary[];
+      total: number;
+      hasMore: boolean;
+    }>;
   }
 
   // ============ Filter Rules ============
@@ -324,7 +367,7 @@ export class EmailClient {
       throw new Error(`Failed to get rules: ${response.status}`);
     }
 
-    const data = await response.json() as { rules: FilterRule[] };
+    const data = (await response.json()) as { rules: FilterRule[] };
     return data.rules;
   }
 
@@ -333,7 +376,7 @@ export class EmailClient {
    */
   async addFilterRule(rule: FilterRule): Promise<void> {
     const response = await fetch(`${this.config.apiEndpoint}/rules`, {
-      method: 'POST',
+      method: "POST",
       headers: this.getAuthHeaders(),
       body: JSON.stringify(rule),
     });
@@ -348,7 +391,7 @@ export class EmailClient {
    */
   async deleteFilterRule(ruleId: string): Promise<void> {
     const response = await fetch(`${this.config.apiEndpoint}/rules/${ruleId}`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: this.getAuthHeaders(),
     });
 
@@ -379,7 +422,7 @@ export class EmailClient {
    */
   async deleteAllData(): Promise<void> {
     const response = await fetch(`${this.config.apiEndpoint}/account`, {
-      method: 'DELETE',
+      method: "DELETE",
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ confirm: true }),
     });
@@ -395,44 +438,78 @@ export class EmailClient {
    * Connect to real-time updates via WebSocket
    */
   async connect(): Promise<void> {
-    const wsUrl = this.config.apiEndpoint
-      .replace('http://', 'ws://')
-      .replace('https://', 'wss://') + '/ws';
+    const wsUrl =
+      this.config.apiEndpoint
+        .replace("http://", "ws://")
+        .replace("https://", "wss://") + "/ws";
 
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
         this.reconnectAttempts = 0;
-        
-        // Authenticate
-        this.ws?.send(JSON.stringify({
-          type: 'auth',
-          token: this.config.sessionToken,
-          address: this.config.address,
-        }));
 
-        this.emit({ type: 'connection:open', data: {} as Email });
+        // Authenticate
+        this.ws?.send(
+          JSON.stringify({
+            type: "auth",
+            token: this.config.sessionToken,
+            address: this.config.address,
+          }),
+        );
+
+        this.emit({ type: "connection:open", data: {} as Email });
         resolve();
       };
 
       this.ws.onmessage = (event) => {
-        const data = JSON.parse(event.data as string) as { type: string; data: Email | EmailSummary };
+        // Validate message size to prevent DoS
+        const messageData = event.data as string;
+        if (messageData.length > MAX_WS_MESSAGE_SIZE) {
+          console.error("WebSocket message too large, ignoring");
+          return;
+        }
+
+        // Safely parse JSON with validation
+        let parsed: { type?: string; data?: Email | EmailSummary };
+        try {
+          parsed = JSON.parse(messageData) as {
+            type?: string;
+            data?: Email | EmailSummary;
+          };
+        } catch {
+          console.error("Invalid JSON in WebSocket message");
+          return;
+        }
+
+        // Validate required fields exist
+        if (
+          typeof parsed.type !== "string" ||
+          parsed.data === undefined ||
+          parsed.data === null
+        ) {
+          console.error("Invalid WebSocket message format");
+          return;
+        }
+
         this.emit({
-          type: data.type as EmailEvent['type'],
-          data: data.data,
+          type: parsed.type as EmailEvent["type"],
+          data: parsed.data,
         });
       };
 
       this.ws.onclose = () => {
-        this.emit({ type: 'connection:close', data: {} as Email });
+        this.emit({ type: "connection:close", data: {} as Email });
         if (this.config.autoReconnect !== false) {
           this.handleReconnect();
         }
       };
 
       this.ws.onerror = (error) => {
-        this.emit({ type: 'connection:error', data: new Error('WebSocket error') });
+        this.emit({
+          type: "connection:error",
+          data: new Error("WebSocket error"),
+        });
         reject(error);
       };
     });
@@ -450,10 +527,23 @@ export class EmailClient {
 
   /**
    * Subscribe to email events
+   * @throws Error if maximum handler limit reached (prevents memory leaks)
    */
   onEvent(handler: EmailEventHandler): () => void {
+    if (this.eventHandlers.size >= MAX_EVENT_HANDLERS) {
+      throw new Error(
+        `Maximum event handlers (${MAX_EVENT_HANDLERS}) reached. Unsubscribe unused handlers.`,
+      );
+    }
     this.eventHandlers.add(handler);
     return () => this.eventHandlers.delete(handler);
+  }
+
+  /**
+   * Remove all event handlers (useful for cleanup)
+   */
+  removeAllEventHandlers(): void {
+    this.eventHandlers.clear();
   }
 
   private emit(event: EmailEvent): void {
@@ -483,17 +573,19 @@ export class EmailClient {
    * Get IMAP configuration for desktop clients
    */
   getIMAPConfig(email: string): IMAPConfig {
-    const baseHost = new URL(this.config.apiEndpoint).hostname
-      .replace('mail.', 'imap.');
+    const baseHost = new URL(this.config.apiEndpoint).hostname.replace(
+      "mail.",
+      "imap.",
+    );
 
     return {
       host: baseHost,
       port: 993,
       secure: true,
       auth: {
-        type: 'XOAUTH2',
+        type: "XOAUTH2",
         user: email,
-        accessToken: this.config.sessionToken ?? '',
+        accessToken: this.config.sessionToken ?? "",
       },
     };
   }
@@ -502,17 +594,19 @@ export class EmailClient {
    * Get SMTP configuration for desktop clients
    */
   getSMTPConfig(email: string): SMTPConfig {
-    const baseHost = new URL(this.config.apiEndpoint).hostname
-      .replace('mail.', 'smtp.');
+    const baseHost = new URL(this.config.apiEndpoint).hostname.replace(
+      "mail.",
+      "smtp.",
+    );
 
     return {
       host: baseHost,
       port: 587,
       secure: false, // STARTTLS
       auth: {
-        type: 'XOAUTH2',
+        type: "XOAUTH2",
         user: email,
-        accessToken: this.config.sessionToken ?? '',
+        accessToken: this.config.sessionToken ?? "",
       },
     };
   }

@@ -63,10 +63,10 @@ class AddressLock {
     while (this.locks.has(address)) {
       await this.locks.get(address);
     }
-    let resolver: () => void;
+    let resolver: (() => void) | undefined;
     const promise = new Promise<void>((resolve) => { resolver = resolve; });
     this.locks.set(address, promise);
-    this.resolvers.set(address, resolver!);
+    if (resolver) this.resolvers.set(address, resolver);
   }
 
   release(address: Address): void {
@@ -705,8 +705,8 @@ export class MailboxStorage {
       const folderEmails = index.folders[folderName] ?? [];
       index.trash.push(...folderEmails);
 
-      mailbox.folders = mailbox.folders.filter(f => f !== folderName);
-      delete index.folders[folderName];
+    mailbox.folders = mailbox.folders.filter(f => f !== folderName);
+    Reflect.deleteProperty(index.folders, folderName);
 
       await this.saveMailbox(owner, mailbox);
       await this.saveIndex(owner, index);
@@ -878,8 +878,11 @@ export class MailboxStorage {
         return false;
       }
 
-      if (options.to && !email.to.some(t => t.toLowerCase().includes(options.to!.toLowerCase()))) {
-        return false;
+      if (options.to) {
+        const toFilter = options.to.toLowerCase();
+        if (!email.to.some(t => t.toLowerCase().includes(toFilter))) {
+          return false;
+        }
       }
 
       if (options.dateFrom && email.timestamp < options.dateFrom) {

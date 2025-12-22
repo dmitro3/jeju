@@ -9,7 +9,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema, ChainIdSchema } from '@jejunetwork/types';
+import { ChainIdSchema } from '@jejunetwork/types';
 
 // ============ Chain Configuration ============
 

@@ -50,7 +50,10 @@ Tags: ${existing.tags.join(", ")}`,
     }
 
     const text = getMessageText(message);
-    const agentName = expect(state?.agentName, "agentName in state");
+    const agentName = expect(
+      state?.agentName as string | undefined,
+      "agentName in state",
+    );
 
     // Extract tags from message
     const tagMatch = text.match(/tags?:\s*([^.]+)/i);

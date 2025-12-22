@@ -13,8 +13,8 @@
  * GROQ_API_KEY=xxx ANTHROPIC_API_KEY=xxx bun test tests/bug-bounty-comprehensive.test.ts
  */
 
-import { describe, test, expect, beforeAll, beforeEach, afterAll, setDefaultTimeout } from 'bun:test';
-import { parseEther, formatEther, keccak256, stringToHex, type Address } from 'viem';
+import { describe, test, expect, setDefaultTimeout } from 'bun:test';
+import { parseEther, formatEther, type Address } from 'viem';
 
 setDefaultTimeout(120000);
 
@@ -23,7 +23,6 @@ setDefaultTimeout(120000);
 import {
   getBugBountyService,
   assessSubmission,
-  resetBugBountyService,
 } from '../src/bug-bounty-service';
 import { validateSubmission } from '../src/security-validation-agent';
 import {
@@ -45,7 +44,6 @@ const hasAI = Boolean(GROQ_API_KEY || ANTHROPIC_API_KEY);
 const RESEARCHER_1: Address = '0x1111111111111111111111111111111111111111';
 const RESEARCHER_2: Address = '0x2222222222222222222222222222222222222222';
 const RESEARCHER_3: Address = '0x3333333333333333333333333333333333333333';
-const SYBIL_ATTACKER: Address = '0xBAD0000000000000000000000000000000000001';
 const SPAM_SUBMITTER: Address = '0xBAD0000000000000000000000000000000000002';
 
 const GUARDIAN_1: Address = '0xAAA0000000000000000000000000000000000001';
@@ -298,7 +296,7 @@ Pay first, details later. This is standard practice in the industry.`,
   stake: '0.001', // Minimum stake to try to game system
 };
 
-const DUPLICATE_SUBMISSION: BountySubmissionDraft = {
+const _DUPLICATE_SUBMISSION: BountySubmissionDraft = {
   severity: BountySeverity.HIGH,
   vulnType: VulnerabilityType.PRIVILEGE_ESCALATION,
   title: 'IDOR Bug in User Settings - Account Takeover', // Same as HIGH_SEVERITY
@@ -400,7 +398,7 @@ describe('SECTION 1: Submission Pipeline - All Severity Levels', () => {
     
     // Guardian votes (LOW needs 2 approvals)
     service.guardianVote(submission.submissionId, GUARDIAN_1, 1n, true, parseEther('0.5'), 'Valid low severity finding');
-    const vote2 = service.guardianVote(submission.submissionId, GUARDIAN_2, 2n, true, parseEther('0.6'), 'Approved - info disclosure confirmed');
+    service.guardianVote(submission.submissionId, GUARDIAN_2, 2n, true, parseEther('0.6'), 'Approved - info disclosure confirmed');
     
     const afterVotes = service.get(submission.submissionId);
     // LOW severity doesn't need CEO review

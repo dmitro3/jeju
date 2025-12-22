@@ -182,6 +182,7 @@ class BridgeServiceImpl implements BridgeService {
   private recentTransfers: TransferEvent[] = [];
   private arbOpportunities: Map<string, ArbOpportunity> = new Map();
   private arbPollInterval: ReturnType<typeof setInterval> | null = null;
+  private readonly maxArbOpportunities = 1000;
 
   // Jito settings
   private jitoBlockEngineUrl = 'https://mainnet.block-engine.jito.wtf';
@@ -195,6 +196,26 @@ class BridgeServiceImpl implements BridgeService {
     this.arbEnabled = config.enableArbitrage ?? false;
   }
 
+  /** Remove expired arbitrage opportunities and enforce size limit to prevent memory leaks */
+  private cleanupArbOpportunities(): void {
+    const now = Date.now();
+    // Remove expired opportunities
+    for (const [id, opp] of this.arbOpportunities) {
+      if (opp.expiresAt < now) {
+        this.arbOpportunities.delete(id);
+      }
+    }
+    // Enforce size limit - remove oldest first (by expiry)
+    if (this.arbOpportunities.size > this.maxArbOpportunities) {
+      const sorted = Array.from(this.arbOpportunities.entries())
+        .sort((a, b) => a[1].expiresAt - b[1].expiresAt);
+      const toRemove = sorted.slice(0, this.arbOpportunities.size - this.maxArbOpportunities);
+      for (const [id] of toRemove) {
+        this.arbOpportunities.delete(id);
+      }
+    }
+  }
+
   private async initArbExecutor(): Promise<void> {
     if (this.arbExecutor || !this.config.privateKey || !this.config.enableArbitrage) return;
     if (this.arbExecutorInitPromise) {
@@ -203,10 +224,25 @@ class BridgeServiceImpl implements BridgeService {
     }
     
     this.arbExecutorInitPromise = (async () => {
+      // Validate private key format before using
+      const privateKeyRegex = /^0x[a-fA-F0-9]{64}$/;
+      if (!privateKeyRegex.test(this.config.privateKey!)) {
+        throw new Error('Invalid EVM private key format in bridge config');
+      }
+      
+      // Validate Solana key if provided
+      const solanaKey = process.env.SOLANA_PRIVATE_KEY;
+      if (solanaKey) {
+        const decoded = Buffer.from(solanaKey, 'base64');
+        if (decoded.length !== 64) {
+          console.warn('[Bridge] Invalid SOLANA_PRIVATE_KEY format - Solana operations will be disabled');
+        }
+      }
+      
       const { createArbitrageExecutor } = await getArbitrageExecutorModule();
       this.arbExecutor = createArbitrageExecutor({
         evmPrivateKey: this.config.privateKey!,
-        solanaPrivateKey: process.env.SOLANA_PRIVATE_KEY,
+        solanaPrivateKey: solanaKey,
         evmRpcUrls: this.config.evmRpcUrls,
         solanaRpcUrl: this.config.solanaRpcUrl,
         zkBridgeEndpoint: process.env.ZK_BRIDGE_ENDPOINT,
@@ -693,6 +729,8 @@ class BridgeServiceImpl implements BridgeService {
             expiresAt: Date.now() + 30000, // 30 second expiry
           };
           
+          // Cleanup expired/excess opportunities before adding
+          this.cleanupArbOpportunities();
           this.arbOpportunities.set(opportunity.id, opportunity);
           this.stats.arbOpportunitiesDetected++;
           

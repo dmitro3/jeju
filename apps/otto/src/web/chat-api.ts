@@ -25,18 +25,45 @@ import {
 const walletService = getWalletService();
 const stateManager = getStateManager();
 
-// Chat message history per session
+// Chat message history per session - bounded to prevent memory leaks
+const MAX_SESSIONS = 10000;
+const MAX_MESSAGES_PER_SESSION = 100;
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 const sessionMessages = new Map<string, Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: number }>>();
+const sessionCreatedAt = new Map<string, number>();
+
+// Cleanup expired sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [sessionId, createdAt] of sessionCreatedAt.entries()) {
+    if (now - createdAt > SESSION_TTL_MS) {
+      sessionMessages.delete(sessionId);
+      sessionCreatedAt.delete(sessionId);
+    }
+  }
+}, 60 * 60 * 1000); // Run every hour
 
 // ============================================================================
 // Session helpers
 // ============================================================================
 
 function createChatSession(walletAddress?: Address): { sessionId: string; messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: number }> } {
+  // Enforce max sessions limit to prevent memory exhaustion
+  if (sessionMessages.size >= MAX_SESSIONS) {
+    // Remove oldest session
+    const oldestSessionId = sessionCreatedAt.entries().next().value;
+    if (oldestSessionId) {
+      sessionMessages.delete(oldestSessionId[0]);
+      sessionCreatedAt.delete(oldestSessionId[0]);
+    }
+  }
+  
   // Use the state manager's createSession method
   const session = stateManager.createSession(walletAddress);
   const messages: Array<{ id: string; role: 'user' | 'assistant'; content: string; timestamp: number }> = [];
   sessionMessages.set(session.sessionId, messages);
+  sessionCreatedAt.set(session.sessionId, Date.now());
   
   return { sessionId: session.sessionId, messages };
 }
@@ -48,6 +75,12 @@ function getSessionMessages(sessionId: string): Array<{ id: string; role: 'user'
 function addSessionMessage(sessionId: string, msg: { id: string; role: 'user' | 'assistant'; content: string; timestamp: number }): void {
   const messages = sessionMessages.get(sessionId) ?? [];
   messages.push(msg);
+  
+  // Enforce max messages per session to prevent memory exhaustion
+  if (messages.length > MAX_MESSAGES_PER_SESSION) {
+    messages.splice(0, messages.length - MAX_MESSAGES_PER_SESSION);
+  }
+  
   sessionMessages.set(sessionId, messages);
 }
 
@@ -127,8 +160,15 @@ function validateSessionId(sessionId: string): string {
 
 export const chatApi = new Hono();
 
+// CORS Configuration - inherits from parent server configuration
+// In production, set OTTO_ALLOWED_ORIGINS to restrict cross-origin access
+const chatAllowedOrigins = process.env.OTTO_ALLOWED_ORIGINS?.split(',') ?? [];
+const chatCorsOrigin = chatAllowedOrigins.length > 0 
+  ? (origin: string) => chatAllowedOrigins.includes(origin) ? origin : chatAllowedOrigins[0]
+  : '*'; // Development: allow all origins
+
 chatApi.use('/*', cors({
-  origin: '*',
+  origin: chatCorsOrigin,
   allowMethods: ['GET', 'POST', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'X-Wallet-Address'],
 }));

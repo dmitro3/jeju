@@ -65,7 +65,16 @@ export const CONTRACTS = {
 } as const;
 
 // API keys (only ones that are actually public/client-safe)
-export const WALLETCONNECT_PROJECT_ID = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID';
+// WalletConnect Project ID - required for WalletConnect functionality
+function getWalletConnectProjectId(): string {
+  const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+  // Allow empty in development, but return empty string to disable WalletConnect
+  if (!projectId || projectId === 'YOUR_PROJECT_ID') {
+    return '';
+  }
+  return projectId;
+}
+export const WALLETCONNECT_PROJECT_ID = getWalletConnectProjectId();
 export const ALCHEMY_API_KEY = process.env.NEXT_PUBLIC_ALCHEMY_API_KEY;
 export const HELIUS_API_KEY = process.env.NEXT_PUBLIC_HELIUS_API_KEY;
 

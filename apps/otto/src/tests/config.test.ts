@@ -120,7 +120,7 @@ describe('Config', () => {
     });
 
     test('each command has required properties', () => {
-      for (const [name, cmd] of Object.entries(OTTO_COMMANDS)) {
+      for (const [_name, cmd] of Object.entries(OTTO_COMMANDS)) {
         expect(cmd.description).toBeDefined();
         expect(cmd.description.length).toBeGreaterThan(0);
         expect(cmd.usage).toBeDefined();

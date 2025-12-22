@@ -18,14 +18,15 @@ import {
   authProviderSchema,
   authCallbackQuerySchema,
 } from '../schemas';
-import { expectValid, expectDefined, ValidationError } from '../utils/validation';
+import { expectValid, expectDefined, ValidationError, sanitizeErrorMessage } from '../utils/validation';
+import { getNetworkName } from '@jejunetwork/config';
 
 /**
  * Middleware for OAuth3 authentication.
  * Checks for 'x-oauth3-session' header and validates the session.
  * Falls back to legacy wallet signature auth if no OAuth3 session.
  */
-export async function OAuth3AuthMiddleware(c: Context, next: Next): Promise<Response | void> {
+export async function OAuth3AuthMiddleware(c: Context, next: Next): Promise<Response | undefined> {
   const oauth3Service = getOAuth3Service();
   const sessionId = c.req.header('x-oauth3-session');
 
@@ -115,13 +116,23 @@ export async function OAuth3AuthMiddleware(c: Context, next: Next): Promise<Resp
  */
 export function createAuthRoutes(): Hono {
   const app = new Hono();
+  
+  // Determine if we're in localnet for error message detail level
+  const networkName = getNetworkName();
+  const isLocalnet = networkName === 'localnet' || networkName === 'Jeju';
 
-  // Error handler
+  // Error handler with sanitized messages
   app.onError((err, c) => {
+    // Log full error for debugging (server-side only)
+    console.error('[Auth Error]', err);
+    
     if (err instanceof ValidationError) {
       return c.json({ error: err.message, code: 'VALIDATION_ERROR' }, 400);
     }
-    return c.json({ error: err.message || 'Internal server error', code: 'INTERNAL_ERROR' }, 500);
+    
+    // Return sanitized message to client
+    const safeMessage = sanitizeErrorMessage(err, isLocalnet);
+    return c.json({ error: safeMessage, code: 'INTERNAL_ERROR' }, 500);
   });
 
   // Initialize OAuth3 and get available providers
@@ -210,15 +221,44 @@ export function createAuthRoutes(): Hono {
       'OAuth callback query'
     );
 
+    // Escape values for safe JSON embedding in HTML
+    const escapeForJson = (str: string): string => {
+      return str
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/</g, '\\u003c')
+        .replace(/>/g, '\\u003e')
+        .replace(/&/g, '\\u0026')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+    };
+
+    // Get the expected origin from environment or same-origin
+    const expectedOrigin = process.env.OAUTH3_REDIRECT_ORIGIN || 
+                           process.env.OAUTH3_REDIRECT_URI?.replace(/\/[^/]*$/, '') || 
+                           '';
+    
+    // Security: Use strict origin validation for postMessage
+    // If no origin is configured, use same-origin (safer default)
+    const postMessageOriginScript = expectedOrigin 
+      ? `'${escapeForJson(expectedOrigin)}'` 
+      : 'window.location.origin';
+
     if (validatedQuery.error) {
-      // Return error page that posts to opener
+      const safeError = escapeForJson(validatedQuery.error);
+      // Return error page that posts to opener with validated origin
       return c.html(`
         <!DOCTYPE html>
         <html>
           <head><title>OAuth3 Error</title></head>
           <body>
             <script>
-              window.opener.postMessage({ error: '${validatedQuery.error}' }, window.location.origin);
+              // Security: Only post to expected origin
+              if (window.opener) {
+                const targetOrigin = ${postMessageOriginScript};
+                window.opener.postMessage({ error: '${safeError}', type: 'oauth3-callback' }, targetOrigin);
+              }
               window.close();
             </script>
             <p>Authentication failed. This window will close automatically.</p>
@@ -231,17 +271,25 @@ export function createAuthRoutes(): Hono {
       throw new ValidationError('Missing code or state in callback');
     }
 
-    // Post code/state to opener window for SDK to process
+    const safeCode = escapeForJson(validatedQuery.code);
+    const safeState = escapeForJson(validatedQuery.state);
+
+    // Post code/state to opener window for SDK to process with validated origin
     return c.html(`
       <!DOCTYPE html>
       <html>
         <head><title>OAuth3 Callback</title></head>
         <body>
           <script>
-            window.opener.postMessage({ 
-              code: '${validatedQuery.code}', 
-              state: '${validatedQuery.state}' 
-            }, window.location.origin);
+            // Security: Only post to expected origin
+            if (window.opener) {
+              const targetOrigin = ${postMessageOriginScript};
+              window.opener.postMessage({ 
+                code: '${safeCode}', 
+                state: '${safeState}',
+                type: 'oauth3-callback'
+              }, targetOrigin);
+            }
             window.close();
           </script>
           <p>Completing authentication. This window will close automatically.</p>

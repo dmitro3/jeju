@@ -1,7 +1,7 @@
-import { createPublicClient, createWalletClient, http, type Address, parseEther, formatEther, isAddress } from 'viem';
+import { createPublicClient, createWalletClient, http, type Address, parseEther, formatEther } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { IERC20_ABI, ZERO_ADDRESS } from '../lib/contracts.js';
-import { JEJU_CHAIN_ID, getRpcUrl, getChainName, IS_TESTNET } from '../config/networks.js';
+import { JEJU_CHAIN_ID, getRpcUrl, getChainName } from '../config/networks.js';
 import { JEJU_TOKEN_ADDRESS, IDENTITY_REGISTRY_ADDRESS } from '../config/contracts.js';
 import { jejuTestnet } from '../lib/chains.js';
 import { faucetState, initializeState } from './state.js';

@@ -9,14 +9,14 @@ import { validateMnemonic } from '@scure/bip39';
 import { wordlist } from '@scure/bip39/wordlists/english';
 import type { Hex, Address } from 'viem';
 
-// Mock localStorage for Node/Bun environment
-const mockStore: Record<string, string> = {};
+// Mock localStorage for Node/Bun environment - use Map to avoid dynamic delete
+const mockStorage = new Map<string, string>();
 if (typeof globalThis.localStorage === 'undefined') {
   (globalThis as Record<string, unknown>).localStorage = {
-    getItem: (key: string) => mockStore[key] ?? null,
-    setItem: (key: string, value: string) => { mockStore[key] = value; },
-    removeItem: (key: string) => { delete mockStore[key]; },
-    clear: () => { Object.keys(mockStore).forEach(k => delete mockStore[k]); },
+    getItem: (key: string) => mockStorage.get(key) ?? null,
+    setItem: (key: string, value: string) => { mockStorage.set(key, value); },
+    removeItem: (key: string) => { mockStorage.delete(key); },
+    clear: () => { mockStorage.clear(); },
   };
 }
 
@@ -41,7 +41,7 @@ describe('KeyringService', () => {
 
   beforeEach(() => {
     // Clear mock localStorage
-    Object.keys(mockStore).forEach(k => delete mockStore[k]);
+    mockStorage.clear();
     service = new KeyringService();
   });
 

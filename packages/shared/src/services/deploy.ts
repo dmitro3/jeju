@@ -119,19 +119,37 @@ export async function deployApp(config: DeployConfig): Promise<DeployResult> {
   return result;
 }
 
+// Well-known Hardhat/Anvil development private key
+// SECURITY: This key is PUBLIC and should ONLY be used for local development
+const HARDHAT_DEV_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+
 async function getWallet(config: DeployConfig): Promise<ReturnType<typeof privateKeyToAccount>> {
   const privateKey = config.privateKey || process.env.DEPLOYER_PRIVATE_KEY;
   
   if (privateKey) {
+    // SECURITY: Warn if using the well-known dev key outside of localnet
+    if (privateKey === HARDHAT_DEV_PRIVATE_KEY && config.network !== 'localnet') {
+      throw new Error(
+        'SECURITY ERROR: Attempting to use Hardhat development private key on non-local network. ' +
+        'This key is publicly known and provides NO security. Use a proper private key for testnet/mainnet.'
+      );
+    }
     return privateKeyToAccount(privateKey as `0x${string}`);
   }
 
-  // Use well-known dev key for localnet
-  if (config.network === 'localnet' || !config.network) {
-    return privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`);
+  // SECURITY: Only use dev key for explicitly configured localnet
+  if (config.network === 'localnet') {
+    console.warn(
+      '[Deploy] SECURITY WARNING: Using well-known Hardhat development private key. ' +
+      'This is acceptable for local development but provides NO security.'
+    );
+    return privateKeyToAccount(HARDHAT_DEV_PRIVATE_KEY as `0x${string}`);
   }
 
-  throw new Error('DEPLOYER_PRIVATE_KEY required');
+  // SECURITY: Require explicit private key for testnet/mainnet
+  throw new Error(
+    `DEPLOYER_PRIVATE_KEY environment variable required for ${config.network ?? 'unknown'} network deployment`
+  );
 }
 
 async function buildFrontend(appDir: string): Promise<void> {

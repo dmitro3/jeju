@@ -30,7 +30,8 @@ export class TreasuryManager {
   private treasuryAddress: string;
   private chainId: ChainId;
 
-  // Local tracking
+  // Local tracking with bounded size to prevent memory leaks
+  private static readonly MAX_PENDING_DEPOSITS = 1000;
   private pendingDeposits: ProfitDeposit[] = [];
   private totalDeposited: Map<string, bigint> = new Map(); // token -> amount
 
@@ -141,6 +142,11 @@ export class TreasuryManager {
       operator: this.account.address,
     };
     this.pendingDeposits.push(deposit);
+    
+    // Prevent unbounded growth - keep only recent deposits
+    if (this.pendingDeposits.length > TreasuryManager.MAX_PENDING_DEPOSITS) {
+      this.pendingDeposits = this.pendingDeposits.slice(-TreasuryManager.MAX_PENDING_DEPOSITS);
+    }
 
     const current = this.totalDeposited.get(token);
     this.totalDeposited.set(token, (current !== undefined ? current : 0n) + amount);

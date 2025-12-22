@@ -10,7 +10,11 @@ export interface StorageConfig {
   apiUrl: string;
   ipfsGateway: string;
   logger?: Logger;
+  maxContentSize?: number; // Max content size in bytes (default: 10MB)
 }
+
+// Default maximum content size: 10MB
+const DEFAULT_MAX_CONTENT_SIZE = 10 * 1024 * 1024;
 
 export class CrucibleStorage {
   private config: StorageConfig;
@@ -138,9 +142,51 @@ export class CrucibleStorage {
   private async fetch(cid: string): Promise<string> {
     expect(cid, 'CID is required');
     expect(cid.length > 0, 'CID cannot be empty');
+    
+    const maxSize = this.config.maxContentSize ?? DEFAULT_MAX_CONTENT_SIZE;
+    
+    // First make a HEAD request to check content length
+    const headResponse = await fetch(`${this.config.ipfsGateway}/ipfs/${cid}`, { method: 'HEAD' });
+    if (headResponse.ok) {
+      const contentLength = headResponse.headers.get('content-length');
+      if (contentLength && parseInt(contentLength, 10) > maxSize) {
+        throw new Error(`Content size ${contentLength} exceeds maximum allowed size ${maxSize}`);
+      }
+    }
+    
     const r = await fetch(`${this.config.ipfsGateway}/ipfs/${cid}`);
     expect(r.ok, `Failed to fetch from IPFS: ${r.statusText}`);
-    const content = await r.text();
+    
+    // Read content with size limit using streaming
+    const reader = r.body?.getReader();
+    if (!reader) {
+      throw new Error('Failed to get response reader');
+    }
+    
+    const chunks: Uint8Array[] = [];
+    let totalSize = 0;
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      totalSize += value.length;
+      if (totalSize > maxSize) {
+        reader.cancel();
+        throw new Error(`Content size exceeds maximum allowed size ${maxSize}`);
+      }
+      chunks.push(value);
+    }
+    
+    const content = new TextDecoder().decode(
+      chunks.reduce((acc, chunk) => {
+        const newAcc = new Uint8Array(acc.length + chunk.length);
+        newAcc.set(acc);
+        newAcc.set(chunk, acc.length);
+        return newAcc;
+      }, new Uint8Array(0))
+    );
+    
     expect(content, 'Content is required');
     return content;
   }

@@ -26,7 +26,6 @@ import {
   getRegionsOrderedByDistance,
   getSchedulerStats,
   clearPoCCache,
-  type SchedulingStrategy,
 } from '../src/containers/scheduler';
 import type { ComputeNode, ContainerImage, ExecutionRequest } from '../src/containers/types';
 import type { Address } from 'viem';
@@ -188,10 +187,10 @@ describe('Node Health Checks', () => {
       lastHeartbeat: Date.now() - 60000, // 60 seconds ago
     }));
 
-    const { healthy, unhealthy } = checkNodeHealth();
+    const { healthy: _healthy, unhealthy } = checkNodeHealth();
     
     expect(unhealthy).toContain('stale-node');
-    expect(healthy).not.toContain('stale-node');
+    expect(_healthy).not.toContain('stale-node');
   });
 
   it('should identify offline nodes', () => {
@@ -201,7 +200,7 @@ describe('Node Health Checks', () => {
       lastHeartbeat: Date.now(),
     }));
 
-    const { healthy, unhealthy } = checkNodeHealth();
+    const { healthy: _healthy2, unhealthy } = checkNodeHealth();
     
     expect(unhealthy).toContain('offline-node');
   });

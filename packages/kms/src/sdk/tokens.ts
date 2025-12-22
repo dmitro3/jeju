@@ -242,7 +242,27 @@ export async function verifyToken(
   // Verify signature
   const signingInput = `${headerB64}.${payloadB64}`;
   const decoded = base64urlDecode(signatureB64);
-  const signature = (decoded.startsWith('0x') ? decoded : `0x${Buffer.from(decoded, 'utf8').toString('hex')}`) as Hex;
+  
+  // Validate signature format and length before conversion
+  if (!decoded || decoded.length < 2) {
+    return { valid: false, error: 'Invalid signature: too short', claims };
+  }
+  
+  let signature: Hex;
+  if (decoded.startsWith('0x')) {
+    // Validate hex format
+    if (!/^0x[a-fA-F0-9]+$/.test(decoded)) {
+      return { valid: false, error: 'Invalid signature: malformed hex', claims };
+    }
+    signature = decoded as Hex;
+  } else {
+    // Convert to hex and validate length
+    const hexSig = Buffer.from(decoded, 'utf8').toString('hex');
+    if (hexSig.length < 128) { // ECDSA signature is at least 64 bytes = 128 hex chars
+      return { valid: false, error: 'Invalid signature: insufficient length', claims };
+    }
+    signature = `0x${hexSig}` as Hex;
+  }
 
   if (header.alg === 'ES256K' && claims.wallet) {
     // Wallet-signed token - verify against wallet address

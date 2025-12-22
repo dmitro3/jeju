@@ -1,30 +1,24 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAccount, useBalance } from 'wagmi'
-import { formatUnits, parseUnits, type Address } from 'viem'
+import { useAccount } from 'wagmi'
+import { parseUnits, type Address } from 'viem'
 import { toast } from 'sonner'
 import { Header } from '@/components/Header'
 import {
   usePerpsConfig,
-  usePerpsMarkets,
-  usePerpsMarket,
-  usePositions,
-  useCollateral,
-  useOpenPosition,
-  useClosePosition,
-  useDepositCollateral,
   formatPrice,
   formatSize,
   formatPnL,
-  formatFundingRate,
   PositionSide,
   MARKET_IDS,
-  type Market,
-  type PositionWithPnL,
+  calculateRequiredMargin,
+  calculateLiquidationPrice,
+  calculateFee,
+  getBaseAsset,
 } from '@/hooks/perps'
-import { SUPPORTED_CHAINS, useEILConfig } from '@/hooks/useEIL'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import type { Market, PositionWithPnL } from '@/schemas/perps'
+import { SUPPORTED_CHAINS, useEILConfig, type ChainInfo } from '@/hooks/useEIL'
 
 const IS_DEMO_MODE = true
 
@@ -143,12 +137,11 @@ function TradingPanel({
   const prices = SAMPLE_PRICES[symbol]
   const markPrice = prices ? Number(prices.mark) / 1e8 : 0
 
-  // Calculate margin from size and leverage
+  // Calculate margin from size and leverage using lib function
   useEffect(() => {
     if (size && markPrice > 0) {
       const sizeNum = parseFloat(size) || 0
-      const notional = sizeNum * markPrice
-      const requiredMargin = notional / leverage
+      const requiredMargin = calculateRequiredMargin(sizeNum, markPrice, leverage)
       setMargin(requiredMargin.toFixed(2))
     } else {
       setMargin('')
@@ -194,7 +187,7 @@ function TradingPanel({
       {/* Size Input */}
       <div className="mb-4">
         <label className="text-xs mb-1.5 block" style={{ color: 'var(--text-tertiary)' }}>
-          Size ({symbol.split('-')[0]})
+          Size ({getBaseAsset(symbol)})
         </label>
         <input
           type="number"
@@ -240,16 +233,17 @@ function TradingPanel({
           <div className="flex justify-between">
             <span style={{ color: 'var(--text-tertiary)' }}>Est. Liq. Price</span>
             <span className="text-red-400">
-              ${(side === 'long' 
-                ? markPrice * (1 - 1/leverage * 0.95)
-                : markPrice * (1 + 1/leverage * 0.95)
+              ${calculateLiquidationPrice(
+                markPrice,
+                leverage,
+                side === 'long' ? PositionSide.Long : PositionSide.Short
               ).toLocaleString(undefined, { maximumFractionDigits: 2 })}
             </span>
           </div>
           <div className="flex justify-between">
             <span style={{ color: 'var(--text-tertiary)' }}>Fee (0.05%)</span>
             <span style={{ color: 'var(--text-primary)' }}>
-              ${((parseFloat(size) * markPrice * 0.0005) || 0).toFixed(2)}
+              ${calculateFee(parseFloat(size) || 0, markPrice, 5).toFixed(2)}
             </span>
           </div>
         </div>
@@ -265,7 +259,7 @@ function TradingPanel({
       >
         {!isConnected 
           ? 'Connect Wallet'
-          : `${side === 'long' ? 'Long' : 'Short'} ${symbol.split('-')[0]}`
+          : `${side === 'long' ? 'Long' : 'Short'} ${getBaseAsset(symbol)}`
         }
       </button>
     </div>
@@ -355,7 +349,7 @@ function CrossChainDepositPanel() {
           onChange={(e) => setSelectedChain(Number(e.target.value))}
           className="input"
         >
-          {SUPPORTED_CHAINS.map((chain) => (
+          {SUPPORTED_CHAINS.map((chain: ChainInfo) => (
             <option key={chain.id} value={chain.id}>
               {chain.icon} {chain.name}
             </option>
@@ -377,7 +371,7 @@ function CrossChainDepositPanel() {
       </div>
 
       <button className="btn-primary w-full py-3">
-        Deposit from {SUPPORTED_CHAINS.find(c => c.id === selectedChain)?.name}
+        Deposit from {SUPPORTED_CHAINS.find((c: ChainInfo) => c.id === selectedChain)?.name}
       </button>
     </div>
   )
@@ -385,7 +379,7 @@ function CrossChainDepositPanel() {
 
 export default function PerpsPage() {
   const { isConnected } = useAccount()
-  const { isAvailable, perpetualMarket } = usePerpsConfig()
+  usePerpsConfig()
   const [selectedMarket, setSelectedMarket] = useState('BTC-PERP')
   const [activeTab, setActiveTab] = useState<'trade' | 'positions' | 'orders'>('trade')
 

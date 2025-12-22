@@ -71,8 +71,20 @@ const asyncHandler = (fn: AsyncHandler) => (req: Request, res: Response, next: N
   Promise.resolve(fn(req, res, next)).catch(next);
 
 const app: express.Application = express();
-app.use(cors());
-app.use(express.json());
+
+// SECURITY: Configure CORS with allowlist - defaults to permissive for local dev
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()).filter(Boolean);
+const corsOptions: cors.CorsOptions = CORS_ORIGINS?.length 
+  ? { 
+      origin: CORS_ORIGINS,
+      credentials: true,
+      methods: ['GET', 'POST', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-Wallet-Address', 'X-Agent-Id'],
+    }
+  : {}; // Permissive CORS for local development when CORS_ORIGINS not set
+
+app.use(cors(corsOptions));
+app.use(express.json({ limit: '1mb' })); // Limit request body size
 app.use(stakeRateLimiter({ skipPaths: ['/health', '/'] }));
 
 app.get('/health', (_req: Request, res: Response) => {
@@ -536,6 +548,7 @@ app.get('/api/rate-limits', (_req, res) => {
 });
 
 app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  // Log full error details server-side for debugging
   console.error('[REST] Unhandled error:', err.message, err.stack);
   
   if (err.name === 'ValidationError' || err.message.includes('Validation error')) {
@@ -553,7 +566,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     return;
   }
   
-  res.status(500).json({ error: 'Internal server error', message: err.message });
+  // SECURITY: Never expose internal error details to clients
+  // Internal errors are logged server-side but clients only see a generic message
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 export async function startRestServer(): Promise<void> {

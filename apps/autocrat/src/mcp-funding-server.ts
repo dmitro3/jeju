@@ -16,6 +16,8 @@ import {
   ListToolsRequestSchema,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
+  type CallToolRequest,
+  type ReadResourceRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { fundingApi } from './funding-api';
 import type { Address } from 'viem';
@@ -241,13 +243,13 @@ export class MCPFundingServer {
     }));
 
     // Call tool
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    this.server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
       const { name, arguments: args } = request.params;
       return this.handleToolCall(name, args as Record<string, unknown>);
     });
 
     // Read resource
-    this.server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    this.server.setRequestHandler(ReadResourceRequestSchema, async (request: ReadResourceRequest) => {
       const { uri } = request.params;
       return this.handleResourceRead(uri);
     });

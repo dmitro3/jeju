@@ -13,7 +13,7 @@ import { VolatilityStrategy } from './volatility-strategy';
 import { OracleAggregator } from '../../oracles';
 import { WEIGHT_PRECISION } from '../../schemas';
 import type { StrategyContext } from './base-strategy';
-import type { Token, TFMMRiskParameters, OraclePrice } from '../../types';
+import type { Token, TFMMRiskParameters } from '../../types';
 
 describe('VolatilityStrategy', () => {
   let strategy: VolatilityStrategy;

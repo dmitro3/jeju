@@ -17,8 +17,9 @@ import {
   type PublicClient,
   type WalletClient,
   type Chain,
+  type HttpTransport,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import { base, baseSepolia } from 'viem/chains';
 import type {
   NodeConfig,
@@ -190,9 +191,8 @@ const DWS_NODE_TAG = 'dws-node';
 
 export class DecentralizedNodeRegistry {
   private publicClient: PublicClient;
-  private walletClient: WalletClient | null = null;
+  private walletClient: WalletClient<HttpTransport, Chain, PrivateKeyAccount> | null = null;
   private registryAddress: Address;
-  private networkConfig: NetworkConfig;
   private chain: Chain;
   
   // Cache
@@ -204,7 +204,6 @@ export class DecentralizedNodeRegistry {
   private eventHandlers: InfraEventHandler[] = [];
 
   constructor(config: NetworkConfig, privateKey?: Hex) {
-    this.networkConfig = config;
     this.registryAddress = config.contracts.identityRegistry;
     this.chain = getChainFromConfig(config);
     
@@ -577,12 +576,14 @@ export class DecentralizedNodeRegistry {
 
     // Filter by reputation
     if (params.minReputation !== undefined) {
-      nodes = nodes.filter(n => n.reputation >= params.minReputation!);
+      const minReputation = params.minReputation;
+      nodes = nodes.filter(n => n.reputation >= minReputation);
     }
 
     // Filter by stake
     if (params.minStake !== undefined) {
-      nodes = nodes.filter(n => n.stakedAmount >= params.minStake!);
+      const minStake = params.minStake;
+      nodes = nodes.filter(n => n.stakedAmount >= minStake);
     }
 
     // Filter by TEE
@@ -595,7 +596,8 @@ export class DecentralizedNodeRegistry {
 
     // Filter by price
     if (params.maxPricePerRequest !== undefined) {
-      nodes = nodes.filter(n => n.pricePerRequest <= params.maxPricePerRequest!);
+      const maxPricePerRequest = params.maxPricePerRequest;
+      nodes = nodes.filter(n => n.pricePerRequest <= maxPricePerRequest);
     }
 
     // Sort by reputation and stake
@@ -662,6 +664,7 @@ export class DecentralizedNodeRegistry {
     });
 
     return this.walletClient.sendTransaction({
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
@@ -677,6 +680,7 @@ export class DecentralizedNodeRegistry {
     });
 
     return this.walletClient.sendTransaction({
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
@@ -692,6 +696,7 @@ export class DecentralizedNodeRegistry {
     });
 
     return this.walletClient.sendTransaction({
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });

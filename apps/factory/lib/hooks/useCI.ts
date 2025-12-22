@@ -222,43 +222,105 @@ export function useWorkflowRun(runId: string) {
   return { run, isLoading, error, refetch: fetchRun };
 }
 
+// Maximum number of log entries to keep in memory to prevent DoS via memory exhaustion
+const MAX_LOG_ENTRIES = 10000;
+
+// Schema for validating log entries from EventSource
+const logEntrySchema = {
+  isValid(entry: unknown): entry is LogEntry {
+    if (typeof entry !== 'object' || entry === null) return false;
+    const e = entry as Record<string, unknown>;
+    return (
+      typeof e.timestamp === 'number' &&
+      typeof e.runId === 'string' &&
+      typeof e.jobId === 'string' &&
+      (e.stepId === undefined || typeof e.stepId === 'string') &&
+      typeof e.level === 'string' &&
+      typeof e.message === 'string' &&
+      typeof e.stream === 'string'
+    );
+  }
+};
+
 export function useRunLogs(runId: string, options?: { jobId?: string; stepId?: string }) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    
     const params = new URLSearchParams();
     if (options?.jobId) params.set('job', options.jobId);
     if (options?.stepId) params.set('step', options.stepId);
 
     globalThis.fetch(`${DWS_API_URL}/ci/runs/${runId}/logs?${params}`)
       .then((r) => r.json())
-      .then((data) => setLogs(data.logs || []))
+      .then((data) => {
+        if (!isMountedRef.current) return;
+        // Limit initial logs to MAX_LOG_ENTRIES
+        const initialLogs = Array.isArray(data.logs) ? data.logs.slice(-MAX_LOG_ENTRIES) : [];
+        setLogs(initialLogs);
+      })
       .catch(console.error);
 
     const eventSource = new EventSource(`${DWS_API_URL}/ci/runs/${runId}/logs/stream`);
     eventSourceRef.current = eventSource;
     setIsStreaming(true);
 
-    eventSource.addEventListener('log', (event) => {
-      const entry = JSON.parse(event.data) as LogEntry;
+    const handleLog = (event: MessageEvent) => {
+      if (!isMountedRef.current) return;
+      
+      let entry: unknown;
+      try {
+        entry = JSON.parse(event.data as string);
+      } catch {
+        console.warn('Invalid JSON in log event');
+        return;
+      }
+      
+      // Validate log entry structure
+      if (!logEntrySchema.isValid(entry)) {
+        console.warn('Invalid log entry structure');
+        return;
+      }
+      
       if (options?.jobId && entry.jobId !== options.jobId) return;
       if (options?.stepId && entry.stepId !== options.stepId) return;
-      setLogs((prev) => [...prev, entry]);
-    });
+      
+      // Limit array growth - keep only the most recent entries
+      setLogs((prev) => {
+        const newLogs = [...prev, entry];
+        if (newLogs.length > MAX_LOG_ENTRIES) {
+          // Remove oldest entries to maintain limit
+          return newLogs.slice(-MAX_LOG_ENTRIES);
+        }
+        return newLogs;
+      });
+    };
 
-    eventSource.addEventListener('complete', () => {
-      setIsStreaming(false);
-      eventSource.close();
-    });
-
-    eventSource.onerror = () => {
+    const handleComplete = () => {
+      if (!isMountedRef.current) return;
       setIsStreaming(false);
       eventSource.close();
     };
 
+    const handleError = () => {
+      if (!isMountedRef.current) return;
+      setIsStreaming(false);
+      eventSource.close();
+    };
+
+    eventSource.addEventListener('log', handleLog);
+    eventSource.addEventListener('complete', handleComplete);
+    eventSource.onerror = handleError;
+
     return () => {
+      isMountedRef.current = false;
+      eventSource.removeEventListener('log', handleLog);
+      eventSource.removeEventListener('complete', handleComplete);
+      eventSource.onerror = null;
       eventSource.close();
       eventSourceRef.current = null;
     };

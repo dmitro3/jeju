@@ -290,6 +290,9 @@ async function handleGetNodes(
   });
 }
 
+// Maximum response body size for A2A proxy (10MB)
+const A2A_MAX_RESPONSE_BODY_SIZE = 10 * 1024 * 1024;
+
 async function handleProxyRequest(
   c: Context,
   ctx: VPNServiceContext,
@@ -313,13 +316,56 @@ async function handleProxyRequest(
   // Validate proxy request params
   const proxyRequest = expectValid(ProxyRequestSchema, params, 'proxy request params');
 
+  // SECURITY: Validate URL with DNS resolution to prevent SSRF and DNS rebinding attacks
+  const { validateProxyUrlWithDNS } = await import('./utils/proxy-validation');
+  await validateProxyUrlWithDNS(proxyRequest.url);
+
+  // Add timeout to prevent hanging connections
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
   const response = await fetch(proxyRequest.url, {
     method: proxyRequest.method,
     headers: proxyRequest.headers,
     body: proxyRequest.body,
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeoutId));
 
-  const responseBody = await response.text();
+  // SECURITY: Check response size before reading
+  const responseContentLength = response.headers.get('content-length');
+  if (responseContentLength && parseInt(responseContentLength, 10) > A2A_MAX_RESPONSE_BODY_SIZE) {
+    throw new Error(`Response too large. Max size: ${A2A_MAX_RESPONSE_BODY_SIZE} bytes`);
+  }
+
+  // SECURITY: Read response with size limit
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('No response body');
+  }
+  
+  const chunks: Uint8Array[] = [];
+  let totalSize = 0;
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    totalSize += value.length;
+    if (totalSize > A2A_MAX_RESPONSE_BODY_SIZE) {
+      reader.cancel();
+      throw new Error(`Response too large. Max size: ${A2A_MAX_RESPONSE_BODY_SIZE} bytes`);
+    }
+    chunks.push(value);
+  }
+  
+  const responseBody = new TextDecoder().decode(
+    chunks.reduce((acc, chunk) => {
+      const result = new Uint8Array(acc.length + chunk.length);
+      result.set(acc);
+      result.set(chunk, acc.length);
+      return result;
+    }, new Uint8Array(0))
+  );
 
   return c.json({
     jsonrpc: '2.0',
@@ -334,7 +380,7 @@ async function handleProxyRequest(
           kind: 'data',
           data: {
             status: response.status,
-            body: responseBody.slice(0, 10000), // Limit response size
+            body: responseBody.slice(0, 10000), // Limit response in JSON output
           },
         },
       ],

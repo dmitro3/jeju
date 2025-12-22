@@ -3,7 +3,6 @@
  * Manages agent workers via workerd
  */
 
-import type { Address } from 'viem';
 import type {
   AgentConfig,
   AgentInstance,
@@ -252,11 +251,11 @@ export class AgentExecutor {
         error?: string;
       };
 
-      if (!responseData.success) {
+      if (!responseData.success || !responseData.response) {
         throw new Error(responseData.error ?? 'Unknown error');
       }
 
-      const response = responseData.response!;
+      const response = responseData.response;
       
       invocation.response = response;
       invocation.status = 'completed';
@@ -324,11 +323,11 @@ export class AgentExecutor {
       error?: string;
     };
 
-    if (!responseData.success) {
+    if (!responseData.success || !responseData.response) {
       throw new Error(responseData.error ?? 'Cron invocation failed');
     }
 
-    return responseData.response!;
+    return responseData.response;
   }
 
   // ============================================================================
@@ -361,7 +360,8 @@ export class AgentExecutor {
 
     // Scale up if needed
     if (instances.length < this.config.warmPool.maxWarmInstances) {
-      const agent = registry.getAgent(agentId)!;
+      const agent = registry.getAgent(agentId);
+      if (!agent) return null;
       const workerId = `eliza-agent-${agentId}`;
       const instance = await this.createInstance(agent, workerId);
       instances.push(instance);

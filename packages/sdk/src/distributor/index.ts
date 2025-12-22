@@ -309,9 +309,21 @@ export function createDistributorModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): DistributorModule {
-  const airdropManagerAddress = requireContract("distributor", "AirdropManager", network);
-  const tokenVestingAddress = requireContract("distributor", "TokenVesting", network);
-  const feeDistributorAddress = requireContract("distributor", "FeeDistributor", network);
+  const airdropManagerAddress = requireContract(
+    "distributor",
+    "AirdropManager",
+    network,
+  );
+  const tokenVestingAddress = requireContract(
+    "distributor",
+    "TokenVesting",
+    network,
+  );
+  const feeDistributorAddress = requireContract(
+    "distributor",
+    "FeeDistributor",
+    network,
+  );
   const stakingRewardAddress = requireContract(
     "distributor",
     "StakingRewardDistributor",

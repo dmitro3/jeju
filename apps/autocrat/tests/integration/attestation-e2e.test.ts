@@ -3,7 +3,7 @@
  * Requires: Anvil on port 9545, contracts deployed (run scripts/start-council-dev.sh)
  */
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, writeContract, waitForTransactionReceipt, keccak256, encodePacked, stringToBytes, stringToHex, zeroAddress, type Address, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, readContract, keccak256, encodePacked, stringToBytes, stringToHex, zeroAddress, type Address, type PublicClient } from 'viem';
 import { privateKeyToAccount, signMessage, type PrivateKeyAccount } from 'viem/accounts';
 import { foundry } from 'viem/chains';
 

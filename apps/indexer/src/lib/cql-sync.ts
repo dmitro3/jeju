@@ -200,31 +200,68 @@ export class CQLSyncService {
     meta: EntityMetadata,
     record: EntityRecord
   ): Promise<void> {
+    // SECURITY: Use parameterized queries to prevent SQL injection
     const columns = meta.columns.map((c) => c.databaseName);
-    const values = meta.columns.map((c) => {
+    const params: SqlParam[] = [];
+    const placeholders: string[] = [];
+    
+    meta.columns.forEach((c, index) => {
       const value = record[c.propertyName];
-      if (value === null || value === undefined) return 'NULL';
-      if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
-      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
-      if (value instanceof Date) return `'${value.toISOString()}'`;
-      if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'`;
-      return `'${String(value).replace(/'/g, "''")}'`;
+      placeholders.push(`$${index + 1}`);
+      
+      if (value === null || value === undefined) {
+        params.push(null);
+      } else if (typeof value === 'string') {
+        params.push(value);
+      } else if (typeof value === 'number') {
+        params.push(value);
+      } else if (typeof value === 'boolean') {
+        params.push(value);
+      } else if (typeof value === 'bigint') {
+        params.push(value);
+      } else if (value instanceof Date) {
+        params.push(value);
+      } else if (typeof value === 'object') {
+        params.push(JSON.stringify(value));
+      } else {
+        params.push(String(value));
+      }
     });
 
     const primaryCols = meta.primaryColumns.map((c) => c.databaseName);
-    const updateSet = columns
-      .filter((c) => !primaryCols.includes(c))
-      .map((c, i) => `${c} = ${values[columns.indexOf(c)]}`)
+    const nonPrimaryCols = columns.filter((c) => !primaryCols.includes(c));
+    const updateSet = nonPrimaryCols
+      .map((c) => {
+        const colIndex = columns.indexOf(c);
+        return `${c} = $${colIndex + 1}`;
+      })
       .join(', ');
+
+    // Validate table name contains only valid characters (alphanumeric and underscore)
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+      throw new Error(`Invalid table name: ${tableName}`);
+    }
+    
+    // Validate all column names to prevent SQL injection
+    for (const colName of columns) {
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(colName)) {
+        throw new Error(`Invalid column name: ${colName}`);
+      }
+    }
+    for (const colName of primaryCols) {
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(colName)) {
+        throw new Error(`Invalid primary column name: ${colName}`);
+      }
+    }
 
     const sql = `
       INSERT INTO ${tableName} (${columns.join(', ')})
-      VALUES (${values.join(', ')})
+      VALUES (${placeholders.join(', ')})
       ON CONFLICT (${primaryCols.join(', ')})
       DO UPDATE SET ${updateSet}
     `.trim();
 
-    await this.client.exec(sql, undefined, CQL_DATABASE_ID);
+    await this.client.exec(sql, params, CQL_DATABASE_ID);
   }
 
   private async createCQLTables(): Promise<void> {
@@ -236,7 +273,16 @@ export class CQLSyncService {
   }
 
   private async createCQLTable(meta: EntityMetadata): Promise<void> {
+    // Validate table name for SQL safety
+    if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(meta.tableName)) {
+      throw new Error(`Invalid table name for CQL: ${meta.tableName}`);
+    }
+    
     const columns = meta.columns.map((col) => {
+      // Validate column name for SQL safety
+      if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(col.databaseName)) {
+        throw new Error(`Invalid column name for CQL: ${col.databaseName}`);
+      }
       let type = 'TEXT';
       switch (col.type) {
         case 'int':
@@ -300,16 +346,24 @@ export class CQLSyncService {
   }
 
   private async saveSyncState(state: SyncState): Promise<void> {
+    // SECURITY: Use parameterized queries to prevent SQL injection
     const sql = `
       INSERT INTO _cql_sync_states (entity, last_synced_id, last_synced_at, total_synced)
-      VALUES ('${state.entity}', '${state.lastSyncedId}', ${state.lastSyncedAt}, ${state.totalSynced})
+      VALUES ($1, $2, $3, $4)
       ON CONFLICT (entity)
-      DO UPDATE SET last_synced_id = '${state.lastSyncedId}', 
-                    last_synced_at = ${state.lastSyncedAt}, 
-                    total_synced = ${state.totalSynced}
+      DO UPDATE SET last_synced_id = $2, 
+                    last_synced_at = $3, 
+                    total_synced = $4
     `.trim();
 
-    await this.client.exec(sql, undefined, CQL_DATABASE_ID).catch((err: Error) => {
+    const params: SqlParam[] = [
+      state.entity,
+      state.lastSyncedId,
+      state.lastSyncedAt,
+      state.totalSynced,
+    ];
+
+    await this.client.exec(sql, params, CQL_DATABASE_ID).catch((err: Error) => {
       // Sync state table may not exist on first run - this is expected
       console.log(`[CQLSync] Saving sync state for ${state.entity}: ${err.message}`);
     });
@@ -319,8 +373,18 @@ export class CQLSyncService {
     return this.client;
   }
 
-  async queryFromCQL<T>(sql: string): Promise<QueryResult<T>> {
-    return this.client.query<T>(sql, undefined, CQL_DATABASE_ID);
+  /**
+   * Query from CQL - INTERNAL USE ONLY
+   * WARNING: This method accepts raw SQL. Never pass user input directly.
+   * Use parameterized queries via the Subsquid TypeORM store for user-facing queries.
+   */
+  async queryFromCQL<T>(sql: string, params?: SqlParam[]): Promise<QueryResult<T>> {
+    // Basic SQL injection check - this method should only be used internally
+    // with pre-defined queries, not with user input
+    if (sql.includes(';') && sql.indexOf(';') !== sql.length - 1) {
+      throw new Error('Multiple SQL statements not allowed');
+    }
+    return this.client.query<T>(sql, params, CQL_DATABASE_ID);
   }
 
   getStats(): {

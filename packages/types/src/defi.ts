@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AddressSchema } from './validation';
+import { AddressSchema, MAX_ARRAY_LENGTH, MAX_SMALL_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_RECORD_KEYS } from './validation';
 
 // ============================================================================
 // Staking Status Types
@@ -63,13 +63,13 @@ export type UniswapV4Pool = z.infer<typeof UniswapV4PoolSchema>;
 
 export const SynthetixMarketSchema = z.object({
   marketId: z.number(),
-  marketName: z.string(),
-  marketSymbol: z.string(),
-  maxFundingVelocity: z.string(),
-  skewScale: z.string(),
-  makerFee: z.string(),
-  takerFee: z.string(),
-  priceFeeds: z.array(AddressSchema),
+  marketName: z.string().max(MAX_SHORT_STRING_LENGTH),
+  marketSymbol: z.string().max(MAX_SHORT_STRING_LENGTH),
+  maxFundingVelocity: z.string().max(MAX_SHORT_STRING_LENGTH),
+  skewScale: z.string().max(MAX_SHORT_STRING_LENGTH),
+  makerFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  takerFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  priceFeeds: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH),
 });
 export type SynthetixMarket = z.infer<typeof SynthetixMarketSchema>;
 
@@ -78,15 +78,15 @@ export const CompoundV3MarketSchema = z.object({
   baseToken: TokenSchema,
   collateralTokens: z.array(z.object({
     token: TokenSchema,
-    borrowCollateralFactor: z.string(),
-    liquidateCollateralFactor: z.string(),
-    liquidationFactor: z.string(),
-    supplyCap: z.string(),
-  })),
+    borrowCollateralFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+    liquidateCollateralFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+    liquidationFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+    supplyCap: z.string().max(MAX_SHORT_STRING_LENGTH),
+  })).max(MAX_SMALL_ARRAY_LENGTH),
   governor: AddressSchema,
   pauseGuardian: AddressSchema,
-  baseBorrowMin: z.string(),
-  targetReserves: z.string(),
+  baseBorrowMin: z.string().max(MAX_SHORT_STRING_LENGTH),
+  targetReserves: z.string().max(MAX_SHORT_STRING_LENGTH),
 });
 export type CompoundV3Market = z.infer<typeof CompoundV3MarketSchema>;
 
@@ -131,14 +131,14 @@ export const LendingPositionSchema = z.object({
   comet: AddressSchema,
   collateral: z.array(z.object({
     token: AddressSchema,
-    balance: z.string(),
-    valueUsd: z.string(),
-  })),
-  borrowed: z.string(),
-  borrowedUsd: z.string(),
-  borrowCapacity: z.string(),
-  liquidationThreshold: z.string(),
-  healthFactor: z.string(),
+    balance: z.string().max(MAX_SHORT_STRING_LENGTH),
+    valueUsd: z.string().max(MAX_SHORT_STRING_LENGTH),
+  })).max(MAX_SMALL_ARRAY_LENGTH),
+  borrowed: z.string().max(MAX_SHORT_STRING_LENGTH),
+  borrowedUsd: z.string().max(MAX_SHORT_STRING_LENGTH),
+  borrowCapacity: z.string().max(MAX_SHORT_STRING_LENGTH),
+  liquidationThreshold: z.string().max(MAX_SHORT_STRING_LENGTH),
+  healthFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
 });
 export type LendingPosition = z.infer<typeof LendingPositionSchema>;
 
@@ -151,20 +151,20 @@ export const DeFiProtocolConfigSchema = z.object({
       fee: z.number(),
       tickSpacing: z.number(),
       hooks: AddressSchema.optional(),
-      initialPrice: z.string(),
-    })),
+      initialPrice: z.string().max(MAX_SHORT_STRING_LENGTH),
+    })).max(MAX_ARRAY_LENGTH),
   }),
   synthetixV3: z.object({
     enabled: z.boolean(),
     marketsToCreate: z.array(z.object({
-      marketName: z.string(),
-      marketSymbol: z.string(),
-      maxFundingVelocity: z.string(),
-      skewScale: z.string(),
-      makerFee: z.string(),
-      takerFee: z.string(),
-      priceFeeds: z.array(AddressSchema),
-    })),
+      marketName: z.string().max(MAX_SHORT_STRING_LENGTH),
+      marketSymbol: z.string().max(MAX_SHORT_STRING_LENGTH),
+      maxFundingVelocity: z.string().max(MAX_SHORT_STRING_LENGTH),
+      skewScale: z.string().max(MAX_SHORT_STRING_LENGTH),
+      makerFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+      takerFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+      priceFeeds: z.array(AddressSchema).max(MAX_SMALL_ARRAY_LENGTH),
+    })).max(MAX_ARRAY_LENGTH),
   }),
   compoundV3: z.object({
     enabled: z.boolean(),
@@ -172,16 +172,16 @@ export const DeFiProtocolConfigSchema = z.object({
       baseToken: AddressSchema,
       collateralTokens: z.array(z.object({
         token: AddressSchema,
-        borrowCollateralFactor: z.string(),
-        liquidateCollateralFactor: z.string(),
-        liquidationFactor: z.string(),
-        supplyCap: z.string(),
-      })),
+        borrowCollateralFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+        liquidateCollateralFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+        liquidationFactor: z.string().max(MAX_SHORT_STRING_LENGTH),
+        supplyCap: z.string().max(MAX_SHORT_STRING_LENGTH),
+      })).max(MAX_SMALL_ARRAY_LENGTH),
       governor: AddressSchema,
       pauseGuardian: AddressSchema,
-      baseBorrowMin: z.string(),
-      targetReserves: z.string(),
-    })),
+      baseBorrowMin: z.string().max(MAX_SHORT_STRING_LENGTH),
+      targetReserves: z.string().max(MAX_SHORT_STRING_LENGTH),
+    })).max(MAX_ARRAY_LENGTH),
   }),
 });
 export type DeFiProtocolConfig = z.infer<typeof DeFiProtocolConfigSchema>;
@@ -202,8 +202,11 @@ export type PaymasterDeployment = z.infer<typeof PaymasterDeploymentSchema>;
 export const MultiTokenSystemSchema = z.object({
   oracle: AddressSchema,
   entryPoint: AddressSchema,
-  deployments: z.record(z.string(), PaymasterDeploymentSchema),
-  network: z.string(),
+  deployments: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), PaymasterDeploymentSchema).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} deployments` }
+  ),
+  network: z.string().max(MAX_SHORT_STRING_LENGTH),
   chainId: z.number(),
   deployedAt: z.number(),
 });

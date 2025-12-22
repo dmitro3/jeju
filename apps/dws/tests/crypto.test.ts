@@ -11,7 +11,6 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
 import {
   // BLS
-  BLS,
   generateKeyPair,
   derivePublicKey,
   validateSecretKey,
@@ -30,12 +29,9 @@ import {
   type BLSSignature,
 
   // KZG
-  KZG,
   initializeKZG,
-  isKZGInitialized,
   createBlob,
   validateBlob,
-  computeCommitment,
   commitToBlob,
   computeBlobProof,
   verifyBlobProof,
@@ -45,7 +41,6 @@ import {
   BLOB_SIZE,
 
   // 2D Reed-Solomon
-  ReedSolomon2D,
   gfMul,
   gfDiv,
   gfPow,
@@ -58,7 +53,6 @@ import {
   canReconstruct,
 
   // Hash-to-Curve
-  HashToCurve,
   hashToG1,
   hashToG2,
   hashToField,

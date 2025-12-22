@@ -16,7 +16,6 @@ const CQL_DATABASE_ID = process.env.CQL_DATABASE_ID ?? "autocrat";
 // ============ Schemas for JSON parsing ============
 
 const ProposalStatusSchema = z.enum(["draft", "review", "voting", "approved", "rejected", "executed"]);
-const ModerationTargetTypeSchema = z.enum(["proposal", "user", "research"]);
 
 const AutocratVotesRecordSchema = z.record(z.string(), z.boolean());
 const SourcesArraySchema = z.array(z.string());
@@ -37,7 +36,7 @@ const ProposalSchema = z.object({
 // ============ Types ============
 
 export type ProposalStatus = z.infer<typeof ProposalStatusSchema>;
-export type ModerationTargetType = z.infer<typeof ModerationTargetTypeSchema>;
+export type ModerationTargetType = "proposal" | "user" | "research";
 
 export interface Proposal {
   id: string;
@@ -180,12 +179,13 @@ async function ensureTablesExist(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_storage_type ON storage_objects(object_type)`,
   ];
 
+  const client = cqlClient ?? await getCQLClient();
   for (const ddl of tables) {
-    await cqlClient!.exec(ddl, [], CQL_DATABASE_ID);
+    await client.exec(ddl, [], CQL_DATABASE_ID);
   }
 
   for (const idx of indexes) {
-    await cqlClient!.exec(idx, [], CQL_DATABASE_ID);
+    await client.exec(idx, [], CQL_DATABASE_ID);
   }
 
   console.log("[Council] CovenantSQL tables ensured");

@@ -15,7 +15,7 @@ import {
 } from 'viem';
 import { OracleAggregator } from '../../oracles';
 import type { EVMChainId } from '../../types';
-import { sleep } from '../../shared';
+import { sleep, NonceManager } from '../../shared';
 
 export interface FundingArbConfig {
   chainId: EVMChainId;
@@ -69,12 +69,14 @@ const DEX_ROUTER_ABI = parseAbi([
 
 const PERP_FEE = 0.0005;
 const SPOT_FEE = 0.003;
+const MAX_SLIPPAGE_BPS = 100; // 1% max slippage protection
 
 export class FundingArbitrageBot {
   private readonly config: FundingArbConfig;
   private readonly oracle: OracleAggregator;
   private readonly publicClient: PublicClient;
   private readonly walletClient: WalletClient;
+  private readonly nonceManager: NonceManager;
   private running = false;
   private positions = new Map<string, Position>();
 
@@ -88,6 +90,12 @@ export class FundingArbitrageBot {
     this.oracle = oracle;
     this.publicClient = publicClient;
     this.walletClient = walletClient;
+    
+    // Initialize nonce manager for transaction ordering
+    this.nonceManager = new NonceManager(async () => {
+      const [address] = await walletClient.getAddresses();
+      return BigInt(await publicClient.getTransactionCount({ address }));
+    });
   }
 
   async start(): Promise<void> {
@@ -146,24 +154,36 @@ export class FundingArbitrageBot {
     const [account] = await this.walletClient.getAddresses();
     const marginAmount = opp.size / BigInt(this.config.targetLeverage);
 
+    // Acquire nonce for perp transaction
+    const { nonce: perpNonce, release: releasePerpNonce } = await this.nonceManager.acquire();
+
     // 1. Open perp position
-    const perpTxHash = await this.walletClient.writeContract({
-      account,
-      chain: null,
-      address: this.config.perpMarketAddress,
-      abi: PERP_MARKET_ABI,
-      functionName: 'openPosition',
-      args: [
-        market.marketId as `0x${string}`,
-        market.quoteAsset,
-        marginAmount,
-        opp.size,
-        perpSide,
-        BigInt(this.config.targetLeverage),
-      ],
-    });
+    let perpTxHash: `0x${string}`;
+    try {
+      perpTxHash = await this.walletClient.writeContract({
+        account,
+        chain: null,
+        address: this.config.perpMarketAddress,
+        abi: PERP_MARKET_ABI,
+        functionName: 'openPosition',
+        args: [
+          market.marketId as `0x${string}`,
+          market.quoteAsset,
+          marginAmount,
+          opp.size,
+          perpSide,
+          BigInt(this.config.targetLeverage),
+        ],
+        nonce: Number(perpNonce),
+      });
+    } catch (error) {
+      releasePerpNonce(false);
+      throw error;
+    }
 
     const perpReceipt = await this.publicClient.waitForTransactionReceipt({ hash: perpTxHash });
+    releasePerpNonce(perpReceipt.status === 'success');
+    
     if (perpReceipt.status !== 'success') {
       console.error(`Failed to open perp position for ${market.symbol}`);
       return;
@@ -181,22 +201,41 @@ export class FundingArbitrageBot {
       ? [market.quoteAsset, market.baseAsset]  // Buy base with quote
       : [market.baseAsset, market.quoteAsset]; // Sell base for quote
 
-    const spotTxHash = await this.walletClient.writeContract({
-      account,
-      chain: null,
-      address: this.config.spotDexAddress,
-      abi: DEX_ROUTER_ABI,
-      functionName: 'swapExactTokensForTokens',
-      args: [
-        opp.size,
-        0n, // amountOutMin - in production, calculate slippage protection
-        spotPath,
+    // Calculate minimum output with slippage protection
+    // Use the entry price to estimate expected output, then apply slippage tolerance
+    const expectedOutput = opp.size; // 1:1 for delta-neutral
+    const minOutputWithSlippage = (expectedOutput * (10000n - BigInt(MAX_SLIPPAGE_BPS))) / 10000n;
+
+    // Acquire nonce for spot transaction
+    const { nonce: spotNonce, release: releaseSpotNonce } = await this.nonceManager.acquire();
+
+    let spotTxHash: `0x${string}`;
+    try {
+      spotTxHash = await this.walletClient.writeContract({
         account,
-        BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour deadline
-      ],
-    });
+        chain: null,
+        address: this.config.spotDexAddress,
+        abi: DEX_ROUTER_ABI,
+        functionName: 'swapExactTokensForTokens',
+        args: [
+          opp.size,
+          minOutputWithSlippage, // Slippage protection against MEV
+          spotPath,
+          account,
+          BigInt(Math.floor(Date.now() / 1000) + 300), // 5 minute deadline (reduced from 1 hour)
+        ],
+        nonce: Number(spotNonce),
+      });
+    } catch (error) {
+      releaseSpotNonce(false);
+      // Close perp position on spot trade failure
+      await this.closePerpPosition(perpPositionId);
+      throw error;
+    }
 
     const spotReceipt = await this.publicClient.waitForTransactionReceipt({ hash: spotTxHash });
+    releaseSpotNonce(spotReceipt.status === 'success');
+    
     if (spotReceipt.status !== 'success') {
       console.error(`Failed to execute spot trade for ${market.symbol}, closing perp`);
       await this.closePerpPosition(perpPositionId);
@@ -246,6 +285,9 @@ export class FundingArbitrageBot {
       ? [market.baseAsset, market.quoteAsset]  // Sell base we bought
       : [market.quoteAsset, market.baseAsset]; // Buy back base we sold
 
+    // Calculate minimum output with slippage protection
+    const minOutputWithSlippage = (pos.spotSize * (10000n - BigInt(MAX_SLIPPAGE_BPS))) / 10000n;
+
     await this.walletClient.writeContract({
       account,
       chain: null,
@@ -254,10 +296,10 @@ export class FundingArbitrageBot {
       functionName: 'swapExactTokensForTokens',
       args: [
         pos.spotSize,
-        0n,
+        minOutputWithSlippage, // Slippage protection against MEV
         spotPath,
         account,
-        BigInt(Math.floor(Date.now() / 1000) + 3600),
+        BigInt(Math.floor(Date.now() / 1000) + 300), // 5 minute deadline (reduced from 1 hour)
       ],
     });
 

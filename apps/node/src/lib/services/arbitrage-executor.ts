@@ -1026,10 +1026,37 @@ export class ArbitrageExecutor {
 
 // ============ Factory ============
 
+/** Validates that a string is a valid EVM private key format */
+function validateEvmPrivateKey(key: string | undefined, source: string): Hex {
+  if (!key) {
+    throw new Error(`EVM private key required. Set ${source} environment variable or provide in config.`);
+  }
+  if (!/^0x[a-fA-F0-9]{64}$/.test(key)) {
+    throw new Error(`Invalid EVM private key format from ${source}. Must be 0x followed by 64 hex characters.`);
+  }
+  return key as Hex;
+}
+
 export function createArbitrageExecutor(config: Partial<ExecutorConfig>): ArbitrageExecutor {
+  // Validate EVM private key - required for operation
+  const evmPrivateKey = validateEvmPrivateKey(
+    config.evmPrivateKey || process.env.EVM_PRIVATE_KEY || process.env.JEJU_PRIVATE_KEY,
+    'EVM_PRIVATE_KEY or JEJU_PRIVATE_KEY'
+  );
+  
+  // Solana private key is optional but validated if provided
+  let solanaPrivateKey = config.solanaPrivateKey || process.env.SOLANA_PRIVATE_KEY;
+  if (solanaPrivateKey) {
+    // Validate base64 format (Solana keys are 64 bytes base64 encoded)
+    const decoded = Buffer.from(solanaPrivateKey, 'base64');
+    if (decoded.length !== 64) {
+      throw new Error('Invalid Solana private key format. Must be 64 bytes base64 encoded.');
+    }
+  }
+  
   const fullConfig: ExecutorConfig = {
-    evmPrivateKey: (config.evmPrivateKey || process.env.EVM_PRIVATE_KEY || '0x') as Hex,
-    solanaPrivateKey: config.solanaPrivateKey || process.env.SOLANA_PRIVATE_KEY,
+    evmPrivateKey,
+    solanaPrivateKey,
     evmRpcUrls: config.evmRpcUrls || {
       1: process.env.RPC_URL_1 || 'https://eth.llamarpc.com',
       42161: process.env.RPC_URL_42161 || 'https://arb1.arbitrum.io/rpc',

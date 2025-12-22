@@ -892,7 +892,7 @@ export async function payReward(submissionId: string): Promise<{ txHash: string;
     
     await publicClient.waitForTransactionReceipt({ hash });
     txHash = hash;
-  } catch (err) {
+  } catch (_err) {
     // Contract not available - mark as paid locally (for testing)
     txHash = keccak256(stringToHex(`payout-${submissionId}-${Date.now()}`));
     console.log(`[BugBounty] Off-chain payout recorded: ${txHash}`);

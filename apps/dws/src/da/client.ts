@@ -8,17 +8,14 @@
  * - On-chain verification
  */
 
-import type { Address, Hex, PublicClient, WalletClient } from 'viem';
-import { createPublicClient, createWalletClient, http, toBytes, toHex } from 'viem';
+import type { Address, Hex, PublicClient } from 'viem';
+import { createPublicClient, http, toBytes, toHex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import type {
-  Blob,
   BlobCommitment,
   BlobSubmissionResult,
-  BlobRetrievalResult,
   SampleVerificationResult,
   AvailabilityAttestation,
-  DAConfig,
 } from './types';
 import { computeBlobId } from './commitment';
 

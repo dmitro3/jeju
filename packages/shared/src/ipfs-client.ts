@@ -3,6 +3,8 @@
  * Wraps the storage service for common IPFS use cases
  */
 
+import type { ZodSchema } from 'zod';
+
 export interface IPFSConfig {
   apiUrl: string;
   gatewayUrl: string;
@@ -97,12 +99,43 @@ export async function retrieveFromIPFS(gatewayUrl: string, cid: string): Promise
 }
 
 /**
- * Retrieve JSON from IPFS
+ * Retrieve JSON from IPFS with optional schema validation.
+ * 
+ * SECURITY: Always provide a schema when retrieving data from IPFS
+ * to prevent insecure deserialization attacks. The schema parameter
+ * validates the parsed JSON against a Zod schema.
+ * 
+ * @param gatewayUrl - IPFS gateway URL
+ * @param cid - Content identifier to retrieve
+ * @param schema - Optional Zod schema for validation (recommended for security)
+ * @throws Error if schema validation fails
  */
-export async function retrieveJSONFromIPFS<T>(gatewayUrl: string, cid: string): Promise<T> {
+export async function retrieveJSONFromIPFS<T>(
+  gatewayUrl: string, 
+  cid: string,
+  schema?: ZodSchema<T>
+): Promise<T> {
   const blob = await retrieveFromIPFS(gatewayUrl, cid);
   const text = await blob.text();
-  return JSON.parse(text) as T;
+  
+  // Parse JSON - this is safe as JSON.parse doesn't execute code
+  const parsed: unknown = JSON.parse(text);
+  
+  // If schema provided, validate the parsed data
+  if (schema) {
+    const result = schema.safeParse(parsed);
+    if (!result.success) {
+      throw new Error(`IPFS data validation failed for CID ${cid}: ${result.error.message}`);
+    }
+    return result.data;
+  }
+  
+  // Without schema, return as-is but log a warning in development
+  if (process.env.NODE_ENV !== 'production') {
+    console.warn(`[IPFS] Retrieving JSON from CID ${cid} without schema validation - consider providing a Zod schema for security`);
+  }
+  
+  return parsed as T;
 }
 
 /**
@@ -126,8 +159,13 @@ export function createIPFSClient(config: IPFSConfig) {
       uploadJSONToIPFS(config.apiUrl, data, filename),
     retrieve: (cid: string) => 
       retrieveFromIPFS(config.gatewayUrl, cid),
-    retrieveJSON: <T>(cid: string) => 
-      retrieveJSONFromIPFS<T>(config.gatewayUrl, cid),
+    /**
+     * Retrieve and parse JSON from IPFS.
+     * @param cid - Content identifier
+     * @param schema - Optional Zod schema for validation (recommended for security)
+     */
+    retrieveJSON: <T>(cid: string, schema?: ZodSchema<T>) => 
+      retrieveJSONFromIPFS<T>(config.gatewayUrl, cid, schema),
     getUrl: (cid: string) => 
       getIPFSUrl(config.gatewayUrl, cid),
     exists: (cid: string) => 

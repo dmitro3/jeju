@@ -188,7 +188,11 @@ export function createGovernanceModule(
   network: NetworkType,
 ): GovernanceModule {
   const councilAddress = requireContract("governance", "council", network);
-  const delegationAddress = requireContract("governance", "delegation", network);
+  const delegationAddress = requireContract(
+    "governance",
+    "delegation",
+    network,
+  );
   const services = getServicesConfig(network);
 
   async function createProposal(params: CreateProposalParams): Promise<Hex> {

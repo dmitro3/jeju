@@ -8,7 +8,6 @@ import { test, expect } from '@playwright/test';
 import { getNetworkName } from '@jejunetwork/config';
 
 const AUTOCRAT_URL = 'http://localhost:8010';
-const CEO_URL = 'http://localhost:8004';
 
 test.describe('Service Discovery', () => {
   test('council server exposes A2A agent card', async ({ request }) => {

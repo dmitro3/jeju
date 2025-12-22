@@ -17,17 +17,18 @@ import {
   encryptForMultipleRecipients,
   decryptFromMultipleRecipients,
   type EncryptedEmail,
-  type KeyPair,
 } from "../src/email/encryption";
 
 describe("Email Encryption", () => {
   describe("generateKeyPair", () => {
-    test("generates 32-byte keys", () => {
+    test("generates proper secp256k1 key pair", () => {
       const keyPair = generateKeyPair();
 
       expect(keyPair.publicKey).toBeInstanceOf(Uint8Array);
       expect(keyPair.privateKey).toBeInstanceOf(Uint8Array);
-      expect(keyPair.publicKey.length).toBe(32);
+      // secp256k1 uncompressed public key: 65 bytes (04 prefix + 32 x + 32 y)
+      expect(keyPair.publicKey.length).toBe(65);
+      // Private key: 32 bytes
       expect(keyPair.privateKey.length).toBe(32);
     });
 
@@ -66,9 +67,6 @@ describe("Email Encryption", () => {
       expect(secret.length).toBe(32);
     });
 
-    // NOTE: The current implementation uses a simplified key derivation
-    // that concatenates and hashes keys rather than proper ECDH.
-    // This test verifies the ACTUAL behavior, not ideal ECDH behavior.
     test("produces deterministic output for same inputs", () => {
       const alice = generateKeyPair();
       const bob = generateKeyPair();
@@ -100,27 +98,21 @@ describe("Email Encryption", () => {
       expect(abHex).not.toBe(acHex);
     });
 
-    test("order of keys matters (not commutative in current impl)", () => {
+    test("ECDH is commutative (proper Diffie-Hellman)", () => {
       const alice = generateKeyPair();
       const bob = generateKeyPair();
 
       const secret1 = deriveSharedSecret(alice.privateKey, bob.publicKey);
       const secret2 = deriveSharedSecret(bob.privateKey, alice.publicKey);
 
-      // In current simplified impl, order matters (not true ECDH)
+      // Proper ECDH: Alice(priv) + Bob(pub) == Bob(priv) + Alice(pub)
       const hex1 = Buffer.from(secret1).toString("hex");
       const hex2 = Buffer.from(secret2).toString("hex");
-      // These will be different due to simplified implementation
-      expect(typeof hex1).toBe("string");
-      expect(typeof hex2).toBe("string");
+      expect(hex1).toBe(hex2);
     });
   });
 
   describe("encryptEmail / decryptEmail", () => {
-    // NOTE: The current implementation has a simplified key derivation that
-    // doesn't implement proper ECDH, so round-trip encryption/decryption
-    // doesn't work. These tests verify the structure and encryption behavior.
-
     test("encrypted output has correct structure", () => {
       const recipient = generateKeyPair();
       const message = "Test message";
@@ -153,14 +145,14 @@ describe("Email Encryption", () => {
       expect(encrypted.tag.length).toBe(34);
     });
 
-    test("ephemeral public key is 32 bytes (64 hex chars)", () => {
+    test("ephemeral public key is 65 bytes (130 hex chars) - uncompressed secp256k1", () => {
       const recipient = generateKeyPair();
       const message = "Test";
 
       const encrypted = encryptEmail(message, recipient.publicKey);
 
-      // 0x + 64 hex chars = 66 total
-      expect(encrypted.ephemeralPublicKey.length).toBe(66);
+      // 0x + 130 hex chars = 132 total (65 bytes uncompressed)
+      expect(encrypted.ephemeralPublicKey.length).toBe(132);
     });
 
     test("decryption fails with wrong key", () => {
@@ -249,15 +241,41 @@ describe("Email Encryption", () => {
         expect(encrypted.ciphertext.startsWith("0x")).toBe(true);
         expect(encrypted.nonce.length).toBe(26);
         expect(encrypted.tag.length).toBe(34);
-        expect(encrypted.ephemeralPublicKey.length).toBe(66);
+        // Uncompressed secp256k1 public key: 65 bytes = 130 hex chars + 0x = 132
+        expect(encrypted.ephemeralPublicKey.length).toBe(132);
+      }
+    });
+
+    test("round-trip encryption/decryption works", () => {
+      const recipient = generateKeyPair();
+      const message = "Hello, secure world!";
+
+      const encrypted = encryptEmail(message, recipient.publicKey);
+      const decrypted = decryptEmail(encrypted, recipient.privateKey);
+
+      expect(decrypted).toBe(message);
+    });
+
+    test("round-trip works with various message lengths", () => {
+      const recipient = generateKeyPair();
+      const testMessages = [
+        "",
+        "a",
+        "Hello",
+        "A".repeat(100),
+        "B".repeat(1000),
+        "Unicode: 你好世界 🌍",
+      ];
+
+      for (const message of testMessages) {
+        const encrypted = encryptEmail(message, recipient.publicKey);
+        const decrypted = decryptEmail(encrypted, recipient.privateKey);
+        expect(decrypted).toBe(message);
       }
     });
   });
 
   describe("encryptForMultipleRecipients / decryptFromMultipleRecipients", () => {
-    // NOTE: Same as single-recipient encryption, the simplified key derivation
-    // means round-trip doesn't work. We test structure and behavior instead.
-
     test("encrypts for multiple recipients", () => {
       const alice = generateKeyPair();
       const bob = generateKeyPair();
@@ -388,8 +406,40 @@ describe("Email Encryption", () => {
       const aliceKey = result.recipientKeys.get("alice");
       expect(aliceKey).toBeDefined();
       expect(aliceKey!.startsWith("0x")).toBe(true);
-      // Key package = 12 (nonce) + 32 (encrypted key) + 16 (tag) + 32 (ephemeral key) = 92 bytes = 184 hex + 2 (0x)
-      expect(aliceKey!.length).toBe(186);
+      // Key package = 12 (nonce) + 32 (encrypted key) + 16 (tag) + 65 (uncompressed ephemeral key) = 125 bytes = 250 hex + 2 (0x)
+      expect(aliceKey!.length).toBe(252);
+    });
+
+    test("multi-recipient round-trip encryption/decryption works", () => {
+      const alice = generateKeyPair();
+      const bob = generateKeyPair();
+
+      const recipients = new Map<string, Uint8Array>([
+        ["alice", alice.publicKey],
+        ["bob", bob.publicKey],
+      ]);
+
+      const message = "Multi-recipient secret message";
+
+      const result = encryptForMultipleRecipients(message, recipients);
+
+      // Alice can decrypt
+      const aliceKey = result.recipientKeys.get("alice")!;
+      const aliceDecrypted = decryptFromMultipleRecipients(
+        result.encryptedContent,
+        aliceKey,
+        alice.privateKey
+      );
+      expect(aliceDecrypted).toBe(message);
+
+      // Bob can also decrypt
+      const bobKey = result.recipientKeys.get("bob")!;
+      const bobDecrypted = decryptFromMultipleRecipients(
+        result.encryptedContent,
+        bobKey,
+        bob.privateKey
+      );
+      expect(bobDecrypted).toBe(message);
     });
   });
 });

@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAccount } from 'wagmi'
 import Link from 'next/link'
-import { z } from 'zod'
 import {
   FaucetStatusSchema,
   FaucetClaimResultSchema,

@@ -10,17 +10,19 @@
  */
 
 import { describe, expect, it } from "bun:test";
-import type { Hex, Address } from "viem";
+import type { Address, Hex } from "viem";
 import {
+	ChainId,
 	createEVMClient,
 	type EVMClientConfig,
-	ChainId,
 } from "../../src/index.js";
 
 // Mock addresses for testing
 const MOCK_BRIDGE = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0" as Address;
-const MOCK_LIGHT_CLIENT = "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
-const MOCK_PRIVATE_KEY = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
+const MOCK_LIGHT_CLIENT =
+	"0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512" as Address;
+const MOCK_PRIVATE_KEY =
+	"0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80" as Hex;
 
 describe("EVMClient", () => {
 	describe("Client Creation", () => {
@@ -96,8 +98,8 @@ describe("EVMClient", () => {
 
 			const address = client.getAddress();
 			expect(address).toBeDefined();
-			expect(address!.startsWith("0x")).toBe(true);
-			expect(address!.length).toBe(42); // 0x + 40 hex chars
+			expect(address?.startsWith("0x")).toBe(true);
+			expect(address?.length).toBe(42); // 0x + 40 hex chars
 		});
 	});
 
@@ -173,14 +175,17 @@ describe("EVMClient", () => {
 
 			// The first Anvil account's address
 			const expectedAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-			expect(client.getAddress()?.toLowerCase()).toBe(expectedAddress.toLowerCase());
+			expect(client.getAddress()?.toLowerCase()).toBe(
+				expectedAddress.toLowerCase(),
+			);
 		});
 	});
 
 	describe("Configuration", () => {
 		it("should use provided bridge address", () => {
-			const customBridge = "0x1234567890123456789012345678901234567890" as Address;
-			
+			const customBridge =
+				"0x1234567890123456789012345678901234567890" as Address;
+
 			const client = createEVMClient({
 				chainId: ChainId.LOCAL_EVM,
 				rpcUrl: "http://127.0.0.1:8545",
@@ -192,8 +197,9 @@ describe("EVMClient", () => {
 		});
 
 		it("should use provided light client address", () => {
-			const customLightClient = "0xabcdef1234567890abcdef1234567890abcdef12" as Address;
-			
+			const customLightClient =
+				"0xabcdef1234567890abcdef1234567890abcdef12" as Address;
+
 			const client = createEVMClient({
 				chainId: ChainId.LOCAL_EVM,
 				rpcUrl: "http://127.0.0.1:8545",
@@ -214,12 +220,14 @@ describe("EVMClient Transfer Parameters", () => {
 
 	it("should handle empty recipient", () => {
 		const emptyRecipient = new Uint8Array(32).fill(0);
-		const isValid = emptyRecipient.some(b => b !== 0);
+		const isValid = emptyRecipient.some((b) => b !== 0);
 		expect(isValid).toBe(false);
 	});
 
 	it("should handle max uint256 amount", () => {
-		const maxAmount = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+		const maxAmount = BigInt(
+			"0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		);
 		expect(maxAmount > BigInt(0)).toBe(true);
 	});
 
@@ -228,4 +236,3 @@ describe("EVMClient Transfer Parameters", () => {
 		expect(minAmount > BigInt(0)).toBe(true);
 	});
 });
-

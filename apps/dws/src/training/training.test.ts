@@ -18,10 +18,8 @@ import {
 } from './atropos-server';
 import {
   createFundamentalPredictionEnv,
-  type EnvConfig,
-  type APIServerConfig,
 } from './environments/fundamental-prediction';
-import { createGRPOTrainer, type TrainingConfig } from './grpo-trainer';
+import { createGRPOTrainer } from './grpo-trainer';
 import type { Server } from 'bun';
 
 // ============================================================================
@@ -270,7 +268,7 @@ describe('Atropos Server', () => {
 
 describe('Fundamental Prediction Environment', () => {
   test('configInit returns valid configuration', () => {
-    const { envConfig, serverConfigs } = createFundamentalPredictionEnv.constructor.prototype.constructor.configInit
+    const { envConfig: _envConfig, serverConfigs: _serverConfigs } = createFundamentalPredictionEnv.constructor.prototype.constructor.configInit
       ? { envConfig: {}, serverConfigs: [] }
       : { envConfig: {}, serverConfigs: [] };
 
@@ -382,11 +380,9 @@ describe('GRPO Trainer', () => {
 // ============================================================================
 
 describe('Cross-Chain Bridge', () => {
-  test('merkle root computation is consistent', () => {
+  test('merkle root computation is consistent', async () => {
     // Import the bridge module
-    const { CrossChainTrainingBridge } = require('./cross-chain-bridge') as {
-      CrossChainTrainingBridge: typeof import('./cross-chain-bridge').CrossChainTrainingBridge;
-    };
+    const { CrossChainTrainingBridge } = await import('./cross-chain-bridge');
 
     // Create bridge with mock config
     const bridge = new CrossChainTrainingBridge({
@@ -461,7 +457,7 @@ describe('Integration', () => {
     await env.setup();
 
     for (let i = 0; i < 3; i++) {
-      const item = await env.getNextItem();
+      const _item = await env.getNextItem();
 
       // Simulate scored data
       const scoredData: ScoredData = {
