@@ -124,7 +124,7 @@ async function fetchCargoPackage(packageName: string): Promise<PackageMetadata> 
   const latestVersion = data.versions?.[0]?.num || 'unknown';
 
   // Fetch dependencies for latest version
-  let dependencies: Record<string, string> = {};
+  const dependencies: Record<string, string> = {};
   try {
     const depsResponse = await fetch(
       `https://crates.io/api/v1/crates/${packageName}/${latestVersion}/dependencies`

@@ -362,7 +362,11 @@ export function createAgentsModule(
   network: NetworkType,
 ): AgentsModule {
   const agentVaultAddress = requireContract("agents", "AgentVault", network);
-  const roomRegistryAddress = requireContract("agents", "RoomRegistry", network);
+  const roomRegistryAddress = requireContract(
+    "agents",
+    "RoomRegistry",
+    network,
+  );
 
   const DEFAULT_SPEND_LIMIT = parseEther("0.01");
   const MIN_VAULT_BALANCE = parseEther("0.001");

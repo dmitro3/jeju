@@ -46,9 +46,15 @@ export interface AuthError {
 export type AuthOutcome = AuthResult | AuthError;
 
 /**
- * Rate limiting state (in-memory for now)
+ * Rate limiting state using LRU cache to prevent memory leaks
+ * SECURITY: Bounded cache prevents memory exhaustion attacks
  */
-const rateLimitState = new Map<string, { count: number; resetAt: number }>();
+import { LRUCache } from 'lru-cache';
+
+const rateLimitState = new LRUCache<string, { count: number; resetAt: number }>({
+  max: 50000, // Max 50k unique clients tracked
+  ttl: 60 * 60 * 1000, // 1 hour TTL
+});
 
 /**
  * Check rate limit for a client
@@ -75,14 +81,52 @@ export function checkRateLimit(
 }
 
 /**
+ * Check if an IP is a private/local address that could be spoofed
+ * SECURITY: Filter out private IPs from X-Forwarded-For to prevent spoofing
+ */
+function isPrivateIp(ip: string): boolean {
+  if (ip.startsWith('10.') || 
+      ip.startsWith('192.168.') || 
+      ip.startsWith('127.') ||
+      ip.startsWith('172.16.') || ip.startsWith('172.17.') || ip.startsWith('172.18.') ||
+      ip.startsWith('172.19.') || ip.startsWith('172.20.') || ip.startsWith('172.21.') ||
+      ip.startsWith('172.22.') || ip.startsWith('172.23.') || ip.startsWith('172.24.') ||
+      ip.startsWith('172.25.') || ip.startsWith('172.26.') || ip.startsWith('172.27.') ||
+      ip.startsWith('172.28.') || ip.startsWith('172.29.') || ip.startsWith('172.30.') ||
+      ip.startsWith('172.31.') ||
+      ip === 'localhost' || ip === '::1') {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Get client identifier from request
+ * SECURITY: Uses rightmost non-private IP from X-Forwarded-For to prevent spoofing
+ * The rightmost IP is added by our most trusted proxy
  */
 export function getClientId(request: Request): string {
+  // X-Real-IP is typically set by nginx and is more trustworthy
+  const realIp = request.headers.get('x-real-ip');
+  if (realIp) {
+    return realIp.trim();
+  }
+  
+  // For X-Forwarded-For, we take the rightmost non-private IP
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
-    return forwarded.split(',')[0].trim();
+    // Split and reverse to get rightmost first
+    const ips = forwarded.split(',').map(ip => ip.trim()).reverse();
+    for (const ip of ips) {
+      if (ip && !isPrivateIp(ip)) {
+        return ip;
+      }
+    }
+    // If all IPs are private, use the last one (closest to us)
+    if (ips[0]) return ips[0];
   }
-  return request.headers.get('x-real-ip') || 'unknown';
+  
+  return 'unknown';
 }
 
 /**

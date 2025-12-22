@@ -12,13 +12,98 @@
 
 import {
   type Address,
+  type Chain,
   type Hash,
   type PublicClient,
   type WalletClient,
-  getContract,
   parseAbi,
+  keccak256,
+  toBytes,
 } from 'viem';
-import { GitHubProvider } from '../../packages/oauth3/src/providers/social';
+
+// ============ GitHub OAuth Types (local implementation) ============
+
+interface GitHubOAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  scopes: string[];
+}
+
+interface GitHubOAuthToken {
+  accessToken: string;
+  tokenType: string;
+  scope: string;
+}
+
+interface GitHubUserProfile {
+  id: number;
+  login: string;
+  name: string | null;
+  email: string | null;
+  avatar_url: string;
+}
+
+class GitHubOAuthProvider {
+  private static AUTH_URL = 'https://github.com/login/oauth/authorize';
+  private static TOKEN_URL = 'https://github.com/login/oauth/access_token';
+  private static PROFILE_URL = 'https://api.github.com/user';
+
+  constructor(private config: GitHubOAuthConfig) {}
+
+  getAuthorizationUrl(state: string): string {
+    const params = new URLSearchParams({
+      client_id: this.config.clientId,
+      redirect_uri: this.config.redirectUri,
+      scope: this.config.scopes.join(' '),
+      state,
+    });
+    return `${GitHubOAuthProvider.AUTH_URL}?${params}`;
+  }
+
+  async exchangeCode(code: string): Promise<GitHubOAuthToken> {
+    const response = await fetch(GitHubOAuthProvider.TOKEN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Accept: 'application/json',
+      },
+      body: new URLSearchParams({
+        client_id: this.config.clientId,
+        client_secret: this.config.clientSecret,
+        code,
+        redirect_uri: this.config.redirectUri,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub token exchange failed: ${response.status}`);
+    }
+
+    const data = await response.json() as { access_token: string; token_type: string; scope: string };
+
+    return {
+      accessToken: data.access_token,
+      tokenType: data.token_type,
+      scope: data.scope,
+    };
+  }
+
+  async getProfile(token: GitHubOAuthToken): Promise<GitHubUserProfile> {
+    const response = await fetch(GitHubOAuthProvider.PROFILE_URL, {
+      headers: {
+        Authorization: `Bearer ${token.accessToken}`,
+        Accept: 'application/vnd.github+json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`GitHub profile fetch failed: ${response.status}`);
+    }
+
+    return response.json() as Promise<GitHubUserProfile>;
+  }
+}
 
 // ============ Types ============
 
@@ -80,6 +165,7 @@ export interface DAOContribution {
 export interface ContributorServiceConfig {
   publicClient: PublicClient;
   walletClient?: WalletClient;
+  chain: Chain;
   registryAddress: Address;
   oauth3Config: {
     github: {
@@ -136,9 +222,6 @@ const CONTRIBUTOR_REGISTRY_ABI = parseAbi([
 ]);
 
 // ============ Platform Hashes ============
-// MUST use keccak256 to match Solidity: keccak256("github"), etc.
-
-import { keccak256, toBytes } from 'viem';
 
 const PLATFORM_HASHES: Record<SocialPlatform, `0x${string}`> = {
   github: keccak256(toBytes('github')),
@@ -173,15 +256,17 @@ function parsePlatformFromHash(hash: string): SocialPlatform {
 export class ContributorService {
   private publicClient: PublicClient;
   private walletClient: WalletClient | null;
+  private chain: Chain;
   private registryAddress: Address;
-  private githubProvider: GitHubProvider;
+  private githubProvider: GitHubOAuthProvider;
 
   constructor(config: ContributorServiceConfig) {
     this.publicClient = config.publicClient;
     this.walletClient = config.walletClient || null;
+    this.chain = config.chain;
     this.registryAddress = config.registryAddress;
 
-    this.githubProvider = new GitHubProvider({
+    this.githubProvider = new GitHubOAuthProvider({
       clientId: config.oauth3Config.github.clientId,
       clientSecret: config.oauth3Config.github.clientSecret,
       redirectUri: config.oauth3Config.github.redirectUri,
@@ -200,6 +285,8 @@ export class ContributorService {
     const typeIndex = ['INDIVIDUAL', 'ORGANIZATION', 'PROJECT'].indexOf(contributorType);
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'register',
@@ -213,6 +300,8 @@ export class ContributorService {
     if (!this.walletClient) throw new Error('Wallet client required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'linkAgent',
@@ -226,6 +315,8 @@ export class ContributorService {
     if (!this.walletClient) throw new Error('Wallet client required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'updateProfile',
@@ -238,35 +329,27 @@ export class ContributorService {
   // ============ Social Link Verification ============
 
   getGitHubAuthUrl(state: string): string {
-    return this.githubProvider.getAuthorizationUrl({
-      state,
-      nonce: crypto.randomUUID(),
-      codeVerifier: crypto.randomUUID(),
-    });
+    return this.githubProvider.getAuthorizationUrl(state);
   }
 
   async verifyGitHubCallback(
-    contributorId: string,
+    _contributorId: string,
     code: string
   ): Promise<{ handle: string; proofHash: string }> {
-    // Exchange code for token
     const token = await this.githubProvider.exchangeCode(code);
-
-    // Get user profile
     const profile = await this.githubProvider.getProfile(token);
 
-    // Create proof hash
     const proofData = JSON.stringify({
       platform: 'github',
-      userId: profile.providerId,
-      username: profile.username,
+      userId: profile.id,
+      username: profile.login,
       verifiedAt: Date.now(),
     });
 
     const proofHash = await this.hashProof(proofData);
 
     return {
-      handle: profile.username || profile.providerId,
+      handle: profile.login,
       proofHash,
     };
   }
@@ -281,6 +364,8 @@ export class ContributorService {
     const platformHash = PLATFORM_HASHES[platform];
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'addSocialLink',
@@ -300,6 +385,8 @@ export class ContributorService {
     if (!this.walletClient) throw new Error('Wallet client required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'claimRepository',
@@ -315,7 +402,6 @@ export class ContributorService {
     repo: string,
     githubToken: string
   ): Promise<{ verified: boolean; proofHash: string }> {
-    // Use GitHub API to verify the user can access the repo
     const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
       headers: {
         Authorization: `Bearer ${githubToken}`,
@@ -327,9 +413,8 @@ export class ContributorService {
       return { verified: false, proofHash: '' };
     }
 
-    const data = await response.json();
+    const data = await response.json() as { permissions?: { admin?: boolean; push?: boolean; maintain?: boolean } };
 
-    // Check if user has admin/push permissions
     const hasPermission =
       data.permissions?.admin || data.permissions?.push || data.permissions?.maintain;
 
@@ -359,6 +444,8 @@ export class ContributorService {
     if (!this.walletClient) throw new Error('Wallet client required');
 
     const hash = await this.walletClient.writeContract({
+      chain: this.chain,
+      account: this.walletClient.account ?? null,
       address: this.registryAddress,
       abi: CONTRIBUTOR_REGISTRY_ABI,
       functionName: 'claimDependency',
@@ -373,21 +460,19 @@ export class ContributorService {
     registryType: string,
     githubToken: string
   ): Promise<{ verified: boolean; proofHash: string; repo?: string }> {
-    // For npm packages, verify via linked GitHub repo
     if (registryType === 'npm') {
       const npmResponse = await fetch(`https://registry.npmjs.org/${packageName}`);
       if (!npmResponse.ok) {
         return { verified: false, proofHash: '' };
       }
 
-      const npmData = await npmResponse.json();
+      const npmData = await npmResponse.json() as { repository?: { url?: string } };
       const repoUrl = npmData.repository?.url;
 
       if (!repoUrl) {
         return { verified: false, proofHash: '' };
       }
 
-      // Extract owner/repo from GitHub URL
       const match = repoUrl.match(/github\.com[/:]([\w-]+)\/([\w-]+)/);
       if (!match) {
         return { verified: false, proofHash: '' };
@@ -395,9 +480,8 @@ export class ContributorService {
 
       const [, owner, repo] = match;
 
-      // Verify GitHub repo access
       const result = await this.verifyRepositoryOwnership(
-        '', // Not needed for this check
+        '',
         owner,
         repo.replace('.git', ''),
         githubToken
@@ -623,4 +707,3 @@ export function getContributorService(config?: ContributorServiceConfig): Contri
 export function resetContributorService(): void {
   service = null;
 }
-

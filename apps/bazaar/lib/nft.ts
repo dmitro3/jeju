@@ -76,14 +76,22 @@ export interface ERC1155BalanceInput {
 }
 
 /**
+ * Cast a string to Address type (0x prefixed)
+ */
+function toAddress(addr: string | undefined): `0x${string}` | undefined {
+  if (!addr) return undefined
+  return addr as `0x${string}`
+}
+
+/**
  * Normalize an ERC721 token into a common NFT format
  */
 export function normalizeERC721Token(token: ERC721TokenInput): NormalizedNFT {
   return {
     id: token.id,
     tokenId: token.tokenId,
-    owner: token.owner?.address,
-    contract: token.contract?.address,
+    owner: toAddress(token.owner?.address),
+    contract: toAddress(token.contract?.address),
     contractName: token.contract?.name ?? 'Unknown',
     type: 'ERC721',
     metadata: token.metadata,
@@ -98,7 +106,7 @@ export function normalizeERC1155Balance(balance: ERC1155BalanceInput): Normalize
     id: balance.id,
     tokenId: balance.tokenId,
     balance: balance.balance,
-    contract: balance.contract?.address,
+    contract: toAddress(balance.contract?.address),
     contractName: balance.contract?.name ?? 'Unknown',
     type: 'ERC1155',
   }

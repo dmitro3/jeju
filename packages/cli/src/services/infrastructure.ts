@@ -10,7 +10,7 @@
  * NO FALLBACKS - all infrastructure must be running.
  */
 
-import { execa, type ExecaChildProcess } from 'execa';
+import { execa, type ResultPromise } from 'execa';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { platform } from 'os';
@@ -46,7 +46,7 @@ const DOCKER_SERVICES = {
 const LOCALNET_PORT = DEFAULT_PORTS.l2Rpc;
 
 // Track CQL process
-let cqlProcess: ExecaChildProcess | null = null;
+let cqlProcess: ResultPromise | null = null;
 
 export class InfrastructureService {
   private rootDir: string;

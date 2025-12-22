@@ -222,15 +222,39 @@ class LocalInferenceServer {
       if (!body.name || !body.baseUrl) {
         return c.json({ error: 'name and baseUrl required' }, 400);
       }
-      this.customProviders.push({
-        name: body.name,
-        type: body.type || 'openai',
-        baseUrl: body.baseUrl,
-        apiKey: body.apiKey,
-        knownModels: body.knownModels,
-      });
-      logger.info(`Added custom provider: ${body.name}`);
-      return c.json({ success: true, provider: body.name });
+      
+      // SECURITY: Validate provider name to prevent prototype pollution
+      // Names like __proto__, constructor, prototype could pollute object prototypes
+      const forbiddenNames = ['__proto__', 'constructor', 'prototype', 'toString', 'hasOwnProperty'];
+      if (forbiddenNames.includes(body.name)) {
+        return c.json({ error: 'Invalid provider name' }, 400);
+      }
+      
+      // Validate name format - alphanumeric with hyphens/underscores only
+      if (!/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(body.name)) {
+        return c.json({ error: 'Provider name must be alphanumeric (starting with letter)' }, 400);
+      }
+      
+      // Validate URL format
+      if (!/^https?:\/\/.+/.test(body.baseUrl)) {
+        return c.json({ error: 'baseUrl must be a valid HTTP/HTTPS URL' }, 400);
+      }
+      
+      // SECURITY: Create a clean object with only allowed properties
+      // This prevents prototype pollution from spreading untrusted input
+      const safeProvider: InferenceProvider = {
+        name: String(body.name),
+        type: String(body.type || 'openai'),
+        baseUrl: String(body.baseUrl),
+        apiKey: body.apiKey ? String(body.apiKey) : undefined,
+        knownModels: Array.isArray(body.knownModels) 
+          ? body.knownModels.filter((m): m is string => typeof m === 'string').map(String)
+          : undefined,
+      };
+      
+      this.customProviders.push(safeProvider);
+      logger.info(`Added custom provider: ${safeProvider.name}`);
+      return c.json({ success: true, provider: safeProvider.name });
     });
 
     // List providers

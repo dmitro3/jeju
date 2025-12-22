@@ -57,20 +57,10 @@ interface SubscriptionMessage {
   chains?: number[];
 }
 
-interface CandleData {
-  timestamp: number;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: string;
-}
-
 // ============ Cache Keys ============
 
 const CACHE_NAMESPACE = 'prices';
 const PRICE_TTL = 30; // 30 seconds
-const CANDLE_TTL = 300; // 5 minutes
 const ETH_PRICE_TTL = 60; // 1 minute
 
 function priceKey(chainId: number, address: string): string {
@@ -83,10 +73,6 @@ function chainPricesKey(chainId: number): string {
 
 function ethPriceKey(chainId: number): string {
   return `price:eth:${chainId}`;
-}
-
-function candleKey(chainId: number, address: string, interval: string, timestamp: number): string {
-  return `candle:${chainId}:${address.toLowerCase()}:${interval}:${timestamp}`;
 }
 
 // ============ In-Memory Fallback Cache ============

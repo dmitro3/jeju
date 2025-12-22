@@ -4,6 +4,7 @@
  */
 
 import { keccak256, toBytes } from 'viem';
+import { constantTimeHexEquals } from '../shared/utils/crypto';
 import type { BackendManager } from './backends';
 import type {
   S3Bucket,
@@ -290,7 +291,8 @@ export class S3Backend {
         }
       }
 
-      const obj = bucketObjects.get(key)!;
+      const obj = bucketObjects.get(key);
+      if (!obj) continue;
       contents.push({
         key: obj.key,
         size: obj.size,
@@ -487,7 +489,8 @@ export class S3Backend {
       toBytes(JSON.stringify(payload) + this.signingKey)
     ).slice(0, 18);
 
-    return signature === expectedSig;
+    // Use constant-time comparison to prevent timing attacks
+    return constantTimeHexEquals(signature, expectedSig);
   }
 
   // ============================================================================

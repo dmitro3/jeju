@@ -151,11 +151,21 @@ function createBrowserAPI(): RuntimeAPI {
   const runningServices = new Map<string, ServiceState>();
   const runningBots = new Map<string, BotState>();
 
-  // Load config from localStorage
+  // Load config from localStorage with prototype pollution protection
   if (typeof localStorage !== 'undefined') {
     const stored = localStorage.getItem(CONFIG_KEY);
     if (stored) {
-      config = { ...DEFAULT_CONFIG, ...JSON.parse(stored) };
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      // Prevent prototype pollution - only merge allowed keys from DEFAULT_CONFIG
+      // This ensures we only copy known properties, not __proto__ or constructor
+      const safeKeys = Object.keys(DEFAULT_CONFIG);
+      const dangerousKeys = new Set(['__proto__', 'constructor', 'prototype']);
+      const configRecord = config as unknown as Record<string, unknown>;
+      for (const key of safeKeys) {
+        if (key in parsed && !dangerousKeys.has(key)) {
+          configRecord[key] = parsed[key];
+        }
+      }
     }
   }
 

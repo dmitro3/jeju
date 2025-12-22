@@ -12,7 +12,8 @@ import {
   TransactionInstruction,
 } from '@solana/web3.js';
 
-export const EVM_LIGHT_CLIENT_PROGRAM_ID = new PublicKey('EVMLightCL1111111111111111111111111111111111');
+// NOTE: This must match the program ID in Anchor.toml
+export const EVM_LIGHT_CLIENT_PROGRAM_ID = new PublicKey('5TMUr2vv5TAUhKo4q8ibfkkw9SeBRzumYaRNo1iWvwsX');
 
 const STATE_SEED = Buffer.from('evm_light_client');
 

@@ -12,7 +12,6 @@ const TEST_OWNER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
 const TEST_RECIPIENT = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' as Address;
 const TEST_FACTORY = '0x9406Cc6185a346906296840746125a0E44976454' as Address;
 const TEST_SMART_ACCOUNT = '0x1234567890abcdef1234567890abcdef12345678' as Address;
-const ENTRY_POINT_V06 = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789' as Address;
 
 // Create mock public client with accessible mock functions
 interface MockPublicClientWithFns {

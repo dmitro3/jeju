@@ -1,8 +1,26 @@
+// Maximum safe value for Number conversion (2^53 - 1)
+const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+
 export function calculateYesPrice(
   yesShares: bigint,
   noShares: bigint,
   liquidityB: bigint = BigInt(100e18)
 ): bigint {
+  // Security: Check for potential precision loss with very large values
+  if (yesShares > MAX_SAFE_BIGINT || noShares > MAX_SAFE_BIGINT || liquidityB > MAX_SAFE_BIGINT) {
+    // For extremely large values, use scaled-down approximation
+    const scale = 10n ** 9n; // Scale down by 1e9
+    const scaledYes = Number(yesShares / scale) / 1e9;
+    const scaledNo = Number(noShares / scale) / 1e9;
+    const scaledB = Number(liquidityB / scale) / 1e9;
+    
+    const expYes = Math.exp(scaledYes / scaledB);
+    const expNo = Math.exp(scaledNo / scaledB);
+    const price = expYes / (expYes + expNo);
+    
+    return BigInt(Math.floor(price * 100 * 1e16));
+  }
+
   // Convert to numbers for calculation (safe for shares < 2^53)
   const yes = Number(yesShares) / 1e18;
   const no = Number(noShares) / 1e18;
@@ -44,10 +62,25 @@ export function calculateCost(
   buyingYes: boolean,
   liquidityB: bigint = BigInt(100e18)
 ): bigint {
-  const b = Number(liquidityB) / 1e18;
-  const yes = Number(yesShares) / 1e18;
-  const no = Number(noShares) / 1e18;
-  const shares = Number(sharesToBuy) / 1e18;
+  // Security: Check for potential precision loss with very large values
+  const allValues = [sharesToBuy, yesShares, noShares, liquidityB];
+  const hasLargeValues = allValues.some(v => v > MAX_SAFE_BIGINT);
+  
+  let b: number, yes: number, no: number, shares: number;
+  
+  if (hasLargeValues) {
+    // Use scaled-down approximation for large values
+    const scale = 10n ** 9n;
+    b = Number(liquidityB / scale) / 1e9;
+    yes = Number(yesShares / scale) / 1e9;
+    no = Number(noShares / scale) / 1e9;
+    shares = Number(sharesToBuy / scale) / 1e9;
+  } else {
+    b = Number(liquidityB) / 1e18;
+    yes = Number(yesShares) / 1e18;
+    no = Number(noShares) / 1e18;
+    shares = Number(sharesToBuy) / 1e18;
+  }
 
   // LMSR cost function: C(q) = b * ln(exp(q_yes/b) + exp(q_no/b))
   const costBefore = b * Math.log(Math.exp(yes / b) + Math.exp(no / b));

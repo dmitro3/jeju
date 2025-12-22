@@ -301,6 +301,7 @@ export class JejuGitSDK {
     if (config.privateKey) {
       this.account = privateKeyToAccount(config.privateKey);
       this.walletClient = createWalletClient({
+        account: this.account,
         transport: http(config.rpcUrl),
       });
     }

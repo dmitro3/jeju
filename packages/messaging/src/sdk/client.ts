@@ -43,6 +43,9 @@ import {
 
 // ============ Client Implementation ============
 
+// Maximum messages to cache in memory to prevent unbounded growth
+const MAX_MESSAGE_CACHE_SIZE = 1000;
+
 export class MessagingClient {
   private config: MessagingClientConfig;
   private publicClient: PublicClient;
@@ -54,6 +57,7 @@ export class MessagingClient {
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private messageCache: Map<string, Message> = new Map();
+  private messageCacheOrder: string[] = []; // Track insertion order for LRU eviction
 
   constructor(config: MessagingClientConfig) {
     // Validate the JSON-serializable portion of config
@@ -134,6 +138,9 @@ export class MessagingClient {
     if (!this.walletClient) {
       throw new MessagingError('Wallet client not configured', ErrorCodes.UNAUTHORIZED);
     }
+    if (!this.walletClient.account) {
+      throw new MessagingError('Wallet client has no account', ErrorCodes.UNAUTHORIZED);
+    }
 
     const identityKey = publicKeyToBytes32(this.keyPair.publicKey);
     // For MVP, use same key as signed pre-key (should rotate in production)
@@ -142,7 +149,7 @@ export class MessagingClient {
 
     await this.walletClient.writeContract({
       chain: null, // Use chain from wallet client
-      account: this.walletClient.account!,
+      account: this.walletClient.account,
       address: this.config.keyRegistryAddress as Address,
       abi: KEY_REGISTRY_ABI,
       functionName: 'registerKeyBundle',
@@ -249,10 +256,55 @@ export class MessagingClient {
   }
 
   /**
+   * Validate URL to prevent SSRF attacks
+   */
+  private validateEndpointUrl(endpoint: string): boolean {
+    let url: URL;
+    try {
+      url = new URL(endpoint);
+    } catch {
+      return false;
+    }
+    
+    // Only allow http and https protocols
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return false;
+    }
+    
+    // Block localhost/internal addresses in production
+    // Note: In development, localhost is allowed
+    const hostname = url.hostname.toLowerCase();
+    const blockedPatterns = [
+      /^127\./,
+      /^10\./,
+      /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+      /^192\.168\./,
+      /^0\./,
+      /^169\.254\./,
+      /^fc00:/i,
+      /^fe80:/i,
+      /^::1$/,
+    ];
+    
+    for (const pattern of blockedPatterns) {
+      if (pattern.test(hostname)) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
+  /**
    * Check if relay node is healthy
    * @throws Error if health check fails or times out
    */
   async checkNodeHealth(endpoint: string): Promise<boolean> {
+    // Validate URL to prevent SSRF
+    if (!this.validateEndpointUrl(endpoint)) {
+      throw new Error(`Invalid endpoint URL: ${endpoint}`);
+    }
+    
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
 
@@ -330,7 +382,33 @@ export class MessagingClient {
   }
 
   private handleWebSocketMessage(data: string): void {
-    const parseResult = WebSocketIncomingMessageSchema.safeParse(JSON.parse(data));
+    // Safe JSON parsing with size limit
+    if (data.length > 1024 * 1024) {
+      this.emitEvent({
+        type: 'error',
+        data: {
+          code: ErrorCodes.INVALID_MESSAGE,
+          message: 'Message too large',
+        },
+      });
+      return;
+    }
+    
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      this.emitEvent({
+        type: 'error',
+        data: {
+          code: ErrorCodes.INVALID_MESSAGE,
+          message: 'Invalid JSON in WebSocket message',
+        },
+      });
+      return;
+    }
+    
+    const parseResult = WebSocketIncomingMessageSchema.safeParse(parsed);
     
     if (!parseResult.success) {
       this.emitEvent({
@@ -343,17 +421,17 @@ export class MessagingClient {
       return;
     }
     
-    const parsed = parseResult.data;
+    const wsMessage = parseResult.data;
     
-    switch (parsed.type) {
+    switch (wsMessage.type) {
       case 'message':
-        this.handleIncomingMessage(parsed.data as MessageEnvelope);
+        this.handleIncomingMessage(wsMessage.data as MessageEnvelope);
         break;
       case 'delivery_receipt': {
         if (!this.relayNode) {
           throw new MessagingError('Received delivery receipt but not connected to relay', ErrorCodes.NOT_CONNECTED);
         }
-        const deliveryData = parsed.data as DeliveryReceiptData;
+        const deliveryData = wsMessage.data as DeliveryReceiptData;
         this.emitEvent({
           type: 'message:delivered',
           data: {
@@ -366,7 +444,7 @@ export class MessagingClient {
         break;
       }
       case 'read_receipt': {
-        const readData = parsed.data as ReadReceiptData;
+        const readData = wsMessage.data as ReadReceiptData;
         this.emitEvent({
           type: 'message:read',
           data: readData,
@@ -393,7 +471,7 @@ export class MessagingClient {
       status: 'delivered',
     };
 
-    this.messageCache.set(message.id, message);
+    this.addToMessageCache(message);
     this.emitEvent({ type: 'message:new', data: message });
   }
 
@@ -477,7 +555,7 @@ export class MessagingClient {
         timestamp: envelope.timestamp,
         status: 'sent',
       };
-      this.messageCache.set(message.id, message);
+      this.addToMessageCache(message);
     }
 
     return response;
@@ -544,6 +622,35 @@ export class MessagingClient {
     }
   }
 
+  // ============ Cache Management ============
+  
+  /**
+   * Add message to cache with LRU eviction to prevent memory leaks
+   */
+  private addToMessageCache(message: Message): void {
+    // If already in cache, update and move to end of order
+    if (this.messageCache.has(message.id)) {
+      this.messageCache.set(message.id, message);
+      const idx = this.messageCacheOrder.indexOf(message.id);
+      if (idx >= 0) {
+        this.messageCacheOrder.splice(idx, 1);
+        this.messageCacheOrder.push(message.id);
+      }
+      return;
+    }
+    
+    // Evict oldest entries if at capacity
+    while (this.messageCache.size >= MAX_MESSAGE_CACHE_SIZE) {
+      const oldestId = this.messageCacheOrder.shift();
+      if (oldestId) {
+        this.messageCache.delete(oldestId);
+      }
+    }
+    
+    this.messageCache.set(message.id, message);
+    this.messageCacheOrder.push(message.id);
+  }
+  
   // ============ Utility Methods ============
 
   /**

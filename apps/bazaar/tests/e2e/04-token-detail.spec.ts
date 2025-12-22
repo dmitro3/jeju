@@ -4,7 +4,6 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { captureScreenshot, captureUserFlow } from '@jejunetwork/tests/playwright-only';
 
 test.describe('Token Detail Page', () => {
   test.beforeEach(async ({ page }) => {

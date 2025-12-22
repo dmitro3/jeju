@@ -26,7 +26,7 @@ const PRIVATE_KEY = (process.env.DWS_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d
 const SKIP = process.env.SKIP_INTEGRATION === 'true';
 
 // PackageRegistry ABI (minimal for testing)
-const PACKAGE_REGISTRY_ABI = [
+const _PACKAGE_REGISTRY_ABI = [
   {
     name: 'createPackage',
     type: 'function',
@@ -70,7 +70,7 @@ const PACKAGE_REGISTRY_ABI = [
 
 describe.skipIf(SKIP)('Package Registry On-Chain Integration', () => {
   let publicClient: ReturnType<typeof createPublicClient>;
-  let walletClient: ReturnType<typeof createWalletClient>;
+  let _walletClient: ReturnType<typeof createWalletClient>;
   let registryManager: PkgRegistryManager;
   let packageRegistryAddress: Address;
   let testAccount: Address;
@@ -91,7 +91,7 @@ describe.skipIf(SKIP)('Package Registry On-Chain Integration', () => {
       transport: http(RPC_URL),
     });
 
-    walletClient = createWalletClient({
+    _walletClient = createWalletClient({
       account,
       chain,
       transport: http(RPC_URL),

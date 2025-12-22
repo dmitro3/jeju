@@ -33,7 +33,7 @@ export {
   getBestGasTokenForApp,
   selectBestGasToken,
   formatGasPaymentOption,
-} from '../../../../scripts/shared/eil-hooks';
+} from '@jejunetwork/deployment/scripts/shared/eil-hooks';
 
 // Import for local use
 import {
@@ -46,7 +46,7 @@ import {
   type SwapStatus,
   type StakeStatus,
   type AppPreference,
-} from '../../../../scripts/shared/eil-hooks';
+} from '@jejunetwork/deployment/scripts/shared/eil-hooks';
 
 // ABI-inferred tuple types for getXLPStake return value
 // Returns: (stakedAmount, unbondingAmount, unbondingStartTime, slashedAmount, isActive, registeredAt)

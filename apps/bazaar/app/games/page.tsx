@@ -2,47 +2,13 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { INDEXER_URL } from '@/config';
-
-interface RegisteredGame {
-  id: string
-  agentId: number
-  name: string
-  tags: string[]
-  totalPlayers?: number
-  totalItems?: number
-}
-
-async function getRegisteredGames() {
-  
-  const query = `
-    query GetGames {
-      registeredGames(where: { active_eq: true }, orderBy: registeredAt_DESC) {
-        id
-        agentId
-        name
-        tags
-        totalPlayers
-        totalItems
-      }
-    }
-  `;
-  
-  const response = await fetch(INDEXER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-    next: { revalidate: 10 },
-  });
-  
-  const result = await response.json();
-  return result.data?.registeredGames || [];
-}
+import { fetchRegisteredGames } from '@/lib/games';
+import type { RegisteredGame } from '@/schemas/games';
 
 export default function GamesPage() {
   const { data: games = [], isLoading } = useQuery({
     queryKey: ['registered-games'],
-    queryFn: getRegisteredGames,
+    queryFn: fetchRegisteredGames,
   });
 
   return (

@@ -6,7 +6,7 @@
  * Requires: localnet running with `jeju dev`
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 import { createPublicClient, http, parseEther, formatEther, type Address } from 'viem';
 import { createNodeClient, jejuLocalnet, getContractAddresses } from '../../src/lib/contracts';
 import { createNodeServices, type NodeServices } from '../../src/lib/services';

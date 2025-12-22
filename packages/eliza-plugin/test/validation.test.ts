@@ -21,23 +21,10 @@ import {
   validateIntentInfo,
   formatNumberedList,
   evidenceContentSchema,
-  evidenceSupportSchema,
   caseContentSchema,
   caseIdSchema,
-  appealContentSchema,
   labelContentSchema,
   bountyContentSchema,
-  bountyIdSchema,
-  workSubmissionSchema,
-  submissionActionSchema,
-  projectContentSchema,
-  taskContentSchema,
-  guardianContentSchema,
-  type ValidatedProvider,
-  type PoolStats,
-  type NodeStats,
-  type IntentQuote,
-  type IntentInfo,
 } from "../src/validation";
 
 // =============================================================================
@@ -791,8 +778,6 @@ describe("bountyContentSchema", () => {
 // =============================================================================
 
 describe("Address validation", () => {
-  const addressRegex = /^0x[a-fA-F0-9]{40}$/;
-
   test("valid addresses", () => {
     const validAddresses = [
       "0x1234567890abcdef1234567890abcdef12345678",

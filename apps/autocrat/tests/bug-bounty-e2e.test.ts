@@ -5,9 +5,8 @@
  * Tests the complete flow from submission to payout
  */
 
-import { describe, test, expect, beforeAll, afterAll, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, setDefaultTimeout } from 'bun:test';
 import { parseEther, formatEther, type Address } from 'viem';
-import { Hono } from 'hono';
 
 // Set timeout for API calls
 setDefaultTimeout(120000);
@@ -28,7 +27,6 @@ import { validateSubmission } from '../src/security-validation-agent';
 import {
   createSandboxConfig,
   getSandboxImageForVulnType,
-  getSandboxStats,
 } from '../src/sandbox-executor';
 import { createBugBountyServer } from '../src/bug-bounty-routes';
 import {
@@ -519,7 +517,7 @@ describe('5. Complete Bug Bounty Flow', () => {
     service.guardianVote(submission.submissionId, TEST_GUARDIAN_4, 4n, true, reward25ETH, 'Critical - max priority');
     
     // 5th vote should trigger CEO review for CRITICAL
-    const vote5 = service.guardianVote(submission.submissionId, TEST_GUARDIAN_5, 5n, true, reward30ETH, 'Approve for CEO review');
+    service.guardianVote(submission.submissionId, TEST_GUARDIAN_5, 5n, true, reward30ETH, 'Approve for CEO review');
     
     const afterVotes = service.get(submission.submissionId);
     expect(afterVotes?.status).toBe(BountySubmissionStatus.CEO_REVIEW);

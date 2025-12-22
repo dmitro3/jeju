@@ -8,7 +8,7 @@ import { join } from 'path';
 import { execa } from 'execa';
 import { logger } from '../lib/logger';
 import { findMonorepoRoot } from '../lib/system';
-import { discoverCoreApps, discoverVendorApps } from '../../../../scripts/shared/discover-apps';
+import { discoverCoreApps, discoverVendorApps } from '../../../../packages/deployment/scripts/shared/discover-apps';
 
 interface ValidationResult {
   app: string;
@@ -227,7 +227,7 @@ validateCommand
   .description('Validate all configuration files')
   .action(async () => {
     const rootDir = findMonorepoRoot();
-    const scriptPath = join(rootDir, 'scripts/validate-config.ts');
+    const scriptPath = join(rootDir, 'packages/deployment/scripts/validate-config.ts');
 
     if (!existsSync(scriptPath)) {
       logger.error('Config validation script not found');

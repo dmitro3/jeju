@@ -122,13 +122,79 @@ async function storeOnIPFS(content: string, ipfsUrl: string): Promise<string> {
   return result.Hash;
 }
 
+// ============ Rate Limiting ============
+
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_WINDOW_MS = 60000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100; // 100 requests per minute
+const RATE_LIMIT_CLEANUP_INTERVAL_MS = 300000; // Clean up every 5 minutes
+const MAX_RATE_LIMIT_ENTRIES = 10000; // Max entries to prevent memory exhaustion
+
+// Periodic cleanup of expired rate limit entries
+let rateLimitCleanupInterval: NodeJS.Timeout | null = null;
+
+function startRateLimitCleanup(): void {
+  if (rateLimitCleanupInterval) return;
+  
+  rateLimitCleanupInterval = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitMap) {
+      if (now > entry.resetAt) {
+        rateLimitMap.delete(key);
+      }
+    }
+  }, RATE_LIMIT_CLEANUP_INTERVAL_MS);
+}
+
+function checkRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+  
+  if (!entry || now > entry.resetAt) {
+    // Prevent unbounded growth - if at max capacity, reject new entries
+    if (rateLimitMap.size >= MAX_RATE_LIMIT_ENTRIES && !entry) {
+      return false;
+    }
+    rateLimitMap.set(identifier, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+  
+  entry.count++;
+  return true;
+}
+
+// Max WebSocket message size (1MB)
+const MAX_WS_MESSAGE_SIZE = 1024 * 1024;
+
+// Max subscribers to prevent DoS
+const MAX_SUBSCRIBERS = 10000;
+
+// Max message age to prevent replay attacks (5 minutes)
+const MAX_MESSAGE_AGE_MS = 5 * 60 * 1000;
+
+// Max clock skew allowed (future messages, 30 seconds)
+const MAX_CLOCK_SKEW_MS = 30 * 1000;
+
 // ============ Create Server ============
 
 export function createRelayServer(config: NodeConfig): Hono {
   const app = new Hono();
   
-  // CORS
-  app.use('/*', cors());
+  // Start periodic rate limit cleanup
+  startRateLimitCleanup();
+  
+  // CORS - restrict to known origins in production
+  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') ?? ['*'];
+  app.use('/*', cors({
+    origin: allowedOrigins.includes('*') ? '*' : allowedOrigins,
+    allowMethods: ['GET', 'POST', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  }));
   
   // ============ Health Check ============
   
@@ -150,6 +216,12 @@ export function createRelayServer(config: NodeConfig): Hono {
   // ============ Send Message ============
   
   app.post('/send', async (c) => {
+    // Rate limiting by IP or address
+    const clientIp = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return c.json({ success: false, error: 'Rate limit exceeded' }, 429);
+    }
+    
     const body = await c.req.json();
     
     // Validate envelope with Zod schema
@@ -163,6 +235,20 @@ export function createRelayServer(config: NodeConfig): Hono {
     }
     
     const envelope = parseResult.data;
+    
+    // Replay attack protection: validate timestamp freshness
+    const now = Date.now();
+    if (envelope.timestamp < now - MAX_MESSAGE_AGE_MS) {
+      return c.json({ success: false, error: 'Message timestamp too old - possible replay attack' }, 400);
+    }
+    if (envelope.timestamp > now + MAX_CLOCK_SKEW_MS) {
+      return c.json({ success: false, error: 'Message timestamp in the future' }, 400);
+    }
+    
+    // Check if this message ID was already processed (dedupe)
+    if (messages.has(envelope.id)) {
+      return c.json({ success: false, error: 'Duplicate message ID - possible replay attack' }, 400);
+    }
     
     // Check message size
     const messageSize = JSON.stringify(envelope).length;
@@ -227,7 +313,19 @@ export function createRelayServer(config: NodeConfig): Hono {
   // ============ Get Pending Messages ============
   
   app.get('/messages/:address', (c) => {
+    // Rate limiting
+    const clientIp = c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return c.json({ error: 'Rate limit exceeded' }, 429);
+    }
+    
     const address = c.req.param('address');
+    
+    // Validate address format (prevent injection)
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(address) && !/^[a-zA-Z0-9._-]+$/.test(address)) {
+      return c.json({ error: 'Invalid address format' }, 400);
+    }
+    
     const pending = getPendingMessages(address);
     
     return c.json({
@@ -245,6 +343,12 @@ export function createRelayServer(config: NodeConfig): Hono {
   
   app.get('/message/:id', (c) => {
     const id = c.req.param('id');
+    
+    // Validate UUID format to prevent injection
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid message ID format' }, 400);
+    }
+    
     const message = messages.get(id);
     
     if (!message) {
@@ -263,6 +367,12 @@ export function createRelayServer(config: NodeConfig): Hono {
   
   app.post('/read/:id', (c) => {
     const id = c.req.param('id');
+    
+    // Validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+      return c.json({ error: 'Invalid message ID format' }, 400);
+    }
+    
     const message = messages.get(id);
     
     if (!message) {
@@ -311,7 +421,28 @@ function processSubscription(
   ws: WebSocketLike,
   onSubscribe: (address: string) => void
 ): string | null {
-  const parseResult = WebSocketSubscribeSchema.safeParse(JSON.parse(rawMessage));
+  // Validate message size to prevent DoS
+  if (rawMessage.length > MAX_WS_MESSAGE_SIZE) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Message too large',
+    }));
+    return null;
+  }
+  
+  // Safe JSON parsing
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawMessage);
+  } catch {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Invalid JSON',
+    }));
+    return null;
+  }
+  
+  const parseResult = WebSocketSubscribeSchema.safeParse(parsed);
   
   if (!parseResult.success) {
     ws.send(JSON.stringify({
@@ -323,6 +454,15 @@ function processSubscription(
   }
   
   const address = parseResult.data.address.toLowerCase();
+  
+  // Check subscriber limit to prevent DoS
+  if (!subscribers.has(address) && subscribers.size >= MAX_SUBSCRIBERS) {
+    ws.send(JSON.stringify({
+      type: 'error',
+      error: 'Server at capacity, please try again later',
+    }));
+    return null;
+  }
   
   subscribers.set(address, {
     address,
@@ -362,7 +502,7 @@ export function handleWebSocket(
     subscribedAddress = processSubscription(
       event.data as string,
       ws,
-      () => {}
+      () => { /* no-op callback for standard WebSocket handler */ }
     );
   });
   

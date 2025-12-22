@@ -16,12 +16,10 @@ import type {
   BlobSubmissionRequest,
   BlobSubmissionResult,
   BlobRetrievalRequest,
-  SampleRequest,
   DAConfig,
   DAOperatorInfo,
 } from './types';
 import { Disperser, createDisperser } from './disperser';
-import { DASampler } from './sampling';
 
 // ============================================================================
 // Gateway Configuration
@@ -111,17 +109,54 @@ export class DAGateway {
         retentionPeriod?: number;
       };
       
+      // Validate required fields
+      if (!body.data || typeof body.data !== 'string') {
+        return c.json({ error: 'Missing or invalid "data" field' }, 400);
+      }
+      if (!body.submitter || typeof body.submitter !== 'string') {
+        return c.json({ error: 'Missing or invalid "submitter" field' }, 400);
+      }
+      // Validate address format
+      if (!/^0x[a-fA-F0-9]{40}$/.test(body.submitter)) {
+        return c.json({ error: 'Invalid submitter address format' }, 400);
+      }
+      // Validate namespace if provided
+      if (body.namespace !== undefined && (typeof body.namespace !== 'string' || !body.namespace.startsWith('0x'))) {
+        return c.json({ error: 'Invalid namespace format - must be hex string' }, 400);
+      }
+      // Validate quorumPercent
+      if (body.quorumPercent !== undefined && (typeof body.quorumPercent !== 'number' || body.quorumPercent < 0 || body.quorumPercent > 100)) {
+        return c.json({ error: 'quorumPercent must be a number between 0 and 100' }, 400);
+      }
+      // Validate retentionPeriod
+      if (body.retentionPeriod !== undefined && (typeof body.retentionPeriod !== 'number' || body.retentionPeriod <= 0)) {
+        return c.json({ error: 'retentionPeriod must be a positive number' }, 400);
+      }
+      
       // Decode data
       let data: Uint8Array;
       if (body.data.startsWith('0x')) {
+        // Validate hex format before decoding
+        if (!/^0x[a-fA-F0-9]*$/.test(body.data)) {
+          return c.json({ error: 'Invalid hex data format' }, 400);
+        }
         data = toBytes(body.data as Hex);
       } else {
+        // Validate base64 format
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(body.data)) {
+          return c.json({ error: 'Invalid base64 data format' }, 400);
+        }
         data = Uint8Array.from(atob(body.data), c => c.charCodeAt(0));
       }
       
       // Check size
       if (data.length > (this.config.maxBlobSize ?? 128 * 1024 * 1024)) {
         return c.json({ error: 'Blob too large' }, 400);
+      }
+      
+      // Validate data is not empty
+      if (data.length === 0) {
+        return c.json({ error: 'Blob data cannot be empty' }, 400);
       }
       
       // Prepare request
@@ -143,10 +178,17 @@ export class DAGateway {
         }, 500);
       }
       
+      if (!result.attestation) {
+        return c.json({ 
+          error: 'Dispersal succeeded but attestation missing',
+          blobId: result.blobId,
+        }, 500);
+      }
+      
       const response: BlobSubmissionResult = {
         blobId: result.blobId,
         commitment: result.commitment,
-        attestation: result.attestation!,
+        attestation: result.attestation,
         operators: result.assignments.flatMap(a => a.operators),
         chunkAssignments: result.assignments,
       };

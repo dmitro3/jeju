@@ -53,6 +53,9 @@ interface LocalCronJob extends CronJob {
   timeoutId?: ReturnType<typeof setTimeout>;
 }
 
+// Max number of local jobs to prevent memory exhaustion
+const MAX_LOCAL_JOBS = 10000;
+
 class CronServiceImpl implements CronService {
   private endpoint: string;
   private available = true;
@@ -63,7 +66,50 @@ class CronServiceImpl implements CronService {
     this.endpoint = validated.endpoint;
   }
 
+  /**
+   * Clean up old completed one-time jobs and enforce max job limit
+   */
+  private enforceJobLimits(): void {
+    if (this.localJobs.size < MAX_LOCAL_JOBS) return;
+
+    const jobEntries = Array.from(this.localJobs.entries());
+    
+    // First, remove any 'once' jobs that have already executed
+    for (const [id, job] of jobEntries) {
+      if (job.type === 'once' && job.lastRun !== null) {
+        // Stop any timeouts
+        if (job.timeoutId) {
+          clearTimeout(job.timeoutId);
+        }
+        this.localJobs.delete(id);
+      }
+    }
+    
+    // If still over limit, remove oldest jobs by creation time (based on id timestamp)
+    if (this.localJobs.size >= MAX_LOCAL_JOBS) {
+      const remainingEntries = Array.from(this.localJobs.entries())
+        .sort((a, b) => {
+          // Extract timestamp from job id format: "cron-{timestamp}-{random}"
+          const tsA = parseInt(a[0].split('-')[1] || '0', 10);
+          const tsB = parseInt(b[0].split('-')[1] || '0', 10);
+          return tsA - tsB;
+        });
+      
+      // Remove oldest 10%
+      const toRemove = Math.ceil(remainingEntries.length * 0.1);
+      for (let i = 0; i < toRemove; i++) {
+        const [id, job] = remainingEntries[i];
+        if (job.cronInstance) job.cronInstance.stop();
+        if (job.timeoutId) clearTimeout(job.timeoutId);
+        this.localJobs.delete(id);
+      }
+    }
+  }
+
   async register(job: CronJobConfig): Promise<CronJob> {
+    // Enforce job limits to prevent memory exhaustion
+    this.enforceJobLimits();
+    
     const id = `cron-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     
     const cronJob: LocalCronJob = {
@@ -142,7 +188,9 @@ class CronServiceImpl implements CronService {
 
   async cancel(jobId: string): Promise<boolean> {
     if (this.available) {
-      await this.remoteCancel(jobId).catch(() => {});
+      await this.remoteCancel(jobId).catch((err: Error) => {
+        console.debug('[Cron] Remote cancel failed:', err.message);
+      });
     }
 
     const job = this.localJobs.get(jobId);

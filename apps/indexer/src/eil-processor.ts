@@ -268,7 +268,7 @@ async function processVoucherFulfilled(
     const _recipientAddr = '0x' + log.topics[2].slice(26)
     const _amount = BigInt(log.data)
 
-    let voucher = vouchers.get(voucherId) || await ctx.store.get(CrossChainVoucher, voucherId)
+    const voucher = vouchers.get(voucherId) || await ctx.store.get(CrossChainVoucher, voucherId)
     if (voucher) {
         voucher.fulfilled = true
         voucher.status = VoucherStatus.FULFILLED
@@ -290,7 +290,7 @@ async function processVoucherFulfilled(
         const requestId = voucher.request?.id
         if (requestId) {
             const transferId = `${requestId}-transfer`
-            let transfer = transfers.get(transferId) || await ctx.store.get(EILTransfer, transferId)
+            const transfer = transfers.get(transferId) || await ctx.store.get(EILTransfer, transferId)
             if (transfer) {
                 transfer.status = TransferStatus.COMPLETED
                 transfer.completedAt = timestamp
@@ -308,7 +308,7 @@ async function processVoucherExpired(
 ): Promise<void> {
     const requestId = log.topics[1]
     
-    let request = voucherRequests.get(requestId) || await ctx.store.get(CrossChainVoucherRequest, requestId)
+    const request = voucherRequests.get(requestId) || await ctx.store.get(CrossChainVoucherRequest, requestId)
     if (request) {
         request.status = VoucherRequestStatus.EXPIRED
         request.expired = true
@@ -324,7 +324,7 @@ async function processFundsRefunded(
 ): Promise<void> {
     const requestId = log.topics[1]
     
-    let request = voucherRequests.get(requestId) || await ctx.store.get(CrossChainVoucherRequest, requestId)
+    const request = voucherRequests.get(requestId) || await ctx.store.get(CrossChainVoucherRequest, requestId)
     if (request) {
         request.status = VoucherRequestStatus.REFUNDED
         request.refunded = true
@@ -332,7 +332,7 @@ async function processFundsRefunded(
     }
 
     const transferId = `${requestId}-transfer`
-    let transfer = transfers.get(transferId) || await ctx.store.get(EILTransfer, transferId)
+    const transfer = transfers.get(transferId) || await ctx.store.get(EILTransfer, transferId)
     if (transfer) {
         transfer.status = TransferStatus.REFUNDED
         transfers.set(transferId, transfer)
@@ -393,7 +393,7 @@ async function processXLPWithdraw(
     const amount = BigInt(log.data)
 
     const depositId = `${xlpAddr}-${tokenAddr}-420691`
-    let deposit = xlpDeposits.get(depositId) || await ctx.store.get(XLPLiquidityDeposit, depositId)
+    const deposit = xlpDeposits.get(depositId) || await ctx.store.get(XLPLiquidityDeposit, depositId)
     
     if (deposit) {
         const isETH = tokenAddr === '0x0000000000000000000000000000000000000000'

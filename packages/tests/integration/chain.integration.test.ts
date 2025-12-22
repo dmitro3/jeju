@@ -28,10 +28,8 @@ describe.skipIf(!kurtosisAvailable)("Chain Integration Tests", () => {
       throw new Error("Could not get L2 RPC URL from Kurtosis. Is the localnet running?");
     }
 
-    // Create test account
-    account = privateKeyToAccount(
-      "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    );
+    // Create test account using shared constants
+    account = privateKeyToAccount(TEST_ACCOUNTS.deployer.privateKey);
 
     // Create clients
     publicClient = createPublicClient({

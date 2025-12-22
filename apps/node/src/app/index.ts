@@ -121,12 +121,50 @@ function getConfigPath(): string {
   return join(getConfigDir(), 'config.json');
 }
 
+/** Safely merge parsed config preventing prototype pollution */
+function safeMergeConfig(base: CliAppConfig, parsed: Record<string, unknown>): CliAppConfig {
+  const result = { ...base };
+  const dangerousKeys = ['__proto__', 'constructor', 'prototype'];
+  
+  function safeAssign(target: Record<string, unknown>, source: Record<string, unknown>, allowedKeys: string[]): void {
+    for (const key of allowedKeys) {
+      if (dangerousKeys.includes(key)) continue;
+      if (!(key in source)) continue;
+      
+      const sourceVal = source[key];
+      const targetVal = target[key];
+      
+      // Deep merge for objects (but not arrays)
+      if (
+        sourceVal !== null &&
+        typeof sourceVal === 'object' &&
+        !Array.isArray(sourceVal) &&
+        targetVal !== null &&
+        typeof targetVal === 'object' &&
+        !Array.isArray(targetVal)
+      ) {
+        safeAssign(
+          targetVal as Record<string, unknown>,
+          sourceVal as Record<string, unknown>,
+          Object.keys(targetVal as Record<string, unknown>)
+        );
+      } else {
+        target[key] = sourceVal;
+      }
+    }
+  }
+  
+  safeAssign(result as unknown as Record<string, unknown>, parsed, Object.keys(base));
+  return result;
+}
+
 function loadConfig(): CliAppConfig {
   const configPath = getConfigPath();
   if (existsSync(configPath)) {
     const fileContent = readFileSync(configPath, 'utf-8');
-    const parsed = JSON.parse(fileContent);
-    const merged = { ...DEFAULT_CONFIG, ...parsed };
+    const parsed = JSON.parse(fileContent) as Record<string, unknown>;
+    // Safely merge with prototype pollution protection
+    const merged = safeMergeConfig(DEFAULT_CONFIG, parsed);
     // Validate the merged config
     const result = CliAppConfigSchema.safeParse(merged);
     if (!result.success) {

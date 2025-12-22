@@ -34,9 +34,16 @@ const stateManager = getStateManager();
 
 const app = new Hono();
 
-// Middleware
+// CORS Configuration
+// In production, OTTO_ALLOWED_ORIGINS should be set to restrict cross-origin access
+// e.g., OTTO_ALLOWED_ORIGINS=https://otto.jeju.network,https://app.jeju.network
+const allowedOrigins = process.env.OTTO_ALLOWED_ORIGINS?.split(',') ?? [];
+const corsOrigin = allowedOrigins.length > 0 
+  ? (origin: string) => allowedOrigins.includes(origin) ? origin : allowedOrigins[0]
+  : '*'; // Development: allow all origins
+
 app.use('/*', cors({
-  origin: '*',
+  origin: corsOrigin,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Session-Id', 'X-Wallet-Address'],
 }));
@@ -85,12 +92,24 @@ app.post('/webhooks/discord', async (c) => {
   return c.json({ type: 5 }); // DEFERRED_CHANNEL_MESSAGE_WITH_SOURCE
 });
 
+// Constant-time string comparison to prevent timing attacks
+function constantTimeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 // Telegram webhook
 app.post('/webhooks/telegram', async (c) => {
-  // Verify secret token if configured
+  // Verify secret token if configured - use constant-time comparison to prevent timing attacks
   if (config.telegram.webhookSecret) {
     const secretToken = c.req.header('X-Telegram-Bot-Api-Secret-Token');
-    if (!secretToken || secretToken !== config.telegram.webhookSecret) {
+    if (!secretToken || !constantTimeCompare(secretToken, config.telegram.webhookSecret)) {
       return c.json({ error: 'Invalid secret token' }, 403);
     }
   }
@@ -212,12 +231,16 @@ app.get('/auth/callback', async (c) => {
     return c.html(`<!DOCTYPE html><html><head><title>Error</title></head><body><h1>Connection Failed</h1><p>Missing required parameters.</p></body></html>`);
   }
   
-  // Validate parameters with fail-fast
+  // Validate parameters with fail-fast - this ensures address is a valid 0x hex address
   validateAddress(address);
   validateHex(signature);
   validatePlatform(platform);
   expectValid(z.string().min(1), platformId, 'auth callback platformId');
   validateNonce(nonce);
+  
+  // After validation, address is guaranteed to be 0x + 40 hex chars (safe for display)
+  // Extract only the validated hex characters for display
+  const shortAddress = `${address.slice(0, 6)}...${address.slice(-4)}`;
   
   return c.html(`<!DOCTYPE html>
 <html>
@@ -232,7 +255,7 @@ app.get('/auth/callback', async (c) => {
 <body>
   <div class="container">
     <h1>Wallet Connected</h1>
-    <p>Address: ${address.slice(0, 6)}...${address.slice(-4)}</p>
+    <p>Address: ${shortAddress}</p>
     <p>You can close this window.</p>
   </div>
 </body>
@@ -284,11 +307,22 @@ app.get('/auth/connect', (c) => {
     <button class="btn btn-primary" onclick="connectWallet()">Connect Wallet</button>
   </div>
   <script>
+    function isValidAddress(addr) {
+      return /^0x[a-fA-F0-9]{40}$/.test(addr);
+    }
+    
     async function connectWallet() {
       if (!window.ethereum) { alert('Install MetaMask'); return; }
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const address = accounts[0];
-      const res = await fetch('/api/chat/auth/message?address=' + address);
+      
+      // Validate address format before using
+      if (!isValidAddress(address)) {
+        alert('Invalid address format');
+        return;
+      }
+      
+      const res = await fetch('/api/chat/auth/message?address=' + encodeURIComponent(address));
       const { message } = await res.json();
       const sig = await window.ethereum.request({ method: 'personal_sign', params: [message, address] });
       const session = new URLSearchParams(location.search).get('session');
@@ -297,7 +331,10 @@ app.get('/auth/connect', (c) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ address, message, signature: sig, sessionId: session }),
       });
-      if (window.opener) window.opener.postMessage({ type: 'wallet_connected', address }, '*');
+      if (window.opener) {
+        // Only post validated address
+        window.opener.postMessage({ type: 'wallet_connected', address }, window.location.origin);
+      }
       window.close();
     }
   </script>

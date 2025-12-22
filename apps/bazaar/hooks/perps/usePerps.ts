@@ -7,6 +7,62 @@ import { AddressSchema } from '@jejunetwork/types'
 import { expect, expectPositive, expectTrue } from '@/lib/validation'
 import { CONTRACTS } from '@/config'
 
+// Re-export types and formatters from lib for backwards compatibility
+export {
+  formatPrice,
+  formatSize,
+  formatPnL,
+  formatFundingRate,
+  formatLeverage,
+  PositionSide,
+  MARKET_IDS,
+  PRICE_DECIMALS,
+  PRICE_SCALE,
+  SIZE_DECIMALS,
+  SIZE_SCALE,
+  PNL_DECIMALS,
+  PNL_SCALE,
+  FUNDING_RATE_DECIMALS,
+  FUNDING_RATE_SCALE,
+  LEVERAGE_DECIMALS,
+  LEVERAGE_SCALE,
+  MAX_LEVERAGE,
+  DEFAULT_TAKER_FEE_BPS,
+  MAINTENANCE_MARGIN_FACTOR,
+  calculateRequiredMargin,
+  calculateLiquidationPrice,
+  calculateFee,
+  calculateUnrealizedPnL,
+  calculateNotional,
+  calculateCurrentLeverage,
+  isAtLiquidationRisk,
+  priceToBigInt,
+  priceToNumber,
+  sizeToBigInt,
+  sizeToNumber,
+  leverageToBigInt,
+  leverageToNumber,
+  validatePositionParams,
+  validateMargin,
+  getTradeButtonText,
+  isTradeButtonDisabled,
+  getBaseAsset,
+} from '@/lib/perps'
+
+// Re-export types from schemas
+export type {
+  Market,
+  Position,
+  PositionWithPnL,
+  TradeResult,
+  OpenPositionParams,
+  PriceData,
+  OpenInterest,
+  FormattedPnL,
+  PositionValidationResult,
+} from '@/schemas/perps'
+
+import type { Market, Position, PositionWithPnL, OpenPositionParams } from '@/schemas/perps'
 
 export const PERPETUAL_MARKET_ABI = [
   {
@@ -235,7 +291,7 @@ function positionFromTuple(tuple: PositionTuple): Position {
     positionId: tuple.positionId as Hash,
     trader: tuple.trader as Address,
     marketId: tuple.marketId as Hash,
-    side: tuple.side as PositionSide,
+    side: tuple.side as 0 | 1,
     marginType: tuple.marginType,
     size: tuple.size,
     margin: tuple.margin,
@@ -318,66 +374,6 @@ export const MARGIN_MANAGER_ABI = [
     stateMutability: 'view'
   }
 ] as const
-
-
-export enum PositionSide {
-  Long = 0,
-  Short = 1
-}
-
-export interface Position {
-  positionId: Hash
-  trader: Address
-  marketId: Hash
-  side: PositionSide
-  marginType: number
-  size: bigint
-  margin: bigint
-  marginToken: Address
-  entryPrice: bigint
-  entryFundingIndex: bigint
-  lastUpdateTime: bigint
-  isOpen: boolean
-}
-
-export interface Market {
-  marketId: Hash
-  symbol: string
-  baseAsset: Address
-  maxLeverage: bigint
-  maintenanceMarginBps: bigint
-  takerFeeBps: bigint
-  makerFeeBps: bigint
-  maxOpenInterest: bigint
-  currentOpenInterest: bigint
-  isActive: boolean
-}
-
-export interface TradeResult {
-  positionId: Hash
-  executionPrice: bigint
-  fee: bigint
-  realizedPnl: bigint
-  fundingPaid: bigint
-}
-
-export interface OpenPositionParams {
-  marketId: Hash
-  marginToken: Address
-  marginAmount: bigint
-  size: bigint
-  side: PositionSide
-  leverage: number
-}
-
-export interface PositionWithPnL extends Position {
-  unrealizedPnl: bigint
-  fundingPnl: bigint
-  liquidationPrice: bigint
-  currentLeverage: bigint
-  healthFactor: bigint
-  canLiquidate: boolean
-}
 
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
@@ -755,33 +751,4 @@ export function useWithdrawCollateral(marginManagerAddress: Address | undefined)
   }, [marginManagerAddress, writeContract])
 
   return { withdraw, error, isLoading: isPending || isConfirming, isSuccess, hash }
-}
-
-export function formatPrice(price: bigint, decimals = 2): string {
-  const priceNumber = Number(price) / 1e8
-  return priceNumber.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-}
-
-export function formatSize(size: bigint, decimals = 4): string {
-  const sizeNumber = Number(size) / 1e8
-  return sizeNumber.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
-}
-
-export function formatPnL(pnl: bigint): { value: string; isProfit: boolean } {
-  const pnlNumber = Number(pnl) / 1e18
-  const isProfit = pnl >= 0n
-  return {
-    value: `${isProfit ? '+' : ''}$${Math.abs(pnlNumber).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    isProfit
-  }
-}
-
-export function formatFundingRate(rate: bigint): string {
-  const rateNumber = Number(rate) / 1e16
-  return `${rateNumber >= 0 ? '+' : ''}${rateNumber.toFixed(4)}%`
-}
-
-export const MARKET_IDS = {
-  BTC_PERP: '0xa3fa5377b11d5955c4ed83f7ace1c7822b5361de56c000486ef1e91146897315' as Hash,
-  ETH_PERP: '0x4554482d504552500000000000000000000000000000000000000000000000000' as Hash,
 }

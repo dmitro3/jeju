@@ -15,12 +15,12 @@
  * No external APIs - all data from on-chain events via our RPC nodes.
  */
 
-import { decodeAbiParameters, type Hex, type Address } from 'viem';
+import { decodeAbiParameters, type Hex } from 'viem';
 import { Store } from '@subsquid/typeorm-store';
 import { ProcessorContext } from './processor';
 import { 
   Token, DEXPool, DEX, Swap, TokenCandle, PoolHourlyCandle, PoolDailyCandle,
-  CandleInterval, Account
+  CandleInterval
 } from './model';
 import { createAccountFactory, BlockHeader, LogData } from './lib/entities';
 
@@ -109,7 +109,7 @@ function isStablecoin(chainId: number, address: string): boolean {
   return STABLECOINS[chainId]?.has(address.toLowerCase()) ?? false;
 }
 
-function isWETH(chainId: number, address: string): boolean {
+function _isWETH(chainId: number, address: string): boolean {
   return WETH[chainId]?.toLowerCase() === address.toLowerCase();
 }
 
@@ -427,7 +427,7 @@ async function processSwapV2(
   const poolId = `${chainId}-${poolAddr}`;
 
   // Get pool from cache or DB
-  let pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
+  const pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
   if (!pool) {
     // Pool not indexed yet - skip this swap
     return;
@@ -565,7 +565,7 @@ async function processSwapV3(
   const poolAddr = log.address.toLowerCase();
   const poolId = `${chainId}-${poolAddr}`;
 
-  let pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
+  const pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
   if (!pool) return;
 
   const token0 = tokens.get(pool.token0.id) || await ctx.store.get(Token, pool.token0.id);
@@ -579,7 +579,7 @@ async function processSwapV3(
   const tokenIn = isToken0In ? token0 : token1;
   const tokenOut = isToken0In ? token1 : token0;
 
-  const price = calculatePriceFromAmounts(
+  calculatePriceFromAmounts(
     amountIn > 0n ? amountIn : -amountIn,
     amountOut > 0n ? amountOut : -amountOut,
     tokenIn.decimals,
@@ -657,7 +657,7 @@ async function processSyncV2(
   const [reserve0, reserve1] = decoded;
   const poolId = `${chainId}-${log.address.toLowerCase()}`;
 
-  let pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
+  const pool = pools.get(poolId) || await ctx.store.get(DEXPool, poolId);
   if (!pool) return;
 
   pool.reserve0 = reserve0;

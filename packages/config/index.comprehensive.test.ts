@@ -20,7 +20,6 @@ import {
   getFederationHub,
   getFederatedNetworks,
   getConfig,
-  getFrontendContracts,
   getFrontendServices,
   getPoCConfig,
   getExternalRpc,
@@ -302,7 +301,7 @@ describe('EIL (Cross-Chain Liquidity) Functions', () => {
       const chains = getEILChains('testnet');
       
       // Test EVM chains that have crossChainPaymaster (even if empty string)
-      for (const [name, chain] of Object.entries(chains)) {
+      for (const [_name, chain] of Object.entries(chains)) {
         // Skip Solana chains which don't have paymaster
         if ('type' in chain && chain.type === 'solana') continue;
         

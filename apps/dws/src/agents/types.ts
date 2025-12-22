@@ -3,7 +3,7 @@
  * First-class agent management in DWS
  */
 
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 
 // ============================================================================
 // Character & Personality

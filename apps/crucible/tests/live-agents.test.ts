@@ -7,12 +7,11 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import {
-  CrucibleAgentRuntime,
   createCrucibleRuntime,
   runtimeManager,
   type RuntimeMessage,
 } from '../src/sdk/eliza-runtime';
-import { getCharacter, listCharacters, characters } from '../src/characters';
+import { getCharacter } from '../src/characters';
 
 // Helper to create unique messages to ensure responses aren't cached
 function createUniqueMessage(text: string): RuntimeMessage {

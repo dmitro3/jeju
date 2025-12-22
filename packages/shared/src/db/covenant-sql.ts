@@ -6,6 +6,45 @@
 import { EventEmitter } from 'events';
 import type { SqlParam } from '../types';
 
+/**
+ * SQL Identifier validation regex - only allows safe characters.
+ * Matches: letters, numbers, underscores (standard SQL identifier pattern)
+ */
+const SAFE_SQL_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+
+/**
+ * Validates and sanitizes SQL identifier (table/column name) to prevent SQL injection.
+ * 
+ * SECURITY: Table and column names cannot be parameterized in SQL, so they must
+ * be validated against a strict pattern. This function throws if the identifier
+ * contains any characters that could enable SQL injection.
+ * 
+ * @param identifier - Table or column name to validate
+ * @param type - Type of identifier for error messages
+ * @throws Error if identifier contains invalid characters
+ */
+function validateSqlIdentifier(identifier: string, type: 'table' | 'column' | 'index'): string {
+  if (!identifier || typeof identifier !== 'string') {
+    throw new Error(`Invalid ${type} name: must be a non-empty string`);
+  }
+  
+  // Check for reasonable length (prevent DoS with very long names)
+  if (identifier.length > 128) {
+    throw new Error(`Invalid ${type} name: exceeds maximum length of 128 characters`);
+  }
+  
+  // Validate against safe pattern
+  if (!SAFE_SQL_IDENTIFIER.test(identifier)) {
+    throw new Error(
+      `Invalid ${type} name "${identifier}": must start with a letter or underscore, ` +
+      `and contain only letters, numbers, and underscores. ` +
+      `This restriction prevents SQL injection attacks.`
+    );
+  }
+  
+  return identifier;
+}
+
 export type ConsistencyLevel = 'strong' | 'eventual';
 
 export interface CovenantSQLConfig {
@@ -229,29 +268,48 @@ export class CovenantSQLClient extends EventEmitter {
 
   /**
    * Create a table with schema
+   * 
+   * SECURITY: All identifiers are validated against a safe pattern
+   * to prevent SQL injection attacks.
    */
   async createTable(schema: TableSchema): Promise<void> {
+    // Validate table name
+    const tableName = validateSqlIdentifier(schema.name, 'table');
+    
+    // Validate and build columns
     const columns = schema.columns.map(col => {
-      let def = `${col.name} ${col.type}`;
+      const colName = validateSqlIdentifier(col.name, 'column');
+      let def = `${colName} ${col.type}`;
       if (!col.nullable) def += ' NOT NULL';
       if (col.unique) def += ' UNIQUE';
       if (col.default !== undefined) {
-        def += ` DEFAULT ${typeof col.default === 'string' ? `'${col.default}'` : col.default}`;
+        // Escape string defaults properly
+        if (typeof col.default === 'string') {
+          // Escape single quotes in string defaults
+          const escapedDefault = col.default.replace(/'/g, "''");
+          def += ` DEFAULT '${escapedDefault}'`;
+        } else {
+          def += ` DEFAULT ${col.default}`;
+        }
       }
       return def;
     }).join(', ');
 
-    const pk = schema.primaryKey.length > 0 ? `, PRIMARY KEY (${schema.primaryKey.join(', ')})` : '';
+    // Validate primary key columns
+    const pkColumns = schema.primaryKey.map(pk => validateSqlIdentifier(pk, 'column'));
+    const pk = pkColumns.length > 0 ? `, PRIMARY KEY (${pkColumns.join(', ')})` : '';
     
-    const sql = `CREATE TABLE IF NOT EXISTS ${schema.name} (${columns}${pk})`;
+    const sql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columns}${pk})`;
     await this.query(sql, [], { consistency: 'strong' });
 
     // Create indexes
     if (schema.indexes) {
       for (const idx of schema.indexes) {
+        const indexName = validateSqlIdentifier(idx.name, 'index');
+        const indexColumns = idx.columns.map(c => validateSqlIdentifier(c, 'column'));
         const unique = idx.unique ? 'UNIQUE ' : '';
         await this.query(
-          `CREATE ${unique}INDEX IF NOT EXISTS ${idx.name} ON ${schema.name} (${idx.columns.join(', ')})`,
+          `CREATE ${unique}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${indexColumns.join(', ')})`,
           [],
           { consistency: 'strong' }
         );
@@ -266,7 +324,8 @@ export class CovenantSQLClient extends EventEmitter {
    * Drop a table
    */
   async dropTable(name: string): Promise<void> {
-    await this.query(`DROP TABLE IF EXISTS ${name}`, [], { consistency: 'strong' });
+    const tableName = validateSqlIdentifier(name, 'table');
+    await this.query(`DROP TABLE IF EXISTS ${tableName}`, [], { consistency: 'strong' });
     this.schemas.delete(name);
     this.emit('table:dropped', name);
   }
@@ -279,24 +338,30 @@ export class CovenantSQLClient extends EventEmitter {
     data: T | T[],
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
+    const tableName = validateSqlIdentifier(table, 'table');
     const rows = Array.isArray(data) ? data : [data];
     if (rows.length === 0) {
       return { rows: [], rowCount: 0, affectedRows: 0, duration: 0, node: '' };
     }
 
-    const columns = Object.keys(rows[0]);
+    // Validate all column names
+    const columns = Object.keys(rows[0]).map(col => validateSqlIdentifier(col, 'column'));
     const placeholders = rows.map((_, i) => 
       `(${columns.map((_, j) => `$${i * columns.length + j + 1}`).join(', ')})`
     ).join(', ');
     
-    const values: SqlParam[] = rows.flatMap(row => columns.map(col => row[col]));
-    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES ${placeholders}`;
+    const values: SqlParam[] = rows.flatMap(row => Object.keys(rows[0]).map(col => row[col]));
+    const sql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES ${placeholders}`;
 
     return this.query<T>(sql, values, { consistency: 'strong', ...options });
   }
 
   /**
    * Update row(s)
+   * 
+   * SECURITY: Column names in data are validated. The `where` clause is
+   * user-provided and MUST use parameterized values ($1, $2, etc.) to
+   * prevent SQL injection.
    */
   async update<T extends Record<string, SqlParam>>(
     table: string,
@@ -305,16 +370,21 @@ export class CovenantSQLClient extends EventEmitter {
     whereParams: SqlParam[] = [],
     options: QueryOptions = {}
   ): Promise<QueryResult<T>> {
-    const columns = Object.keys(data);
-    const sets = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-    const values: SqlParam[] = [...columns.map(col => data[col] as SqlParam), ...whereParams];
+    const tableName = validateSqlIdentifier(table, 'table');
+    const originalColumns = Object.keys(data);
+    const validatedColumns = originalColumns.map(col => validateSqlIdentifier(col, 'column'));
+    const sets = validatedColumns.map((col, i) => `${col} = $${i + 1}`).join(', ');
+    const values: SqlParam[] = [...originalColumns.map(col => data[col] as SqlParam), ...whereParams];
     
-    const sql = `UPDATE ${table} SET ${sets} WHERE ${where}`;
+    const sql = `UPDATE ${tableName} SET ${sets} WHERE ${where}`;
     return this.query<T>(sql, values, { consistency: 'strong', ...options });
   }
 
   /**
    * Delete row(s)
+   * 
+   * SECURITY: The `where` clause MUST use parameterized values ($1, $2, etc.)
+   * to prevent SQL injection. Table name is validated.
    */
   async delete(
     table: string,
@@ -322,7 +392,8 @@ export class CovenantSQLClient extends EventEmitter {
     whereParams: SqlParam[] = [],
     options: QueryOptions = {}
   ): Promise<QueryResult> {
-    const sql = `DELETE FROM ${table} WHERE ${where}`;
+    const tableName = validateSqlIdentifier(table, 'table');
+    const sql = `DELETE FROM ${tableName} WHERE ${where}`;
     return this.query(sql, whereParams, { consistency: 'strong', ...options });
   }
 
@@ -372,8 +443,9 @@ export class CovenantSQLClient extends EventEmitter {
     whereParams: SqlParam[] = [],
     options: QueryOptions = {}
   ): Promise<T | null> {
+    const tableName = validateSqlIdentifier(table, 'table');
     const result = await this.query<T>(
-      `SELECT * FROM ${table} WHERE ${where} LIMIT 1`,
+      `SELECT * FROM ${tableName} WHERE ${where} LIMIT 1`,
       whereParams,
       options
     );
@@ -389,7 +461,8 @@ export class CovenantSQLClient extends EventEmitter {
     whereParams?: SqlParam[],
     options: QueryOptions = {}
   ): Promise<number> {
-    let sql = `SELECT COUNT(*) as count FROM ${table}`;
+    const tableName = validateSqlIdentifier(table, 'table');
+    let sql = `SELECT COUNT(*) as count FROM ${tableName}`;
     if (where) {
       sql += ` WHERE ${where}`;
     }
@@ -405,8 +478,9 @@ export class CovenantSQLClient extends EventEmitter {
     where: string,
     whereParams: SqlParam[] = []
   ): Promise<boolean> {
-    const count = await this.count(table, where, whereParams, { consistency: 'eventual' });
-    return count > 0;
+    // Table name validation happens in count()
+    const rowCount = await this.count(table, where, whereParams, { consistency: 'eventual' });
+    return rowCount > 0;
   }
 
   /**
@@ -466,8 +540,54 @@ export class CovenantSQLClient extends EventEmitter {
     return this.config.nodes[0] ?? null;
   }
 
+  /**
+   * Sign a request payload with the private key
+   * SECURITY: Only the signature is sent, never the private key itself
+   */
+  private async signRequest(payload: string, timestamp: string): Promise<string> {
+    const { keccak256, toBytes } = await import('viem');
+    const { privateKeyToAccount } = await import('viem/accounts');
+    
+    // Create message to sign: hash of payload + timestamp
+    const message = keccak256(toBytes(`${this.config.databaseId}:${timestamp}:${payload}`));
+    
+    // Sign with private key
+    const account = privateKeyToAccount(this.config.privateKey as `0x${string}`);
+    const signature = await account.signMessage({ message: { raw: toBytes(message) } });
+    
+    return signature;
+  }
+
+  // Queue for connection acquisition to prevent race conditions
+  private acquireQueue: Array<{
+    resolve: (conn: PooledConnection) => void;
+    reject: (err: Error) => void;
+    timestamp: number;
+    timeoutId: ReturnType<typeof setTimeout>;
+  }> = [];
+
+  private processAcquireQueue(): void {
+    if (this.acquireQueue.length === 0) return;
+    
+    const available = this.pool.find(c => !c.inUse);
+    if (!available) return;
+    
+    // Mark connection as in-use BEFORE resolving to prevent races
+    available.inUse = true;
+    available.lastUsed = Date.now();
+    
+    const request = this.acquireQueue.shift();
+    if (request) {
+      clearTimeout(request.timeoutId);
+      request.resolve(available);
+    } else {
+      // No one waiting, release connection
+      available.inUse = false;
+    }
+  }
+
   private async acquireConnection(): Promise<PooledConnection> {
-    // Find available connection
+    // Fast path: check for available connection
     const available = this.pool.find(c => !c.inUse);
     if (available) {
       available.inUse = true;
@@ -475,27 +595,27 @@ export class CovenantSQLClient extends EventEmitter {
       return available;
     }
 
-    // Wait for connection
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Connection pool exhausted'));
+    // Slow path: queue the request
+    return new Promise<PooledConnection>((resolve, reject) => {
+      const timestamp = Date.now();
+      
+      // Set timeout for this specific request
+      const timeoutId = setTimeout(() => {
+        const index = this.acquireQueue.findIndex(r => r.timestamp === timestamp);
+        if (index !== -1) {
+          this.acquireQueue.splice(index, 1);
+          reject(new Error('Connection pool exhausted: timeout waiting for available connection'));
+        }
       }, 10000);
 
-      const check = setInterval(() => {
-        const conn = this.pool.find(c => !c.inUse);
-        if (conn) {
-          clearInterval(check);
-          clearTimeout(timeout);
-          conn.inUse = true;
-          conn.lastUsed = Date.now();
-          resolve(conn);
-        }
-      }, 100);
+      this.acquireQueue.push({ resolve, reject, timestamp, timeoutId });
     });
   }
 
   private releaseConnection(conn: PooledConnection): void {
     conn.inUse = false;
+    // Process any waiting requests
+    this.processAcquireQueue();
   }
 
   private async executeQuery<T>(
@@ -507,15 +627,22 @@ export class CovenantSQLClient extends EventEmitter {
   ): Promise<QueryResult<T>> {
     const startTime = Date.now();
 
+    // Generate authentication signature from private key
+    // SECURITY: Never send the private key directly - only send a signed message
+    const timestamp = Date.now().toString();
+    const payload = JSON.stringify({ sql, params });
+    const signature = await this.signRequest(payload, timestamp);
+
     const response = await fetch(`${conn.node}/v1/query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Database-ID': this.config.databaseId,
         'X-Consistency': consistency,
-        'X-Private-Key': this.config.privateKey,
+        'X-Auth-Timestamp': timestamp,
+        'X-Auth-Signature': signature,
       },
-      body: JSON.stringify({ sql, params }),
+      body: payload,
       signal: AbortSignal.timeout(timeout),
     });
 

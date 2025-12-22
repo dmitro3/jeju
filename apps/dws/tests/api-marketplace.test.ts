@@ -5,33 +5,23 @@
  * Note: Some tests require CovenantSQL. They will be skipped when CQL is not available.
  */
 
-import { describe, test, expect, beforeEach, beforeAll, afterAll, mock } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 
 // Check if CQL is available
 const CQL_AVAILABLE = !!process.env.CQL_BLOCK_PRODUCER_ENDPOINT;
 import type { Address } from 'viem';
 
-// Mock fetch for provider tests
-const originalFetch = globalThis.fetch;
-
 // Import all modules to test
 import {
   // Types
-  type APIProvider,
-  type APIListing,
-  type ProxyRequest,
   type AccessControl,
   // Providers
   ALL_PROVIDERS,
   getProvider,
   getProvidersByCategory,
-  getConfiguredProviders,
-  isProviderConfigured,
   // Registry
   createListing,
   getListing,
-  getAllListings,
-  getListingsByProvider,
   getListingsBySeller,
   updateListing,
   getOrCreateAccount,
@@ -40,16 +30,12 @@ import {
   chargeUser,
   canAfford,
   getMarketplaceStats,
-  initializeSystemListings,
-  findCheapestListing,
   // Key Vault
   storeKey,
   getKeyMetadata,
   deleteKey,
   getKeysByOwner,
   decryptKeyForRequest,
-  loadSystemKeys,
-  hasSystemKey,
   getVaultStats,
   // Sanitizer
   sanitizeString,
@@ -59,7 +45,6 @@ import {
   mightContainKey,
   extractPotentialKeys,
   checkForLeaks,
-  DEFAULT_KEY_PATTERNS,
   // Access Control
   isDomainAllowed,
   isEndpointAllowed,
@@ -70,9 +55,6 @@ import {
   accessControl,
   // Payments
   processDeposit,
-  processWithdraw,
-  getBalance,
-  getAccountInfo,
   create402Response,
   parsePaymentProof,
   meetsMinimumDeposit,

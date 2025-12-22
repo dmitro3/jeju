@@ -24,14 +24,9 @@ import {
   ContentTypeIds,
 } from '../mls/content-types';
 import type {
-  TextContent,
   ImageContent,
   FileContent,
-  ReactionContent,
-  ReplyContent,
   TransactionContent,
-  AgentActionContent,
-  MessageContent,
 } from '../mls/types';
 import type { Hex, Address } from 'viem';
 
@@ -487,7 +482,7 @@ describe('validateImage', () => {
   test('validates valid PNG image', () => {
     const content: ImageContent = {
       type: 'image',
-      url: 'http://example.com/img.png',
+      url: 'https://example.com/img.png',  // HTTPS required for security
       width: 1920,
       height: 1080,
       mimeType: 'image/png',
@@ -943,6 +938,7 @@ describe('Edge Cases', () => {
   });
 
   test('handles very long image URLs', () => {
+    // URLs over 2048 chars are rejected for security
     const longUrl = 'https://example.com/' + 'a'.repeat(10000);
     const content = image({
       url: longUrl,
@@ -951,8 +947,18 @@ describe('Edge Cases', () => {
       mimeType: 'image/png',
     });
     
-    // validateImage should still check url starts with http
-    expect(validateImage(content)).toBe(true);
+    // validateImage rejects URLs over 2048 characters
+    expect(validateImage(content)).toBe(false);
+    
+    // But reasonable length URLs should pass
+    const reasonableUrl = 'https://example.com/' + 'a'.repeat(500);
+    const validContent = image({
+      url: reasonableUrl,
+      width: 100,
+      height: 100,
+      mimeType: 'image/png',
+    });
+    expect(validateImage(validContent)).toBe(true);
   });
 
   test('handles emoji in filenames', () => {

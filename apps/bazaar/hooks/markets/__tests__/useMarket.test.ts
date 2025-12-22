@@ -1,5 +1,8 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
 import { parseEther } from 'viem';
+import { useMarket } from '../useMarket';
+import { calculateYesPrice, calculateNoPrice } from '@/lib/markets/lmsrPricing';
+import { NonEmptyStringSchema } from '@/schemas/common';
 
 // Mock graphql-request
 const mockRequest = mock(() => Promise.resolve({
@@ -28,13 +31,10 @@ describe('useMarket Hook', () => {
   });
 
   test('should export useMarket function', () => {
-    const { useMarket } = require('../useMarket');
     expect(typeof useMarket).toBe('function');
   });
 
   test('should validate sessionId parameter', () => {
-    const { useMarket } = require('../useMarket');
-    
     // Empty string should throw via Zod validation
     expect(() => {
       // The hook uses NonEmptyStringSchema.parse which throws synchronously
@@ -73,8 +73,6 @@ describe('useMarket Hook', () => {
   });
 
   test('should calculate prices using LMSR', () => {
-    const { calculateYesPrice, calculateNoPrice } = require('@/lib/markets/lmsrPricing');
-    
     const yesShares = parseEther('60');
     const noShares = parseEther('40');
     const liquidityB = parseEther('100');
@@ -116,8 +114,6 @@ describe('useMarket Hook', () => {
 
 describe('Market Data Validation', () => {
   test('should require non-empty question', () => {
-    const { NonEmptyStringSchema } = require('@/schemas/common');
-    
     expect(() => NonEmptyStringSchema.parse('')).toThrow();
     expect(NonEmptyStringSchema.parse('Valid question?')).toBe('Valid question?');
   });

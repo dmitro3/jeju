@@ -186,7 +186,8 @@ export class TrajectoryStore {
     while (leaves.length > 1) {
       const newLeaves: Hex[] = [];
       for (let i = 0; i < leaves.length; i += 2) {
-        const left = leaves[i]!;
+        const left = leaves[i];
+        if (!left) break;
         const right = leaves[i + 1] ?? left;
         const combined = (left < right ? left + right.slice(2) : right + left.slice(2)) as Hex;
         newLeaves.push(keccak256(combined));
@@ -194,7 +195,11 @@ export class TrajectoryStore {
       leaves = newLeaves;
     }
 
-    return leaves[0]!;
+    const root = leaves[0];
+    if (!root) {
+      return '0x0000000000000000000000000000000000000000000000000000000000000000';
+    }
+    return root;
   }
 
   private deterministicSample(total: number, count: number, seed: number): number[] {
@@ -206,7 +211,9 @@ export class TrajectoryStore {
     for (let i = 0; i < sampleCount; i++) {
       s = (s * 1103515245 + 12345) & 0x7fffffff;
       const idx = s % available.length;
-      indices.push(available[idx]!);
+      const value = available[idx];
+      if (value === undefined) break;
+      indices.push(value);
       available.splice(idx, 1);
     }
 

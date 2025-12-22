@@ -410,8 +410,16 @@ export function createStakingModule(
   const services = getServicesConfig(network);
 
   const stakingAddress = requireContract("staking", "Staking", network);
-  const nodeStakingAddress = requireContract("staking", "NodeStakingManager", network);
-  const rpcProviderAddress = requireContract("rpc", "RPCProviderRegistry", network);
+  const nodeStakingAddress = requireContract(
+    "staking",
+    "NodeStakingManager",
+    network,
+  );
+  const rpcProviderAddress = requireContract(
+    "rpc",
+    "RPCProviderRegistry",
+    network,
+  );
 
   const MIN_STAKE = parseEther("100"); // 100 JEJU
   const UNBONDING_PERIOD = 604800n; // 7 days
@@ -519,14 +527,19 @@ export function createStakingModule(
       // Fetch from API for more stats
       const response = await fetch(`${services.gateway.api}/staking/stats`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch staking stats: ${response.statusText}`);
+        throw new Error(
+          `Failed to fetch staking stats: ${response.statusText}`,
+        );
       }
       const data = (await response.json()) as {
         totalStakers: number;
         currentAPY: number;
       };
 
-      if (typeof data.totalStakers !== "number" || typeof data.currentAPY !== "number") {
+      if (
+        typeof data.totalStakers !== "number" ||
+        typeof data.currentAPY !== "number"
+      ) {
         throw new Error("Invalid staking stats response");
       }
 
@@ -763,8 +776,11 @@ export function createStakingModule(
         args: [],
       });
 
+      // Limit to prevent DoS from large arrays
+      const MAX_PROVIDERS = 100;
       const providers: RPCProviderInfo[] = [];
-      for (const addr of addresses) {
+      const limitedAddresses = addresses.slice(0, MAX_PROVIDERS);
+      for (const addr of limitedAddresses) {
         const info = await this.getRPCProvider(addr);
         if (info) providers.push(info);
       }

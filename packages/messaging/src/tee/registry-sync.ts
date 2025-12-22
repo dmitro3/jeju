@@ -6,19 +6,17 @@
 
 import {
   createPublicClient,
-  createWalletClient,
   http,
   type PublicClient,
   type WalletClient,
   type Address,
   type Hex,
   encodeFunctionData,
-  keccak256,
-  toBytes,
 } from 'viem';
 import { base, baseSepolia } from 'viem/chains';
-import type { TEEXMTPKeyManager, TEEIdentityKey, TEEPreKey, TEEAttestation } from './key-manager';
+import type { TEEXMTPKeyManager } from './key-manager';
 import type { KeyRegistration, RegistrationResult } from './types';
+import type { TEEAttestation } from './types';
 
 // ============ Contract ABI ============
 
@@ -105,7 +103,7 @@ export class KeyRegistrySync {
   private registryAddress: Address;
   private publicClient: PublicClient;
   private walletClient: WalletClient | null = null;
-  private network: 'mainnet' | 'testnet';
+  private chain: typeof base | typeof baseSepolia;
   
   constructor(
     keyManager: TEEXMTPKeyManager,
@@ -113,14 +111,12 @@ export class KeyRegistrySync {
   ) {
     this.keyManager = keyManager;
     this.registryAddress = config.registryAddress;
-    this.network = config.network;
-    
-    const chain = config.network === 'mainnet' ? base : baseSepolia;
+    this.chain = config.network === 'mainnet' ? base : baseSepolia;
     
     this.publicClient = createPublicClient({
-      chain,
+      chain: this.chain,
       transport: http(config.rpcUrl),
-    });
+    }) as PublicClient;
   }
   
   /**
@@ -139,6 +135,9 @@ export class KeyRegistrySync {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     const key = await this.keyManager.getKey(keyId);
     if (!key) {
@@ -147,10 +146,10 @@ export class KeyRegistrySync {
     
     // Get pre-key
     const preKeys = await this.keyManager.getPreKeys(keyId);
-    if (preKeys.length === 0) {
+    const preKey = preKeys[0];
+    if (!preKey) {
       throw new Error(`No pre-keys for identity: ${keyId}`);
     }
-    const preKey = preKeys[0]!;
     
     // Get attestation
     const attestation = await this.keyManager.getAttestation(keyId);
@@ -170,6 +169,8 @@ export class KeyRegistrySync {
     
     // Send transaction
     const txHash = await this.walletClient.sendTransaction({
+      account: this.walletClient.account,
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
@@ -195,6 +196,9 @@ export class KeyRegistrySync {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     const key = await this.keyManager.getKey(keyId);
     if (!key) {
@@ -203,10 +207,10 @@ export class KeyRegistrySync {
     
     // Get pre-key
     const preKeys = await this.keyManager.getPreKeys(keyId);
-    if (preKeys.length === 0) {
+    const preKey = preKeys[0];
+    if (!preKey) {
       throw new Error(`No pre-keys for identity: ${keyId}`);
     }
-    const preKey = preKeys[0]!;
     
     // Build transaction
     const data = encodeFunctionData({
@@ -221,6 +225,8 @@ export class KeyRegistrySync {
     
     // Send transaction
     const txHash = await this.walletClient.sendTransaction({
+      account: this.walletClient.account,
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
@@ -246,6 +252,9 @@ export class KeyRegistrySync {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     // Generate new pre-key
     const newPreKey = await this.keyManager.generatePreKey(keyId);
@@ -259,11 +268,14 @@ export class KeyRegistrySync {
     
     // Send transaction
     const txHash = await this.walletClient.sendTransaction({
+      account: this.walletClient.account,
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
     
-    console.log(`[KeyRegistrySync] Rotated pre-key for ${keyId}, tx: ${txHash}`);
+    // Log truncated identifiers
+    console.log(`[KeyRegistrySync] Rotated pre-key for ${keyId.slice(0, 20)}..., tx: ${txHash.slice(0, 18)}...`);
     
     // Wait for confirmation
     const receipt = await this.publicClient.waitForTransactionReceipt({
@@ -345,6 +357,9 @@ export class KeyRegistrySync {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     const data = encodeFunctionData({
       abi: KEY_REGISTRY_ABI,
@@ -353,6 +368,8 @@ export class KeyRegistrySync {
     });
     
     const txHash = await this.walletClient.sendTransaction({
+      account: this.walletClient.account,
+      chain: this.chain,
       to: this.registryAddress,
       data,
     });
@@ -407,18 +424,6 @@ export class KeyRegistrySync {
     });
     
     return `0x${Buffer.from(encoded).toString('hex')}` as Hex;
-  }
-  
-  /**
-   * Decode attestation from on-chain
-   */
-  private decodeAttestation(proof: Hex): TEEAttestation | null {
-    try {
-      const json = Buffer.from(proof.slice(2), 'hex').toString();
-      return JSON.parse(json);
-    } catch {
-      return null;
-    }
   }
 }
 

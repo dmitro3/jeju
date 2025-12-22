@@ -19,7 +19,7 @@ import type {
 	TEEAttestation,
 } from "../types/index.js";
 import { toHash32 } from "../types/index.js";
-import { createLogger, computeMerkleRoot } from "../utils/index.js";
+import { computeMerkleRoot, createLogger } from "../utils/index.js";
 
 const log = createLogger("phala");
 
@@ -206,13 +206,10 @@ export class PhalaClient {
 	): Promise<PhalaBatchAttestation> {
 		// Compute merkle root of transfer IDs
 		const transferIds = transfers.map((t) => t.transferId);
-		const transfersRoot = computeMerkleRoot(
-			transferIds,
-			(data) => {
-				const hash = keccak256(data);
-				return Buffer.from(hash.slice(2), "hex");
-			},
-		);
+		const transfersRoot = computeMerkleRoot(transferIds, (data) => {
+			const hash = keccak256(data);
+			return Buffer.from(hash.slice(2), "hex");
+		});
 
 		// Build data to attest
 		const attestData = keccak256(
@@ -302,7 +299,9 @@ export class PhalaClient {
 	 */
 	toTEEAttestation(attestation: PhalaAttestationResponse): TEEAttestation {
 		if (!this.enclavePublicKey) {
-			throw new Error("Enclave public key not initialized - call initialize() first");
+			throw new Error(
+				"Enclave public key not initialized - call initialize() first",
+			);
 		}
 		return {
 			measurement: toHash32(
@@ -367,7 +366,7 @@ export function createPhalaClient(config?: Partial<PhalaConfig>): PhalaClient {
 	}
 
 	return new PhalaClient({
-		endpoint: endpoint ?? "http://localhost:8000",  // Default for mock mode only
+		endpoint: endpoint ?? "http://localhost:8000", // Default for mock mode only
 		apiKey: config?.apiKey ?? process.env.PHALA_API_KEY,
 		useMock,
 		timeoutMs: config?.timeoutMs ?? 30000,

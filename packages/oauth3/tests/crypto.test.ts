@@ -7,8 +7,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 import { secp256k1 } from '@noble/curves/secp256k1';
-import { keccak256, toBytes, toHex, type Hex, type Address } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { keccak256, toBytes, toHex, type Hex } from 'viem';
 
 // ============ FROST Signing Tests ============
 
@@ -18,8 +17,6 @@ import {
   computeBindingFactor,
   computeGroupCommitment,
   computeChallenge,
-  generateSignatureShare,
-  aggregateSignatures,
   verifySignature,
   publicKeyToAddress,
   randomScalar,
@@ -399,8 +396,8 @@ describe('FROST Threshold Signing - Signature Verification', () => {
     const signature = await coordinator.sign(messageHex as Hex, [1, 2]);
 
     const cluster = coordinator.getCluster();
-    // Get the group public key from the first party
-    const groupPubKeyHex = cluster.groupPublicKey;
+    // Get the group public key from the first party (used for verification)
+    void cluster.groupPublicKey;
     
     // Verify signature structure
     expect(BigInt(signature.r)).toBeGreaterThan(0n);
@@ -1004,7 +1001,7 @@ describe('Passkeys - Challenge Management', () => {
 
   test('registration excludes existing credentials', async () => {
     // First register a credential
-    const regOptions = await manager.generateRegistrationOptions({
+    await manager.generateRegistrationOptions({
       userId: 'multiuser',
       username: 'multi',
       displayName: 'Multi User',

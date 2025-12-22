@@ -145,12 +145,13 @@ export async function runTeeCeremony(
     }
     
     // Convert TEE-derived key to Ethereum account
-    const account = privateKeyToAccount(('0x' + privateKeyHex) as `0x${string}`);
+    const pk = ('0x' + privateKeyHex) as `0x${string}`;
+    const account = privateKeyToAccount(pk);
 
     const keyConfig: TeeKeyConfig = {
       name: role.name,
       address: account.address,
-      privateKey: account.privateKey,
+      privateKey: pk,
       role: role.desc,
       derivationPath: keyPath,
     };
@@ -244,12 +245,13 @@ async function runSimulatedCeremony(
   const timestamp = new Date().toISOString();
 
   for (const role of OPERATOR_ROLES) {
-    const account = privateKeyToAccount(generatePrivateKey());
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
     
     keys.push({
       name: role.name,
       address: account.address,
-      privateKey: account.privateKey,
+      privateKey: pk,
       role: role.desc,
       derivationPath: `${role.path}/${network}`,
     });

@@ -7,9 +7,7 @@ import type { Address } from 'viem';
 import type {
   AgentConfig,
   AgentStatus,
-  AgentCharacter,
   AgentRuntimeConfig,
-  AgentModelPreferences,
   AgentCronTrigger,
   AgentStats,
   RegisterAgentRequest,
@@ -256,7 +254,8 @@ export function listAgents(filter?: { status?: AgentStatus; owner?: Address }): 
     result = result.filter(a => a.status === filter.status);
   }
   if (filter?.owner) {
-    result = result.filter(a => a.owner.toLowerCase() === filter.owner!.toLowerCase());
+    const ownerLower = filter.owner.toLowerCase();
+    result = result.filter(a => a.owner.toLowerCase() === ownerLower);
   }
   
   return result;
@@ -392,7 +391,7 @@ export function getAllActiveCronTriggers(): AgentCronTrigger[] {
 }
 
 export async function updateCronTriggerRun(triggerId: string): Promise<void> {
-  for (const [agentId, triggers] of cronTriggers) {
+  for (const [_agentId, triggers] of cronTriggers) {
     const trigger = triggers.find(t => t.id === triggerId);
     if (trigger) {
       trigger.lastRunAt = Date.now();

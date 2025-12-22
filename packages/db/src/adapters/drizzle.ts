@@ -18,6 +18,7 @@
 
 import type { CQLClient } from '../client.js';
 import type { ExecResult, QueryResult } from '../types.js';
+import { validateSQLIdentifier, validateSQLIdentifiers } from '../utils.js';
 
 // ============================================================================
 // Types
@@ -82,7 +83,9 @@ class SelectBuilder<T extends Record<string, unknown>> {
   }
 
   from(table: TableRef<T> | string): this {
-    this.tableName = typeof table === 'string' ? table : table._.name;
+    const rawName = typeof table === 'string' ? table : table._.name;
+    // Validate table name to prevent SQL injection
+    this.tableName = validateSQLIdentifier(rawName, 'table');
     return this;
   }
 
@@ -99,7 +102,9 @@ class SelectBuilder<T extends Record<string, unknown>> {
   }
 
   orderBy(column: string, direction: 'asc' | 'desc' = 'asc'): this {
-    this.orderByClause = `${column} ${direction.toUpperCase()}`;
+    // Validate column name to prevent SQL injection
+    const safeColumn = validateSQLIdentifier(column, 'column');
+    this.orderByClause = `${safeColumn} ${direction.toUpperCase()}`;
     return this;
   }
 
@@ -154,7 +159,8 @@ class InsertBuilder<T extends Record<string, unknown>> {
   constructor(client: CQLClient, databaseId: string, table: TableRef<T>) {
     this.client = client;
     this.databaseId = databaseId;
-    this.tableName = table._.name;
+    // Validate table name to prevent SQL injection
+    this.tableName = validateSQLIdentifier(table._.name, 'table');
   }
 
   values(...rows: Partial<T>[]): this {
@@ -168,7 +174,9 @@ class InsertBuilder<T extends Record<string, unknown>> {
     }
 
     const columns = Object.keys(this.data[0]);
-    const placeholders = columns.map(() => '?').join(', ');
+    // Validate column names to prevent SQL injection
+    const safeColumns = validateSQLIdentifiers(columns, 'column');
+    const placeholders = safeColumns.map(() => '?').join(', ');
     const allParams: SQLValue[] = [];
 
     const valuesClauses = this.data.map((row) => {
@@ -179,7 +187,7 @@ class InsertBuilder<T extends Record<string, unknown>> {
       return `(${placeholders})`;
     });
 
-    const sql = `INSERT INTO ${this.tableName} (${columns.join(', ')}) VALUES ${valuesClauses.join(', ')}`;
+    const sql = `INSERT INTO ${this.tableName} (${safeColumns.join(', ')}) VALUES ${valuesClauses.join(', ')}`;
 
     return this.client.exec(sql, allParams, this.databaseId);
   }
@@ -201,7 +209,8 @@ class UpdateBuilder<T extends Record<string, unknown>> {
   constructor(client: CQLClient, databaseId: string, table: TableRef<T>) {
     this.client = client;
     this.databaseId = databaseId;
-    this.tableName = table._.name;
+    // Validate table name to prevent SQL injection
+    this.tableName = validateSQLIdentifier(table._.name, 'table');
   }
 
   set(data: Partial<T>): this {
@@ -227,7 +236,9 @@ class UpdateBuilder<T extends Record<string, unknown>> {
       throw new Error('No values to update');
     }
 
-    const setClause = columns.map((col) => `${col} = ?`).join(', ');
+    // Validate column names to prevent SQL injection
+    const safeColumns = validateSQLIdentifiers(columns, 'column');
+    const setClause = safeColumns.map((col) => `${col} = ?`).join(', ');
     const params: SQLValue[] = columns.map((col) => this.setData[col as keyof T] as SQLValue);
     params.push(...this.whereParams);
 
@@ -250,7 +261,8 @@ class DeleteBuilder<T extends Record<string, unknown>> {
   constructor(client: CQLClient, databaseId: string, table: TableRef<T>) {
     this.client = client;
     this.databaseId = databaseId;
-    this.tableName = table._.name;
+    // Validate table name to prevent SQL injection
+    this.tableName = validateSQLIdentifier(table._.name, 'table');
   }
 
   where(condition: SQL | string, ...params: SQLValue[]): this {
@@ -286,8 +298,12 @@ function createDrizzleCQL(
 ): DrizzleCQL {
   function logQuery(query: string, params: SQLValue[]): void {
     if (config?.logger === true) {
-      console.log('[CQL Drizzle]', query, params);
+      // Log query structure without exposing potentially sensitive parameter values
+      // Extract just the SQL statement type (SELECT, INSERT, UPDATE, DELETE)
+      const statementType = query.trim().split(/\s+/)[0]?.toUpperCase() ?? 'QUERY';
+      console.log(`[CQL Drizzle] ${statementType} (params: ${params.length})`);
     } else if (typeof config?.logger === 'object') {
+      // Custom loggers receive full data - they're responsible for their own filtering
       config.logger.logQuery(query, params);
     }
   }

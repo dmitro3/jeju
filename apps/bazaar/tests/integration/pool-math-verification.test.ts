@@ -15,7 +15,6 @@ import { describe, test, expect } from 'bun:test'
 
 // Q96 = 2^96 - used for fixed-point math in sqrtPriceX96
 const Q96 = 2n ** 96n
-const Q128 = 2n ** 128n
 
 // Tick boundaries
 const MIN_TICK = -887272
@@ -149,26 +148,6 @@ function getLiquidity(amount0: bigint, amount1: bigint): bigint {
   return x
 }
 
-/**
- * Calculate token amounts needed for a liquidity amount at a given price
- */
-function getAmountsForLiquidity(
-  liquidity: bigint,
-  sqrtPriceX96: bigint,
-  sqrtPriceAX96: bigint, // lower bound
-  sqrtPriceBX96: bigint  // upper bound
-): { amount0: bigint; amount1: bigint } {
-  // Simplified: For full range, amounts are proportional to price
-  const currentPrice = sqrtPriceX96ToPrice(sqrtPriceX96)
-  
-  // amount0 = L / sqrtPrice
-  // amount1 = L * sqrtPrice
-  const sqrtPrice = Math.sqrt(currentPrice)
-  const amount0 = BigInt(Math.floor(Number(liquidity) / sqrtPrice))
-  const amount1 = BigInt(Math.floor(Number(liquidity) * sqrtPrice))
-  
-  return { amount0, amount1 }
-}
 
 // =============================================================================
 // TESTS: SQRT PRICE MATH
@@ -558,7 +537,7 @@ describe('Real World Scenarios', () => {
     // Swap 100 ETH (10% of ETH reserve)
     const ethIn = 100n * 10n ** 18n
     
-    const { amountOut: usdcOut, feeAmount } = getAmountOutWithFee(
+    const { amountOut: usdcOut, feeAmount: _feeAmount } = getAmountOutWithFee(
       ethIn, ethReserve, usdcReserve, 30
     )
     

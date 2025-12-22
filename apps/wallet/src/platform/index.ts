@@ -2,7 +2,8 @@
  * Platform Abstraction Layer
  */
 
-/// <reference path="./globals.d.ts" />
+// Global type declarations
+import './globals.d.ts';
 
 export * from './types';
 export * from './detection';

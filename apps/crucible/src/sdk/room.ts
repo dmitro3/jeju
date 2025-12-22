@@ -96,7 +96,7 @@ export class RoomSDK {
       args: [roomId],
     }) as [bigint, Address, string, string, string, number, number, bigint, boolean, bigint, bigint, bigint, boolean];
 
-    const [, owner, name, description, stateCid, roomTypeNum, phaseNum, maxMembers, turnBased, turnTimeout, createdAt, , active] = roomData;
+    const [, owner, name, description, stateCid, roomTypeNum, , maxMembers, turnBased, turnTimeout, createdAt, , active] = roomData;
 
     if (!owner || owner === '0x0000000000000000000000000000000000000000') return null;
 

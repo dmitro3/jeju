@@ -5,13 +5,60 @@
 
 import express from 'express';
 import cors from 'cors';
-import { readFile } from 'fs/promises';
+import { readFile, stat, realpath } from 'fs/promises';
 import path from 'path';
 import { z } from 'zod';
 import { getNetworkName } from '@jejunetwork/config';
 import { searchDocumentation, listTopics, DOCS_ROOT, type SearchResult, type Topic } from '../lib/a2a';
 
 const PORT = process.env.DOCUMENTATION_A2A_PORT || 7778;
+const MAX_FILE_SIZE_BYTES = 1024 * 1024; // 1MB max file size
+const MAX_JSON_BODY_SIZE = '100kb';
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 100;
+
+// Rate limiting state (simple in-memory implementation)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function getRateLimitKey(req: express.Request): string {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function checkRateLimit(req: express.Request): boolean {
+  const key = getRateLimitKey(req);
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  entry.count++;
+  return true;
+}
+
+// Cleanup old rate limit entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of rateLimitMap.entries()) {
+    if (now > entry.resetTime) {
+      rateLimitMap.delete(key);
+    }
+  }
+}, RATE_LIMIT_WINDOW_MS);
+
+// Allowed origins for CORS (production should be more restrictive)
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || [
+  'http://localhost:4004',
+  'http://localhost:3000',
+  'https://docs.jejunetwork.org',
+  'https://jejunetwork.org',
+];
 
 const SkillParamsSchema = z.record(z.string(), z.string());
 
@@ -46,8 +93,35 @@ interface SkillResult {
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json());
+
+// CORS with explicit origin validation
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like curl or server-to-server)
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    if (ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+}));
+
+// JSON body parsing with size limit to prevent DoS
+app.use(express.json({ limit: MAX_JSON_BODY_SIZE }));
+
+// Rate limiting middleware
+app.use((req, res, next) => {
+  if (!checkRateLimit(req)) {
+    res.status(429).json({ error: 'Too many requests' });
+    return;
+  }
+  next();
+});
 
 const AGENT_CARD = {
   protocolVersion: '0.3.0',
@@ -141,16 +215,67 @@ app.post('/api/a2a', async (req, res) => {
   });
 });
 
+/**
+ * Validates that a file path is safe and within the documentation root.
+ * Prevents path traversal attacks by:
+ * 1. Resolving the full path
+ * 2. Verifying it starts with DOCS_ROOT
+ * 3. Only allowing .md files
+ * 4. Resolving symlinks to prevent escaping via symlink chains
+ * 5. Checking file size to prevent memory exhaustion
+ */
+async function validateDocPath(pagePath: string): Promise<string> {
+  const normalizedPath = path.normalize(pagePath);
+  
+  if (normalizedPath.includes('..') || path.isAbsolute(normalizedPath)) {
+    throw new Error('Invalid path: path traversal not allowed');
+  }
+  
+  if (!normalizedPath.endsWith('.md')) {
+    throw new Error('Invalid path: only .md files are allowed');
+  }
+  
+  const fullPath = path.resolve(DOCS_ROOT, normalizedPath);
+  
+  // Check the unresolved path first
+  if (!fullPath.startsWith(path.resolve(DOCS_ROOT))) {
+    throw new Error('Invalid path: access denied');
+  }
+  
+  // Resolve symlinks and check real path is still within DOCS_ROOT
+  const realPath = await realpath(fullPath);
+  const realDocsRoot = await realpath(DOCS_ROOT);
+  
+  if (!realPath.startsWith(realDocsRoot)) {
+    throw new Error('Invalid path: symlink escape not allowed');
+  }
+  
+  // Check file size to prevent memory exhaustion
+  const fileStat = await stat(realPath);
+  if (fileStat.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error(`File too large: maximum size is ${MAX_FILE_SIZE_BYTES} bytes`);
+  }
+  
+  return realPath;
+}
+
 async function executeSkill(skillId: string, params: Record<string, string>): Promise<SkillResult> {
   switch (skillId) {
     case 'search-docs': {
       const query = (params.query || '').toLowerCase();
+      if (query.length > 200) {
+        throw new Error('Query too long: maximum 200 characters');
+      }
       const results = await searchDocumentation(query);
       return { message: `Found ${results.length} results for "${query}"`, data: { results, query } };
     }
     case 'get-page': {
       const pagePath = params.page || '';
-      const content = await readFile(path.join(DOCS_ROOT, pagePath), 'utf-8');
+      if (!pagePath) {
+        throw new Error('Page parameter is required');
+      }
+      const safePath = await validateDocPath(pagePath);
+      const content = await readFile(safePath, 'utf-8');
       return { message: `Retrieved ${pagePath}`, data: { page: pagePath, content } };
     }
     case 'list-topics': {

@@ -5,30 +5,7 @@
 import { describe, expect, it } from 'bun:test';
 import { app } from '../server/index';
 
-// Chat completion response types (OpenAI-compatible format)
-interface ChatCompletionMessage {
-  role: 'assistant' | 'user' | 'system';
-  content: string;
-}
-
-interface ChatCompletionChoice {
-  index: number;
-  message: ChatCompletionMessage;
-  finish_reason: string;
-}
-
-interface ChatCompletionResponse {
-  id: string;
-  object: string;
-  created: number;
-  model: string;
-  choices: ChatCompletionChoice[];
-}
-
-interface ChatCompletionErrorResponse {
-  error: string;
-  docs: string;
-}
+// Chat completion response types removed - not currently used in tests
 
 describe('DWS Server', () => {
   describe('Health & Info', () => {

@@ -7,12 +7,12 @@
 
 import { describe, test, expect } from 'bun:test';
 import { createPublicClient, http, parseAbi, readContract, getCode, getChainId, getBlockNumber, parseEther, zeroAddress, getAddress, type Address } from 'viem';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 // Import shared chains
-import { chainName, rpcUrl, getChainIds } from '../../../scripts/shared/chains';
+import { chainName, rpcUrl, getChainIds } from '../../../packages/deployment/scripts/shared/chains';
 
 // Contract ABIs (minimal for testing)
 const SOLVER_REGISTRY_ABI = [

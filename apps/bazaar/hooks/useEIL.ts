@@ -36,7 +36,7 @@ export {
   getBestGasTokenForApp,
   selectBestGasToken,
   formatGasPaymentOption,
-} from '../../../scripts/shared/eil-hooks'
+} from '@jejunetwork/deployment/scripts/shared/eil-hooks'
 
 // Import for use
 import {
@@ -46,7 +46,7 @@ import {
   type CrossChainSwapParams,
   type SwapStatus,
   type AppPreference,
-} from '../../../scripts/shared/eil-hooks'
+} from '@jejunetwork/deployment/scripts/shared/eil-hooks'
 
 // EIL config - hardcoded for client-side use
 const eilConfig = {

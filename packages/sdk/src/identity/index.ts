@@ -157,7 +157,11 @@ export function createIdentityModule(
   network: NetworkType,
 ): IdentityModule {
   const identityAddress = requireContract("registry", "identity", network);
-  const reportingAddress = requireContract("moderation", "reportingSystem", network);
+  const reportingAddress = requireContract(
+    "moderation",
+    "reportingSystem",
+    network,
+  );
   const services = getServicesConfig(network);
 
   async function register(
@@ -208,8 +212,19 @@ export function createIdentityModule(
     );
     if (!response.ok) return null;
 
-    const data = (await response.json()) as AgentInfo;
-    return data;
+    const rawData: unknown = await response.json();
+
+    // Validate response structure
+    if (
+      typeof rawData !== "object" ||
+      rawData === null ||
+      !("agentId" in rawData) ||
+      !("owner" in rawData)
+    ) {
+      throw new Error("Invalid agent info response format");
+    }
+
+    return rawData as AgentInfo;
   }
 
   async function getMyAgent(): Promise<AgentInfo | null> {

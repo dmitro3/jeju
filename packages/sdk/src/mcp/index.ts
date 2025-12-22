@@ -147,20 +147,14 @@ export interface MCPModule {
   // Network Services (pre-configured endpoints)
   factory: {
     listTools(): Promise<MCPTool[]>;
-    callTool(
-      toolName: string,
-      args: JsonRecord,
-    ): Promise<MCPToolResult>;
+    callTool(toolName: string, args: JsonRecord): Promise<MCPToolResult>;
     listResources(): Promise<MCPResource[]>;
     readResource(uri: string): Promise<MCPResourceContent>;
   };
 
   gateway: {
     listTools(): Promise<MCPTool[]>;
-    callTool(
-      toolName: string,
-      args: JsonRecord,
-    ): Promise<MCPToolResult>;
+    callTool(toolName: string, args: JsonRecord): Promise<MCPToolResult>;
     listResources(): Promise<MCPResource[]>;
     readResource(uri: string): Promise<MCPResourceContent>;
   };

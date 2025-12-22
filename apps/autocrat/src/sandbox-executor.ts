@@ -107,8 +107,20 @@ const SANDBOX_IMAGES: Record<string, { image: string; description: string }> = {
 
 // ============ Job Management ============
 
+const MAX_ACTIVE_JOBS = 50;  // DoS protection: limit concurrent jobs
+const MAX_COMPLETED_JOBS = 500;  // Memory leak protection: cap completed job history
 const activeJobs = new Map<string, SandboxJob>();
 const completedJobs = new Map<string, SandboxJob>();
+
+// FIFO eviction for completedJobs to prevent unbounded memory growth
+function evictOldestCompleted(): void {
+  if (completedJobs.size >= MAX_COMPLETED_JOBS) {
+    const oldest = completedJobs.keys().next().value;
+    if (oldest !== undefined) {
+      completedJobs.delete(oldest);
+    }
+  }
+}
 
 // ============ Core Functions ============
 
@@ -215,6 +227,11 @@ export async function executeInSandbox(
   submissionId: string,
   config: SandboxConfig
 ): Promise<SandboxJob> {
+  // DoS protection: reject if too many active jobs
+  if (activeJobs.size >= MAX_ACTIVE_JOBS) {
+    throw new Error(`Maximum concurrent jobs (${MAX_ACTIVE_JOBS}) exceeded. Try again later.`);
+  }
+
   const jobId = keccak256(stringToHex(`job-${submissionId}-${Date.now()}`)).slice(0, 18);
 
   const job: SandboxJob = {
@@ -261,6 +278,7 @@ export async function executeInSandbox(
       artifacts: [],
     };
     activeJobs.delete(jobId);
+    evictOldestCompleted();
     completedJobs.set(jobId, job);
     return job;
   }
@@ -280,6 +298,7 @@ export async function executeInSandbox(
       artifacts: [],
     };
     activeJobs.delete(jobId);
+    evictOldestCompleted();
     completedJobs.set(jobId, job);
     return job;
   }
@@ -374,6 +393,7 @@ export async function executeInSandbox(
   }
 
   activeJobs.delete(jobId);
+  evictOldestCompleted();
   completedJobs.set(jobId, job);
 
   console.log(`[Sandbox] Job ${jobId} completed: ${job.status}, exploit: ${job.result?.exploitTriggered}`);
@@ -388,10 +408,10 @@ export function getJob(jobId: string): SandboxJob | null {
 export function getJobsForSubmission(submissionId: string): SandboxJob[] {
   const jobs: SandboxJob[] = [];
 
-  for (const job of activeJobs.values()) {
+  for (const job of Array.from(activeJobs.values())) {
     if (job.submissionId === submissionId) jobs.push(job);
   }
-  for (const job of completedJobs.values()) {
+  for (const job of Array.from(completedJobs.values())) {
     if (job.submissionId === submissionId) jobs.push(job);
   }
 
@@ -417,6 +437,7 @@ export function cancelJob(jobId: string): boolean {
   };
 
   activeJobs.delete(jobId);
+  evictOldestCompleted();
   completedJobs.set(jobId, job);
 
   return true;
@@ -454,11 +475,11 @@ export async function validatePoCInSandbox(
   let validationResult: ValidationResult;
 
   if (job.result.exploitTriggered) {
-    validationResult = ValidationResult.VALID;
+    validationResult = ValidationResult.VERIFIED;
   } else if (job.result.success && job.result.exitCode === 0) {
-    validationResult = ValidationResult.VALID;
+    validationResult = ValidationResult.VERIFIED;
   } else if (job.status === 'timeout') {
-    validationResult = ValidationResult.NEEDS_REVIEW;
+    validationResult = ValidationResult.NEEDS_MORE_INFO;
   } else if (job.status === 'failed') {
     validationResult = ValidationResult.INVALID;
   } else {
@@ -503,7 +524,7 @@ export function cleanupOldJobs(maxAge: number = 24 * 60 * 60 * 1000): number {
   const cutoff = Date.now() - maxAge;
   let cleaned = 0;
 
-  for (const [jobId, job] of completedJobs) {
+  for (const [jobId, job] of Array.from(completedJobs.entries())) {
     if ((job.completedAt ?? 0) < cutoff) {
       completedJobs.delete(jobId);
       cleaned++;
@@ -513,7 +534,22 @@ export function cleanupOldJobs(maxAge: number = 24 * 60 * 60 * 1000): number {
   return cleaned;
 }
 
-// Cleanup every hour
-setInterval(() => cleanupOldJobs(), 60 * 60 * 1000);
+// Cleanup every hour - store interval ID for proper cleanup on module unload
+let cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
+export function startCleanupInterval(): void {
+  if (cleanupIntervalId === null) {
+    cleanupIntervalId = setInterval(() => cleanupOldJobs(), 60 * 60 * 1000);
+  }
+}
+
+export function stopCleanupInterval(): void {
+  if (cleanupIntervalId !== null) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
+}
+
+// Auto-start cleanup on module load
+startCleanupInterval();
 

@@ -11,23 +11,23 @@
  * - Preimage generation
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { keccak256, encodeAbiParameters, pad, concat, type Hex, type Address } from 'viem';
+import { describe, test, expect, beforeAll } from 'bun:test';
+import { keccak256, encodeAbiParameters, pad, concat, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { FraudProofGenerator } from '../../../../scripts/dispute/proof-generator';
-import { StateFetcher, L2_TO_L1_MESSAGE_PASSER, type L2StateSnapshot, type AccountProof } from '../../../../scripts/dispute/state-fetcher';
+import { FraudProofGenerator } from '../../../../packages/deployment/scripts/dispute/proof-generator';
+import { StateFetcher, L2_TO_L1_MESSAGE_PASSER, type L2StateSnapshot, type AccountProof } from '../../../../packages/deployment/scripts/dispute/state-fetcher';
 import {
   CannonInterface,
   MIPS_REGISTERS,
   MIPS_OPCODES,
   MIPS_FUNCTS,
   HEAP_START,
-  PREIMAGE_KEY_KECCAK256,
   type MIPSState,
-} from '../../../../scripts/dispute/cannon-interface';
+} from '../../../../packages/deployment/scripts/dispute/cannon-interface';
+import { TEST_ACCOUNTS } from '../../shared/utils';
 
-// Test account
-const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
+// Test account from shared constants (Anvil defaults)
+const TEST_PRIVATE_KEY = TEST_ACCOUNTS.deployer.privateKey;
 const testAccount = privateKeyToAccount(TEST_PRIVATE_KEY);
 
 // Mock L1 RPC (local anvil)

@@ -1,5 +1,5 @@
 /**
- * JNS (Network Name Service) Hooks for Bazaar
+ * JNS (Jeju Name Service) Hooks for Bazaar
  * 
  * Provides hooks for:
  * - Listing names for sale
@@ -9,11 +9,15 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
-import { type Address, type Hash, formatEther, parseEther, namehash, keccak256, toBytes } from 'viem';
+import { type Address, type Hash, parseEther } from 'viem';
 import { AddressSchema } from '@jejunetwork/types';
 import { expect, expectTrue, expectPositive } from '@/lib/validation';
-import { NonEmptyStringSchema } from '@/schemas/common';
 import { CONTRACTS } from '@/config';
+import {
+  computeNameIdentifiers,
+  listingDurationToSeconds,
+  validateListingInput,
+} from '@/lib/jns';
 
 // Contract addresses from centralized config
 const JNS_REGISTRAR = CONTRACTS.jnsRegistrar;
@@ -185,16 +189,15 @@ export function useJNSList() {
     AddressSchema.parse(validatedAddress);
     const validatedPublicClient = expect(publicClient, 'Public client not available');
     
-    const validatedName = NonEmptyStringSchema.parse(name);
-    const validatedPriceInEth = NonEmptyStringSchema.parse(priceInEth);
-    expectTrue(durationDays > 0, 'Duration must be positive');
+    // Validate input using lib schema
+    const validation = validateListingInput({ name, priceEth: priceInEth, durationDays });
+    expectTrue(validation.valid, validation.valid ? '' : validation.error);
 
     setLoading(true);
     setError(null);
 
-    // Compute labelhash (tokenId)
-    const labelhash = keccak256(toBytes(validatedName));
-    const tokenId = BigInt(labelhash);
+    // Compute labelhash and tokenId using lib function
+    const { tokenId } = computeNameIdentifiers(name);
 
     // Check if approved
     const isApproved = await validatedPublicClient.readContract({
@@ -219,8 +222,8 @@ export function useJNSList() {
     // Create listing
     // AssetType: 0 = ERC721
     // Currency: 0 = ETH
-    const price = parseEther(validatedPriceInEth);
-    const duration = BigInt(durationDays * 24 * 60 * 60);
+    const price = parseEther(priceInEth);
+    const duration = listingDurationToSeconds(durationDays);
 
     const hash = await validatedWalletClient.writeContract({
       address: BAZAAR,
@@ -272,7 +275,7 @@ export function useJNSList() {
  * Hook for buying JNS names from Bazaar
  */
 export function useJNSBuy() {
-  const publicClient = usePublicClient();
+  usePublicClient();
   const { data: walletClient } = useWalletClient();
   const { address } = useAccount();
   const [loading, setLoading] = useState(false);
@@ -437,31 +440,11 @@ export function useOwnedJNSNames() {
   };
 }
 
-// ============ Utilities ============
+// ============ Utilities (re-exported from lib/jns) ============
 
-export function computeLabelhash(name: string): `0x${string}` {
-  // Simple implementation - use viem's keccak256 in production
-  return `0x${'0'.repeat(64)}` as `0x${string}`;
-}
-
-export function formatNamePrice(price: bigint): string {
-  return `${formatEther(price)} ETH`;
-}
-
-export function getTimeRemaining(expiresAt: number): string {
-  const now = Math.floor(Date.now() / 1000);
-  const diff = expiresAt - now;
-
-  if (diff <= 0) return 'Expired';
-
-  const days = Math.floor(diff / (24 * 60 * 60));
-  if (days > 30) return `${Math.floor(days / 30)} months`;
-  if (days > 0) return `${days} days`;
-
-  const hours = Math.floor(diff / (60 * 60));
-  if (hours > 0) return `${hours} hours`;
-
-  return `${Math.floor(diff / 60)} minutes`;
-}
-
+export { 
+  computeLabelhash, 
+  formatListingPrice as formatNamePrice,
+  formatTimeRemaining as getTimeRemaining,
+} from '@/lib/jns';
 

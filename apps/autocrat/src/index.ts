@@ -298,7 +298,7 @@ app.get('/api/v1/triggers/history', async (c) => {
 app.post('/api/v1/triggers/execute', async (c) => c.json(await runOrchestratorCycle()));
 
 // Proposal Assistant API
-const proposalAssistant = getProposalAssistant(blockchain);
+const proposalAssistant = getProposalAssistant();
 
 app.post('/api/v1/proposals/assess', async (c) => {
   const draftRaw = await parseAndValidateBody(c, AssessProposalRequestSchema, 'Proposal assessment request');

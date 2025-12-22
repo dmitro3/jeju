@@ -18,4 +18,4 @@ export {
   generatePaymasterData,
   getApprovalTxData,
   loadPaymasterConfig,
-} from '../../../scripts/shared/paymaster';
+} from '@jejunetwork/deployment/scripts/shared/paymaster';

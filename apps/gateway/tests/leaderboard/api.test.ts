@@ -5,7 +5,7 @@
  * For integration tests with real CQL, run with docker-compose up.
  */
 
-import { describe, test, expect, beforeAll, afterAll, mock } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 import { leaderboardApp } from '../../src/leaderboard/server';
 
 // Mock the database for unit tests
@@ -17,14 +17,14 @@ const mockDb = {
     return { rowsAffected: 0 };
   }),
   isHealthy: mock(async () => true),
-  close: mock(async () => {}),
+  close: mock(async () => { /* mock cleanup */ }),
 };
 
 // Mock database module
 mock.module('../../src/leaderboard/db', () => ({
   getLeaderboardDB: () => mockDb,
-  initLeaderboardDB: async () => {},
-  closeLeaderboardDB: async () => {},
+  initLeaderboardDB: async () => { /* mock init */ },
+  closeLeaderboardDB: async () => { /* mock close */ },
   query: mockDb.query,
   exec: mockDb.exec,
 }));

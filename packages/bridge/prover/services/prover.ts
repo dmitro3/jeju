@@ -235,7 +235,8 @@ export class ProverService {
 
     // Start workers if available
     while (this.workers < this.config.workers && this.queue.length > 0) {
-      const request = this.queue.shift()!;
+      const request = this.queue.shift();
+      if (!request) break;
       this.workers++;
       this.processing.set(request.id, request);
 

@@ -41,6 +41,10 @@ const EdgeCoordinatorConfigSchema = z.object({
   staleThresholdMs: z.number().default(300000),
   metricsPort: z.number().optional(),
   requireOnChainRegistration: z.boolean().default(true),
+  // Security: WebSocket message size limit (default 1MB)
+  maxMessageSizeBytes: z.number().min(1024).max(10 * 1024 * 1024).default(1024 * 1024),
+  // Security: Allowed origins (empty = allow all, for P2P networks)
+  allowedOrigins: z.array(z.string()).default([]),
 });
 
 export type EdgeCoordinatorConfig = z.infer<typeof EdgeCoordinatorConfigSchema>;
@@ -351,14 +355,36 @@ export class EdgeCoordinator {
       res.end('Not found');
     });
 
-    this.wss = new WebSocketServer({ server: this.httpServer! });
+    this.wss = new WebSocketServer({ 
+      server: this.httpServer!,
+      maxPayload: this.config.maxMessageSizeBytes,
+    });
 
     this.wss.on('connection', (ws, req) => {
       const ip = req.socket.remoteAddress ?? 'unknown';
+      
+      // Validate origin if allowedOrigins is configured
+      if (this.config.allowedOrigins.length > 0) {
+        const origin = req.headers.origin ?? '';
+        if (!this.config.allowedOrigins.includes(origin)) {
+          console.warn(`[EdgeCoordinator] Rejected connection from ${ip}: origin '${origin}' not in allowed list`);
+          ws.close(1008, 'Origin not allowed');
+          return;
+        }
+      }
+      
       console.log(`[EdgeCoordinator] New connection from ${ip}`);
 
       ws.on('message', async (data) => {
-        const parseResult = GossipMessageSchema.safeParse(JSON.parse(data.toString()));
+        // Check message size (defense in depth, WebSocketServer also enforces maxPayload)
+        const rawData = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
+        if (rawData.length > this.config.maxMessageSizeBytes) {
+          console.error(`[EdgeCoordinator] Message too large: ${rawData.length} bytes from ${ip}`);
+          ws.close(1009, 'Message too large');
+          return;
+        }
+        
+        const parseResult = GossipMessageSchema.safeParse(JSON.parse(rawData.toString()));
         if (!parseResult.success) {
           console.error('[EdgeCoordinator] Invalid message:', parseResult.error.message);
           return;

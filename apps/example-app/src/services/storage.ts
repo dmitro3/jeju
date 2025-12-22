@@ -18,13 +18,66 @@ interface StorageService {
   isHealthy(): Promise<boolean>;
 }
 
+// Validate IPFS CID format
+// CIDv0: starts with Qm, base58btc, 46 chars
+// CIDv1: starts with b (base32), z (base58btc), etc.
+const CID_PATTERN = /^(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{58,}|z[1-9A-HJ-NP-Za-km-z]+|f[a-f0-9]+)$/;
+
+const validateCID = (cid: string): string => {
+  if (!cid || cid.length === 0) {
+    throw new Error('CID is required');
+  }
+  
+  // Check for path traversal attempts
+  if (cid.includes('/') || cid.includes('\\') || cid.includes('..')) {
+    throw new Error('Invalid CID: contains path characters');
+  }
+  
+  // Validate CID format (loose check for various CID formats)
+  if (!CID_PATTERN.test(cid)) {
+    throw new Error(`Invalid CID format: ${cid}`);
+  }
+  
+  return cid;
+};
+
+// Sanitize file names to prevent path traversal attacks
+const sanitizeFileName = (name: string): string => {
+  if (!name || name.length === 0) {
+    throw new Error('File name is required');
+  }
+  
+  // Remove any directory components (path traversal prevention)
+  let sanitized = name
+    .replace(/\.\./g, '') // Remove ..
+    .replace(/^\/+/, '') // Remove leading slashes
+    .replace(/[/\\]/g, '_') // Replace path separators with underscores
+    .replace(/[<>:"|?*]/g, '_') // Remove invalid characters
+    .split('').filter(c => c.charCodeAt(0) >= 32).join(''); // Remove control characters
+  
+  // Limit length
+  if (sanitized.length > 255) {
+    sanitized = sanitized.slice(0, 255);
+  }
+  
+  // Ensure we have a valid name
+  if (sanitized.length === 0 || sanitized === '.' || sanitized === '..') {
+    throw new Error('Invalid file name after sanitization');
+  }
+  
+  return sanitized;
+};
+
 class IPFSStorageService implements StorageService {
   private healthLastChecked = 0;
   private healthy = false;
 
   async upload(data: Uint8Array, name: string, owner: Address): Promise<string> {
+    // Sanitize the file name to prevent path traversal
+    const safeName = sanitizeFileName(name);
+    
     const formData = new FormData();
-    formData.append('file', new Blob([data]), name);
+    formData.append('file', new Blob([data]), safeName);
     formData.append('tier', 'hot');
 
     const response = await fetch(`${STORAGE_ENDPOINT}/upload`, {
@@ -43,7 +96,10 @@ class IPFSStorageService implements StorageService {
   }
 
   async retrieve(cid: string): Promise<Uint8Array> {
-    const response = await fetch(`${IPFS_GATEWAY}/ipfs/${cid}`, {
+    // Validate CID before using in URL
+    const validatedCid = validateCID(cid);
+    
+    const response = await fetch(`${IPFS_GATEWAY}/ipfs/${validatedCid}`, {
       signal: AbortSignal.timeout(STORAGE_TIMEOUT),
     });
 
@@ -55,7 +111,9 @@ class IPFSStorageService implements StorageService {
   }
 
   getUrl(cid: string): string {
-    return `${IPFS_GATEWAY}/ipfs/${cid}`;
+    // Validate CID before using in URL
+    const validatedCid = validateCID(cid);
+    return `${IPFS_GATEWAY}/ipfs/${validatedCid}`;
   }
 
   async isHealthy(): Promise<boolean> {

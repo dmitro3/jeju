@@ -12,7 +12,9 @@
  */
 
 import {
+  type Account,
   type Address,
+  type Chain,
   type Hash,
   type PublicClient,
   type WalletClient,
@@ -100,6 +102,8 @@ export interface PaymentRequestServiceConfig {
   publicClient: PublicClient;
   walletClient?: WalletClient;
   registryAddress: Address;
+  chain: Chain;
+  account?: Account | Address;
 }
 
 export interface SubmitPaymentRequestParams {
@@ -203,11 +207,15 @@ export class PaymentRequestService {
   private publicClient: PublicClient;
   private walletClient: WalletClient | null;
   private registryAddress: Address;
+  private chain: Chain;
+  private account: Account | Address | null;
 
   constructor(config: PaymentRequestServiceConfig) {
     this.publicClient = config.publicClient;
     this.walletClient = config.walletClient || null;
     this.registryAddress = config.registryAddress;
+    this.chain = config.chain;
+    this.account = config.account || null;
   }
 
   // ============ Submission ============
@@ -219,6 +227,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'submitRequest',
+      chain: this.chain,
+      account: this.account,
       args: [
         params.daoId as `0x${string}`,
         params.contributorId as `0x${string}`,
@@ -243,6 +253,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'updateEvidence',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`, evidenceUri],
     });
 
@@ -256,6 +268,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'cancelRequest',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`],
     });
 
@@ -271,6 +285,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'councilVote',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`, getVoteIndex(vote), reason],
     });
 
@@ -284,6 +300,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'escalateToCEO',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`],
     });
 
@@ -304,6 +322,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'ceoDecision',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`, approved, modifiedAmount, reason],
     });
 
@@ -319,6 +339,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'fileDispute',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`, evidenceUri],
     });
 
@@ -334,6 +356,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'executePayment',
+      chain: this.chain,
+      account: this.account,
       args: [requestId as `0x${string}`],
     });
 
@@ -349,6 +373,8 @@ export class PaymentRequestService {
       address: this.registryAddress,
       abi: PAYMENT_REQUEST_REGISTRY_ABI,
       functionName: 'setDAOConfig',
+      chain: this.chain,
+      account: this.account,
       args: [
         daoId as `0x${string}`,
         {

@@ -12,7 +12,6 @@ import basicSetup from '../../wallet-setup/basic.setup';
 const test = testWithSynpress(metaMaskFixtures(basicSetup));
 const { expect } = test;
 
-const dwsUrl = process.env.DWS_URL || 'http://127.0.0.1:4030';
 const frontendUrl = process.env.BASE_URL || 'http://127.0.0.1:4033';
 
 test.describe('DWS E2E - Wallet Connected Operations', () => {

@@ -3,7 +3,7 @@ import { parseEther } from 'viem'
 import { toast } from 'sonner'
 import { useEffect, useState } from 'react'
 import { AddressSchema } from '@jejunetwork/types'
-import { expect, expectPositive, expectTrue } from '@/lib/validation'
+import { expectPositive, expectTrue } from '@/lib/validation'
 import NFTMarketplaceABI from '@/lib/abis/NFTMarketplace.json'
 import { CONTRACTS } from '@/config'
 

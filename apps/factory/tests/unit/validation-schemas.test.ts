@@ -10,8 +10,6 @@ import {
   bountyMilestoneSchema,
   createBountySchema,
   salarySchema,
-  createJobSchema,
-  createProjectSchema,
   createRepositorySchema,
   packageMetadataSchema,
   createModelSchema,

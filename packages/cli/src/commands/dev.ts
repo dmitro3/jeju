@@ -133,7 +133,7 @@ async function startDev(options: { minimal?: boolean; only?: string; skip?: stri
 }
 
 async function startLocalProxy(rootDir: string): Promise<void> {
-  const proxyScript = join(rootDir, 'scripts/shared/local-proxy.ts');
+  const proxyScript = join(rootDir, 'packages/deployment/scripts/shared/local-proxy.ts');
   if (!existsSync(proxyScript)) {
     logger.debug('Local proxy script not found, skipping');
     return;
@@ -179,7 +179,7 @@ function setupSignalHandlers(): void {
 
     // Stop local proxy
     if (proxyEnabled) {
-      const proxyScript = join(process.cwd(), 'scripts/shared/local-proxy.ts');
+      const proxyScript = join(process.cwd(), 'packages/deployment/scripts/shared/local-proxy.ts');
       if (existsSync(proxyScript)) {
         const { stopProxy } = await import(proxyScript);
         await stopProxy();
@@ -302,7 +302,7 @@ async function startApp(rootDir: string, app: AppManifest, rpcUrl: string, servi
 
 async function startVendorOnly(): Promise<void> {
   const rootDir = findMonorepoRoot();
-  const scriptPath = join(rootDir, 'scripts/dev-with-vendor.ts');
+  const scriptPath = join(rootDir, 'packages/deployment/scripts/dev-with-vendor.ts');
   
   if (!existsSync(scriptPath)) {
     logger.error('Vendor-only script not found');

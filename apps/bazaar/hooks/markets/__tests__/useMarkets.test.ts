@@ -1,5 +1,7 @@
 import { describe, test, expect, mock } from 'bun:test';
 import { parseEther } from 'viem';
+import { useMarkets } from '../useMarkets';
+import { calculateYesPrice, calculateNoPrice } from '@/lib/markets/lmsrPricing';
 
 // Mock graphql-request
 const mockRequest = mock(() => Promise.resolve({
@@ -38,7 +40,6 @@ mock.module('graphql-request', () => ({
 
 describe('useMarkets Hook', () => {
   test('should export useMarkets function', () => {
-    const { useMarkets } = require('../useMarkets');
     expect(typeof useMarkets).toBe('function');
   });
 
@@ -77,8 +78,6 @@ describe('useMarkets Hook', () => {
   });
 
   test('should calculate prices for each market', () => {
-    const { calculateYesPrice, calculateNoPrice } = require('@/lib/markets/lmsrPricing');
-    
     // Balanced market
     const balancedYes = parseEther('50');
     const balancedNo = parseEther('50');

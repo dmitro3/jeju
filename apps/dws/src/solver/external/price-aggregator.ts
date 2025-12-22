@@ -26,7 +26,7 @@ import {
   parseAbi,
 } from 'viem';
 import { mainnet, arbitrum, optimism, base } from 'viem/chains';
-import { CHAINS, type ChainConfig } from '../../rpc/config/chains';
+import { CHAINS } from '../../rpc/config/chains';
 
 // ============ Types ============
 

@@ -253,9 +253,14 @@ export class AcrossAdapter extends EventEmitter {
       ? deposit.outputAmount 
       : 0n;
     
+    const account = client.wallet.account;
+    if (!account) {
+      return { success: false, error: 'No account configured' };
+    }
+    
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account,
       address: spokePool,
       abi: FILL_RELAY_ABI,
       functionName: 'fillV3Relay',

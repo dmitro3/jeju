@@ -176,10 +176,12 @@ export class WorkerIsolationManager {
     worker: WorkerdWorkerDefinition,
     config: IsolationConfig
   ): Promise<IsolationContext> {
+    const maxWorkers = config.resources?.maxWorkers ?? DEFAULT_ISOLATION_CONFIG.resources?.maxWorkers ?? 100;
+    
     // Find a shared process with capacity
     for (const [id, process] of this.sharedProcesses) {
       if (
-        process.workers.size < config.resources!.maxWorkers &&
+        process.workers.size < maxWorkers &&
         process.status === 'running'
       ) {
         process.workers.add(worker.id);

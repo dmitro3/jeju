@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema, HashSchema } from './validation';
+import { AddressSchema, HashSchema, MAX_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_STRING_LENGTH, MAX_RECORD_KEYS } from './validation';
 
 // ============================================================================
 // Status Schemas
@@ -120,15 +120,18 @@ export type InferenceSettlement = z.infer<typeof InferenceSettlementSchema>;
 export const ChatMessageRoleSchema = z.enum(['system', 'user', 'assistant']);
 export type ChatMessageRole = z.infer<typeof ChatMessageRoleSchema>;
 
+/** Maximum content length for chat messages (100KB) */
+const MAX_CHAT_CONTENT_LENGTH = 100000;
+
 export const ChatMessageSchema = z.object({
   role: ChatMessageRoleSchema,
-  content: z.string(),
+  content: z.string().max(MAX_CHAT_CONTENT_LENGTH),
 });
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
 export const InferenceRequestSchema = z.object({
-  model: z.string(),
-  messages: z.array(ChatMessageSchema),
+  model: z.string().max(MAX_SHORT_STRING_LENGTH),
+  messages: z.array(ChatMessageSchema).max(MAX_ARRAY_LENGTH),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().int().positive().optional(),
   stream: z.boolean().optional(),
@@ -404,10 +407,13 @@ export type ComputeRental = z.infer<typeof ComputeRentalSchema>;
 export const CreateRentalRequestSchema = z.object({
   provider: AddressSchema,
   durationHours: z.number().int().positive(),
-  sshPublicKey: z.string(),
-  containerImage: z.string().optional(),
-  startupScript: z.string().optional(),
-  environmentVars: z.record(z.string(), z.string()).optional(),
+  sshPublicKey: z.string().max(MAX_STRING_LENGTH),
+  containerImage: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
+  startupScript: z.string().max(MAX_STRING_LENGTH).optional(),
+  environmentVars: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.string().max(MAX_STRING_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} environment variables` }
+  ).optional(),
 });
 export type CreateRentalRequest = z.infer<typeof CreateRentalRequestSchema>;
 

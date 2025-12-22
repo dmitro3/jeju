@@ -10,7 +10,14 @@ import {
   type State,
 } from "@elizaos/core";
 import { JEJU_SERVICE_NAME, type JejuService } from "../service";
-import { getMessageText, expect, validateServiceExists } from "../validation";
+import {
+  getMessageText,
+  expect,
+  validateServiceExists,
+  sanitizeText,
+  truncateOutput,
+  MAX_MESSAGE_LENGTH,
+} from "../validation";
 
 export const runInferenceAction: Action = {
   name: "RUN_INFERENCE",
@@ -44,8 +51,9 @@ export const runInferenceAction: Action = {
       return;
     }
 
-    // Use the prompt from the message
-    const prompt = getMessageText(message);
+    // Use the prompt from the message (sanitized with length limit)
+    const rawPrompt = getMessageText(message);
+    const prompt = sanitizeText(rawPrompt.slice(0, MAX_MESSAGE_LENGTH));
 
     // Find a suitable model (prefer llama or gpt)
     const preferredModel = models.find((m: { model: string }) =>
@@ -63,17 +71,20 @@ export const runInferenceAction: Action = {
       messages: [{ role: "user", content: prompt }],
     });
 
+    // Truncate and sanitize the inference result
+    const responseContent = truncateOutput(result.content ?? "", 20000);
+
     callback?.({
       text: `Inference result:
 
-${result.content}
+${responseContent}
 
 ---
 Model: ${result.model}
 Tokens: ${result.usage.totalTokens}`,
       content: {
         model: result.model,
-        response: result.content,
+        response: responseContent,
         usage: result.usage,
       },
     });

@@ -3,7 +3,7 @@
  * Handles: IdentityRegistry, ReputationRegistry, ValidationRegistry, BanManager, ReportingSystem
  */
 
-import { parseAbi, decodeEventLog, decodeAbiParameters, zeroHash, hexToString, toHex } from 'viem';
+import { parseAbi, decodeEventLog, decodeAbiParameters, zeroHash, hexToString } from 'viem';
 import { Store } from '@subsquid/typeorm-store';
 import { ProcessorContext } from './processor';
 import { 
@@ -90,7 +90,7 @@ export async function processRegistryEvents(ctx: ProcessorContext<Store>): Promi
     const feedbackResponses: FeedbackResponse[] = [];
     const validations: AgentValidation[] = [];
 
-    async function getOrCreateAgent(agentId: bigint, blockTimestamp: Date): Promise<RegisteredAgent | undefined> {
+    async function getOrCreateAgent(agentId: bigint, _blockTimestamp: Date): Promise<RegisteredAgent | undefined> {
         const id = agentId.toString();
         let agent = agents.get(id);
         if (!agent) {

@@ -58,8 +58,9 @@ describe('appNameToId', () => {
 
   test('handles empty string', () => {
     const result = appNameToId('');
+    const expected = '0x' + '0'.repeat(64);
     
-    expect(result).toBe('0x' + '0'.repeat(64));
+    expect(result as string).toBe(expected);
   });
 
   test('handles long app names', () => {
@@ -111,7 +112,7 @@ describe('getBanStatusLabel', () => {
     [BanStatus.APPEALING, 'Appealing'],
   ];
 
-  test.each(testCases)('returns "%s" for status %s', (status, expected) => {
+  test.each(testCases)('returns "%s" for status %s', (status: BanStatus, expected: string) => {
     expect(getBanStatusLabel(status)).toBe(expected);
   });
 
@@ -137,7 +138,7 @@ describe('getBanTypeLabel', () => {
     [BanType.PERMANENT, 'Permanent'],
   ];
 
-  test.each(testCases)('returns "%s" for type %d', (type, expected) => {
+  test.each(testCases)('returns "%s" for type %d', (type: BanType, expected: string) => {
     expect(getBanTypeLabel(type)).toBe(expected);
   });
 
@@ -392,7 +393,7 @@ describe('getReputationTierLabel', () => {
     [ReputationTier.TRUSTED, 'Trusted'],
   ];
 
-  test.each(testCases)('returns "%s" for tier %d', (tier, expected) => {
+  test.each(testCases)('returns "%s" for tier %d', (tier: ReputationTier, expected: string) => {
     expect(getReputationTierLabel(tier)).toBe(expected);
   });
 });

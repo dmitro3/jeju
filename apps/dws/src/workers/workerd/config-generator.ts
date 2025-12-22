@@ -5,7 +5,6 @@
 
 import type {
   WorkerdWorkerDefinition,
-  WorkerdCapnpConfig,
   WorkerdConfig,
 } from './types';
 
@@ -18,7 +17,7 @@ export function generateWorkerConfig(
   config: WorkerdConfig
 ): string {
   const workerName = sanitizeName(worker.name);
-  const mainModuleName = worker.mainModule || 'worker.js';
+  const _mainModuleName = worker.mainModule || 'worker.js';
 
   // Generate modules section
   const modules = worker.modules.map((mod) => {
@@ -104,12 +103,12 @@ export function generatePoolConfig(
   port: number,
   config: WorkerdConfig
 ): string {
-  const services = workers.map((w, i) => {
+  const services = workers.map((w, _i) => {
     const name = sanitizeName(w.name);
     return `    (name = "${name}", worker = .${name}Worker)`;
   }).join(',\n');
 
-  const routes = workers.map((w) => {
+  const _routes = workers.map((w) => {
     const name = sanitizeName(w.name);
     return `      ("/${w.id}/*", "${name}")`;
   }).join(',\n');
@@ -157,7 +156,7 @@ ${workerDefs}
  */
 function generateInlineWorkerDef(
   worker: WorkerdWorkerDefinition,
-  config: WorkerdConfig
+  _config: WorkerdConfig
 ): string {
   const name = sanitizeName(worker.name);
   

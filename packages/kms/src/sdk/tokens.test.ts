@@ -6,10 +6,14 @@
  * 
  * Uses wallet-signed tokens for testing since MPC/TEE providers
  * are not available in unit tests.
+ * 
+ * SECURITY NOTE: The private key below is from a well-known test mnemonic
+ * ("test test test..." / Anvil account 0). It has NO VALUE and should NEVER
+ * be used with real funds. It is only used for deterministic test execution.
  */
 
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { toHex, type Address, type Hex } from 'viem';
+import { describe, it, expect } from 'bun:test';
+import type { Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   issueTokenWithWallet,
@@ -20,6 +24,7 @@ import {
 } from './tokens';
 
 describe('Token SDK', () => {
+  // SECURITY: Well-known Anvil/Hardhat test account #0 - NEVER use with real funds
   const testPrivateKey: Hex = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
   const testAccount = privateKeyToAccount(testPrivateKey);
 

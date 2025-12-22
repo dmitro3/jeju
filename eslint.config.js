@@ -18,7 +18,10 @@ export default tseslint.config(
       '**/coverage/**',
       'vendor/**',
       '8004/**',
-      'packages/contracts/**',
+      'packages/contracts/lib/**',
+      'packages/contracts/src/**',
+      'packages/contracts/test/**',
+      'packages/contracts/script/**',
       'packages/deployment/kubernetes/**',
       'packages/deployment/terraform/**',
       'packages/deployment/kurtosis/**',
@@ -35,7 +38,14 @@ export default tseslint.config(
       // CLI bin files are plain JS with CommonJS
       '**/packages/cli/bin/**',
       // Bundled/minified JS files
-      '**/scripts/shared/x402.js',
+      '**/packages/deployment/scripts/shared/x402.js',
+      // Generated files that shouldn't be linted
+      '**/model/generated/**',
+      '**/playwright-report/**',
+      '**/synpress-report*/**',
+      '**/db/migrations/**',
+      '**/patches/**',
+      '**/abi/**',
     ],
   },
   // Base JS recommended rules

@@ -9,7 +9,7 @@
  */
 
 import type { Address, Hex } from 'viem';
-import { keccak256, toBytes, toHex } from 'viem';
+import { keccak256, toBytes } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import type {
   Chunk,
@@ -159,7 +159,11 @@ export class DAOperator {
     if (!this.chunkData.has(blobId)) {
       this.chunkData.set(blobId, new Map());
     }
-    this.chunkData.get(blobId)!.set(index, data);
+    const blobChunkMap = this.chunkData.get(blobId);
+    if (!blobChunkMap) {
+      throw new Error(`Failed to create chunk map for blob ${blobId}`);
+    }
+    blobChunkMap.set(index, data);
     
     // Store in verifier for sampling
     this.verifier.storeChunk(blobId, chunk);
@@ -237,7 +241,7 @@ export class DAOperator {
    * Get operator info
    */
   getInfo(): DAOperatorInfo {
-    const stats = this.verifier.getStats();
+    const _stats = this.verifier.getStats();
     
     return {
       address: this.account.address,

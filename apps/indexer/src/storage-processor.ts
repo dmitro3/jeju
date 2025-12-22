@@ -66,13 +66,13 @@ const PROVIDER_TYPES_MAP: StorageProviderType[] = [
   StorageProviderType.CLOUD_R2,
   StorageProviderType.HYBRID,
 ];
-const STORAGE_TIERS_MAP: StorageTier[] = [
+const _STORAGE_TIERS_MAP: StorageTier[] = [
   StorageTier.HOT,
   StorageTier.WARM,
   StorageTier.COLD,
   StorageTier.PERMANENT,
 ];
-const DEAL_STATUS_MAP: StorageDealStatus[] = [
+const _DEAL_STATUS_MAP: StorageDealStatus[] = [
   StorageDealStatus.PENDING,
   StorageDealStatus.ACTIVE,
   StorageDealStatus.EXPIRED,

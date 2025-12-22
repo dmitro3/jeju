@@ -215,12 +215,12 @@ test.describe('Network and Connection Errors', () => {
     console.log('✅ Disconnected state handled correctly');
   });
 
-  test.skip('should detect wrong network and show warning', async ({ page, metamask }) => {
+  test.skip('should detect wrong network and show warning', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Switch to different network and verify warning
     console.log('⚠️  Wrong network test - needs network switching implementation');
   });
 
-  test.skip('should handle RPC connection failures', async ({ page }) => {
+  test.skip('should handle RPC connection failures', async ({ page: _page }) => {
     // TODO: Simulate RPC down and test graceful degradation
     console.log('⚠️  RPC failure test - needs error injection');
   });

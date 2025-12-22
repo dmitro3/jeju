@@ -5,8 +5,8 @@
  * Validates that events are parsed correctly and entities are created.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { keccak256, stringToHex, parseAbi, parseEther, stringToBytes, encodeEventTopics, decodeEventLog, type Hex, type Address } from 'viem';
+import { describe, test, expect } from 'bun:test';
+import { keccak256, stringToHex, parseAbi, parseEther, stringToBytes, encodeEventTopics, type Hex } from 'viem';
 
 // Event signatures from oracle-processor.ts
 const EVENTS = {
@@ -71,7 +71,6 @@ describe('Oracle Event Signatures', () => {
 describe('Oracle Event Encoding', () => {
   const testFeedId = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef' as Hex;
   const testOperatorId = '0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd' as Hex;
-  const testAddress = '0x1234567890123456789012345678901234567890' as Address;
 
   test('should encode FeedCreated event topics', () => {
     const topics = encodeEventTopics({

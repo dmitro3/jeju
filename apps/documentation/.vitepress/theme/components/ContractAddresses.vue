@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { data as chainConfigs } from '../../data/chainConfig.data';
-import { ref } from 'vue';
 
 interface Props {
   network: 'mainnet' | 'testnet';
@@ -12,16 +11,61 @@ const props = defineProps<Props>();
 const config = chainConfigs[props.network];
 const contracts = config.contracts[props.layer];
 
+// Allowed explorer domains to prevent link injection
+const ALLOWED_EXPLORER_DOMAINS = [
+  'explorer.jejunetwork.org',
+  'testnet-explorer.jejunetwork.org',
+  'etherscan.io',
+  'basescan.org',
+  'sepolia.basescan.org',
+];
+
 const copyToClipboard = (text: string) => {
   navigator.clipboard.writeText(text);
 };
 
-const getExplorerLink = (address: string) => {
-  if (props.layer === 'l2') {
-    return `${config.explorerUrl}/address/${address}`;
-  } else {
-    return `${config.l1RpcUrl.replace('https://', 'https://').replace('.org', 'scan.org')}/address/${address}`;
+/**
+ * Validates that a URL hostname is in the allowed list.
+ * Prevents malicious link injection via compromised config.
+ */
+const isValidExplorerUrl = (urlString: string): boolean => {
+  try {
+    const url = new URL(urlString);
+    return ALLOWED_EXPLORER_DOMAINS.some(domain => 
+      url.hostname === domain || url.hostname.endsWith('.' + domain)
+    );
+  } catch {
+    return false;
   }
+};
+
+/**
+ * Generates explorer link with URL validation.
+ * Returns empty string if URL is not trusted.
+ */
+const getExplorerLink = (address: string): string => {
+  // Validate address format (basic hex check)
+  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    return '';
+  }
+  
+  let baseUrl: string;
+  if (props.layer === 'l2') {
+    baseUrl = config.explorerUrl;
+  } else {
+    // Construct L1 explorer URL from RPC URL
+    baseUrl = config.l1RpcUrl.replace('https://', 'https://').replace('.org', 'scan.org');
+  }
+  
+  const fullUrl = `${baseUrl}/address/${address}`;
+  
+  // Validate the constructed URL before returning
+  if (!isValidExplorerUrl(fullUrl)) {
+    console.warn('Explorer URL not in allowed list:', fullUrl);
+    return '';
+  }
+  
+  return fullUrl;
 };
 </script>
 
@@ -37,7 +81,14 @@ const getExplorerLink = (address: string) => {
         <button @click="copyToClipboard(address)" class="copy-button" title="Copy address">
           Copy
         </button>
-        <a :href="getExplorerLink(address)" target="_blank" class="explorer-link" title="View on explorer">
+        <a 
+          v-if="getExplorerLink(address)" 
+          :href="getExplorerLink(address)" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="explorer-link" 
+          title="View on explorer"
+        >
           Explorer
         </a>
       </div>

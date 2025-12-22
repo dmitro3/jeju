@@ -246,7 +246,7 @@ export function createKMSRouter(): Hono {
     const mpcEnabled = !!process.env.MPC_COORDINATOR_URL;
     
     const { privateKeyToAccount } = await import('viem/accounts');
-    const { keccak256, toBytes, toHex, fromHex } = await import('viem');
+    const { keccak256, toBytes, toHex: _toHex, fromHex } = await import('viem');
     
     // Derive signing key from keyId (deterministic for development)
     const derivedKey = keccak256(toBytes(`${key.keyId}:${key.version}`));

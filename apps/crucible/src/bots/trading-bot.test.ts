@@ -8,11 +8,11 @@
  * - Integration with real dependencies (where possible)
  */
 
-import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect } from 'bun:test';
 import type { TradingBotOptions } from './trading-bot';
-import type { ChainId } from './autocrat-types';
 import type { TradingBotStrategy, TradingBotChain } from '../types';
 import type { DefaultBotConfig } from './default-bots';
+import { DEFAULT_BOTS, getDefaultBotsForNetwork, createTradingBotOptions } from './default-bots';
 
 // Note: These tests focus on logic and structure
 // Full integration tests would require mocked RPC clients
@@ -188,8 +188,6 @@ describe('TradingBot Configuration', () => {
 
 describe('Default Bots Configuration', () => {
   test('should have valid bot configurations', () => {
-    const { DEFAULT_BOTS } = require('./default-bots');
-    
     expect(DEFAULT_BOTS.length).toBeGreaterThan(0);
     DEFAULT_BOTS.forEach((bot: DefaultBotConfig) => {
       expect(bot.name).toBeTruthy();
@@ -201,7 +199,6 @@ describe('Default Bots Configuration', () => {
   });
 
   test('should filter chains correctly for testnet', () => {
-    const { getDefaultBotsForNetwork } = require('./default-bots');
     const bots = getDefaultBotsForNetwork('testnet');
     
     const testnetChains = new Set([420690, 11155111, 84532, 421614]);
@@ -213,7 +210,6 @@ describe('Default Bots Configuration', () => {
   });
 
   test('should create valid trading bot options', () => {
-    const { DEFAULT_BOTS, createTradingBotOptions } = require('./default-bots');
     const botConfig = DEFAULT_BOTS[0];
     
     const options = createTradingBotOptions(

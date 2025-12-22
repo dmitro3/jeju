@@ -200,7 +200,8 @@ export const StrategyTypeSchema = z.enum([
 export const BotEngineConfigSchema = z.object({
   chainId: EVMChainIdSchema,
   rpcUrl: z.string().url(),
-  privateKey: z.string(),
+  // Private key must be 0x-prefixed 64 hex chars - NEVER log or expose this value
+  privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Private key must be 0x-prefixed 64 hex characters'),
   enabledStrategies: z.array(StrategyTypeSchema),
   healthCheckIntervalMs: z.number().positive(),
   logLevel: z.enum(['debug', 'info', 'warn', 'error']),

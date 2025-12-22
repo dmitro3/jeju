@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { validateQuery, validateBody, errorResponse, expect } from '@/lib/validation';
+import { validateQuery, validateBody, errorResponse, expect, requireAuth } from '@/lib/validation';
 import { getBountiesQuerySchema, createBountySchema } from '@/lib/validation/schemas';
 import type { Bounty } from '@/types';
 
@@ -55,31 +55,34 @@ export async function GET(request: NextRequest) {
 }
 
 // POST /api/bounties - Create a new bounty
+// Requires authentication - only authenticated users can create bounties
 export async function POST(request: NextRequest) {
-  try {
-    const body = await validateBody(createBountySchema, request.json());
-
-    // In production: call BountyRegistry.createBounty()
-    const bounty: Bounty = {
-      id: `bounty-${Date.now()}`,
-      title: body.title,
-      description: body.description,
-      reward: body.reward,
-      currency: body.currency,
-      skills: body.skills,
-      deadline: body.deadline,
-      milestones: body.milestones,
-      status: 'open',
-      creator: expect('0x0000000000000000000000000000000000000000' as const, 'Creator address required'),
-      submissions: 0,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    return NextResponse.json(bounty, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    return errorResponse(message, 400);
+  // Verify authentication for state-changing operation
+  const authResult = await requireAuth(request);
+  if ('error' in authResult) {
+    return authResult.error;
   }
+
+  const body = await validateBody(createBountySchema, request.json());
+
+  // In production: call BountyRegistry.createBounty()
+  // Use the authenticated address as the creator
+  const bounty: Bounty = {
+    id: `bounty-${Date.now()}`,
+    title: body.title,
+    description: body.description,
+    reward: body.reward,
+    currency: body.currency,
+    skills: body.skills,
+    deadline: body.deadline,
+    milestones: body.milestones,
+    status: 'open',
+    creator: authResult.auth.address,
+    submissions: 0,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+
+  return NextResponse.json(bounty, { status: 201 });
 }
 

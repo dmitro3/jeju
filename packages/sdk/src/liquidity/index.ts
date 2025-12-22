@@ -7,7 +7,7 @@
  * - Cross-pool yield tracking
  */
 
-import { type Address, type Hex, encodeFunctionData, parseEther } from "viem";
+import { type Address, type Hex, encodeFunctionData } from "viem";
 import type { NetworkType } from "@jejunetwork/types";
 import type { JejuWallet } from "../wallet";
 import { safeGetContract } from "../config";
@@ -71,7 +71,10 @@ export interface LiquidityModule {
   getSleeveStats(tier: RiskTier): Promise<SleeveStats>;
 
   /** Get user's position in a sleeve */
-  getSleevePosition(tier: RiskTier, address?: Address): Promise<UserSleevePosition>;
+  getSleevePosition(
+    tier: RiskTier,
+    address?: Address,
+  ): Promise<UserSleevePosition>;
 
   /** Get token risk score */
   getTokenRiskScore(token: Address): Promise<number>;
@@ -277,15 +280,21 @@ export function createLiquidityModule(
 ): LiquidityModule {
   // Contract addresses from config - undefined if not deployed
   const riskSleeveAddress = safeGetContract("liquidity", "riskSleeve", network);
-  const liquidityRouterAddress = safeGetContract("liquidity", "liquidityRouter", network);
+  const liquidityRouterAddress = safeGetContract(
+    "liquidity",
+    "liquidityRouter",
+    network,
+  );
 
   // Helper to require contract before calling
   const requireRiskSleeve = (): Address => {
-    if (!riskSleeveAddress) throw new Error("RiskSleeve contract not deployed on this network");
+    if (!riskSleeveAddress)
+      throw new Error("RiskSleeve contract not deployed on this network");
     return riskSleeveAddress;
   };
   const requireLiquidityRouter = (): Address => {
-    if (!liquidityRouterAddress) throw new Error("LiquidityRouter contract not deployed on this network");
+    if (!liquidityRouterAddress)
+      throw new Error("LiquidityRouter contract not deployed on this network");
     return liquidityRouterAddress;
   };
 
@@ -490,5 +499,3 @@ export function createLiquidityModule(
     },
   };
 }
-
-

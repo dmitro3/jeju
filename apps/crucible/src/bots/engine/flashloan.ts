@@ -54,10 +54,6 @@ const BALANCER_VAULT_ABI = parseAbi([
   'function flashLoan(address recipient, address[] tokens, uint256[] amounts, bytes userData) external',
 ]);
 
-const FLASH_LOAN_RECEIVER_ABI = parseAbi([
-  'function executeOperation(address[] calldata assets, uint256[] calldata amounts, uint256[] calldata premiums, address initiator, bytes calldata params) external returns (bool)',
-]);
-
 // Flash loan callback contract interface
 const ARBITRAGE_EXECUTOR_ABI = parseAbi([
   // Execute arbitrage with flash loan
@@ -168,7 +164,7 @@ export class FlashLoanExecutor {
   /**
    * Get the best flash loan provider for a given token/amount
    */
-  getBestProvider(token: `0x${string}`, amount: bigint): FlashLoanProvider | null {
+  getBestProvider(_token: `0x${string}`, _amount: bigint): FlashLoanProvider | null {
     // Balancer has no fee, so prefer it when available
     if (this.balancerVault) return 'balancer';
     if (this.aavePool) return 'aave';
@@ -388,7 +384,7 @@ export class FlashLoanExecutor {
    */
   async simulateFlashLoan(
     opportunity: ArbitrageOpportunity,
-    swapCalldata: `0x${string}`[]
+    _swapCalldata: `0x${string}`[]
   ): Promise<{
     success: boolean;
     expectedProfit?: bigint;

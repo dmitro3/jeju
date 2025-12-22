@@ -69,6 +69,9 @@ export function NetworkProvider({
       "NetworkProvider config",
     );
 
+    // Track if effect is still active to prevent stale state updates
+    let isCancelled = false;
+
     const init = async (): Promise<void> => {
       setIsLoading(true);
       setError(null);
@@ -83,14 +86,26 @@ export function NetworkProvider({
       };
 
       const jejuClient = await createJejuClient(config);
-      setClient(jejuClient);
-      setIsLoading(false);
+      
+      // Only update state if effect is still active
+      if (!isCancelled) {
+        setClient(jejuClient);
+        setIsLoading(false);
+      }
     };
 
     init().catch((err: unknown) => {
-      setError(err instanceof Error ? err : new Error(String(err)));
-      setIsLoading(false);
+      // Only update state if effect is still active
+      if (!isCancelled) {
+        setError(err instanceof Error ? err : new Error(String(err)));
+        setIsLoading(false);
+      }
     });
+
+    // Cleanup function to prevent stale updates
+    return () => {
+      isCancelled = true;
+    };
   }, [network, privateKey, mnemonic, account, smartAccount, rpcUrl]);
 
   return (

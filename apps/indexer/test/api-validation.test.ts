@@ -285,16 +285,6 @@ describe('Service ID Validation', () => {
 });
 
 describe('A2A Request Validation', () => {
-  interface A2ATaskRequest {
-    id: string;
-    method: 'tasks/send' | 'tasks/get' | 'tasks/cancel';
-    params?: {
-      task_id?: string;
-      content?: string;
-      skills?: string[];
-    };
-  }
-
   const validateA2ARequest = (body: Record<string, unknown>): { valid: boolean; error?: string } => {
     if (!body.id || typeof body.id !== 'string') {
       return { valid: false, error: 'Missing or invalid request id' };
@@ -366,13 +356,6 @@ describe('A2A Request Validation', () => {
 });
 
 describe('MCP Request Validation', () => {
-  interface MCPRequest {
-    jsonrpc: '2.0';
-    id: string | number;
-    method: string;
-    params?: Record<string, unknown>;
-  }
-
   const validateMCPRequest = (body: Record<string, unknown>): { valid: boolean; error?: string } => {
     if (body.jsonrpc !== '2.0') {
       return { valid: false, error: 'jsonrpc must be "2.0"' };

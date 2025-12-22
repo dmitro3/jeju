@@ -9,7 +9,7 @@
  * All integrations are fully permissionless - no API keys required.
  */
 
-import { describe, it, expect, beforeAll } from 'bun:test';
+import { describe, it, expect } from 'bun:test';
 import type { Address } from 'viem';
 
 // Import modules to test type compatibility

@@ -392,12 +392,12 @@ test.describe('App Stake Approval and Registration', () => {
 });
 
 test.describe('App Edit and Update Transactions', () => {
-  test.skip('should edit app metadata', async ({ page, metamask }) => {
+  test.skip('should edit app metadata', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Implement when edit functionality available
     console.log('⚠️  Edit app transaction - needs implementation');
   });
 
-  test.skip('should update A2A endpoint', async ({ page, metamask }) => {
+  test.skip('should update A2A endpoint', async ({ page: _page, metamask: _metamask }) => {
     // TODO: Implement when update functionality available
     console.log('⚠️  Update A2A endpoint - needs implementation');
   });

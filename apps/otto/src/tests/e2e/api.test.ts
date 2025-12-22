@@ -2,7 +2,7 @@
  * E2E API Tests for Otto
  */
 
-import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
+import { describe, test, expect, beforeAll } from 'bun:test';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 

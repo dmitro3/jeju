@@ -187,7 +187,7 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
 
       if (eventSig === ORDER_CLAIMED) {
         const orderId = log.topics[1]
-        let intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
+        const intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
         if (intent) {
           intent.status = OIFIntentStatus.CLAIMED
           intent.claimedAt = blockTimestamp
@@ -202,12 +202,12 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
         // data = (token, amount)
         const orderId = log.topics[1]
         const solverAddr = '0x' + log.topics[2].slice(26)
-        const decoded = decodeAbiParameters(
+        decodeAbiParameters(
           [{ type: 'address' }, { type: 'uint256' }],
           log.data as `0x${string}`
         )
 
-        let intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
+        const intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
         if (intent) {
           intent.status = OIFIntentStatus.FILLED
           intent.filledAt = blockTimestamp
@@ -248,14 +248,14 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
 
       if (eventSig === ORDER_SETTLED) {
         const orderId = log.topics[1]
-        let intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
+        const intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
         if (intent) {
           intent.status = OIFIntentStatus.SETTLED
           intent.settledAt = blockTimestamp
           intents.set(orderId, intent)
 
           // Update settlements
-          for (const [id, settlement] of settlements) {
+          for (const [_id, settlement] of settlements) {
             if (settlement.intent.id === orderId) {
               settlement.status = OIFSettlementStatus.SETTLED
               settlement.settledAt = blockTimestamp
@@ -282,7 +282,7 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
 
       if (eventSig === ORDER_REFUNDED) {
         const orderId = log.topics[1]
-        let intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
+        const intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
         if (intent) {
           intent.status = OIFIntentStatus.CANCELLED
           intents.set(orderId, intent)
@@ -400,8 +400,7 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
         // topics[0] = sig, topics[1] = orderId, topics[2] = attester
         // data = (timestamp)
         const orderId = log.topics[1]
-        const attesterAddr = '0x' + log.topics[2].slice(26)
-        const decoded = decodeAbiParameters([{ type: 'uint256' }], log.data as `0x${string}`)
+        decodeAbiParameters([{ type: 'uint256' }], log.data as `0x${string}`)
 
         const attestationId = `${orderId}-${txHash}`
         const intent = intents.get(orderId) || await ctx.store.get(OIFIntent, orderId)
@@ -428,7 +427,7 @@ export async function processOIFEvents(ctx: ProcessorContext<Store>): Promise<vo
           attestations.set(attestationId, attestation)
 
           // Update settlements
-          for (const [id, settlement] of settlements) {
+          for (const [_id, settlement] of settlements) {
             if (settlement.intent.id === orderId) {
               settlement.status = OIFSettlementStatus.ATTESTED
               settlement.attestedAt = blockTimestamp

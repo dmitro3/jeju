@@ -48,10 +48,14 @@ export class JejuService extends Service {
       runtime.getSetting("JEJU_PRIVATE_KEY")) as Hex | undefined;
     const mnemonic = (runtime.getSetting("NETWORK_MNEMONIC") ||
       runtime.getSetting("JEJU_MNEMONIC")) as string | undefined;
-    const network =
-      runtime.getSetting("NETWORK_TYPE") ||
-      (runtime.getSetting("JEJU_NETWORK") as NetworkType) ||
-      "testnet";
+    const networkSetting =
+      runtime.getSetting("NETWORK_TYPE") || runtime.getSetting("JEJU_NETWORK");
+    const network: NetworkType =
+      networkSetting === "localnet" ||
+      networkSetting === "testnet" ||
+      networkSetting === "mainnet"
+        ? networkSetting
+        : "testnet";
     const smartAccount =
       (runtime.getSetting("NETWORK_SMART_ACCOUNT") ||
         runtime.getSetting("JEJU_SMART_ACCOUNT")) !== "false";
@@ -67,22 +71,33 @@ export class JejuService extends Service {
       smartAccount,
     };
 
-    service.client = await createJejuClient(config);
+    // Use try-finally to ensure cleanup on initialization failure
+    let initSucceeded = false;
+    try {
+      service.client = await createJejuClient(config);
 
-    // Cache initial wallet data
-    await service.refreshWalletData();
+      // Cache initial wallet data
+      await service.refreshWalletData();
 
-    // Set up refresh interval (every 60 seconds)
-    service.refreshInterval = setInterval(
-      () => service.refreshWalletData(),
-      60000,
-    );
+      // Set up refresh interval (every 60 seconds)
+      service.refreshInterval = setInterval(
+        () => service.refreshWalletData(),
+        60000,
+      );
 
-    logger.log(`${networkName} service initialized on ${network}`);
-    logger.log(`Address: ${service.client.address}`);
-    logger.log(`Smart Account: ${service.client.isSmartAccount}`);
+      logger.log(`${networkName} service initialized on ${network}`);
+      logger.log(`Address: ${service.client.address}`);
+      logger.log(`Smart Account: ${service.client.isSmartAccount}`);
 
-    return service;
+      initSucceeded = true;
+      return service;
+    } finally {
+      // Clean up interval if initialization failed after interval was set
+      if (!initSucceeded && service.refreshInterval) {
+        clearInterval(service.refreshInterval);
+        service.refreshInterval = null;
+      }
+    }
   }
 
   static async stop(runtime: IAgentRuntime): Promise<void> {

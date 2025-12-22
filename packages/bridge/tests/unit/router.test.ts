@@ -8,14 +8,14 @@
  * - Edge cases and error handling
  */
 
-import { describe, expect, it, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, it } from "bun:test";
 import {
-	CrossChainRouter,
-	createRouter,
-	ChainType,
 	BridgeMechanism,
-	SUPPORTED_CHAINS,
+	ChainType,
+	type CrossChainRouter,
+	createRouter,
 	type RouteRequest,
+	SUPPORTED_CHAINS,
 } from "../../src/router/cross-chain-router.js";
 
 describe("CrossChainRouter", () => {
@@ -43,8 +43,8 @@ describe("CrossChainRouter", () => {
 
 			expect(routes.length).toBeGreaterThan(0);
 			// EIL should be available for L2 -> L2
-			const eilRoute = routes.find(r => 
-				r.steps.some(s => s.mechanism === BridgeMechanism.EIL_XLP)
+			const eilRoute = routes.find((r) =>
+				r.steps.some((s) => s.mechanism === BridgeMechanism.EIL_XLP),
 			);
 			expect(eilRoute).toBeDefined();
 		});
@@ -65,8 +65,8 @@ describe("CrossChainRouter", () => {
 			const routes = await router.findRoutes(request);
 
 			expect(routes.length).toBeGreaterThan(0);
-			const zkRoute = routes.find(r =>
-				r.steps.some(s => s.mechanism === BridgeMechanism.ZK_SOL_BRIDGE)
+			const zkRoute = routes.find((r) =>
+				r.steps.some((s) => s.mechanism === BridgeMechanism.ZK_SOL_BRIDGE),
 			);
 			expect(zkRoute).toBeDefined();
 			expect(zkRoute?.overallTrustLevel).toBe("trustless");
@@ -88,8 +88,8 @@ describe("CrossChainRouter", () => {
 			const routes = await router.findRoutes(request);
 
 			expect(routes.length).toBeGreaterThan(0);
-			const ccipRoute = routes.find(r =>
-				r.steps.some(s => s.mechanism === BridgeMechanism.CCIP)
+			const ccipRoute = routes.find((r) =>
+				r.steps.some((s) => s.mechanism === BridgeMechanism.CCIP),
 			);
 			expect(ccipRoute).toBeDefined();
 		});
@@ -107,7 +107,9 @@ describe("CrossChainRouter", () => {
 				preferTrustless: false,
 			};
 
-			await expect(router.findRoutes(request)).rejects.toThrow("Unsupported chain");
+			await expect(router.findRoutes(request)).rejects.toThrow(
+				"Unsupported chain",
+			);
 		});
 
 		it("should prioritize trustless routes when preferTrustless is true", async () => {
@@ -201,15 +203,17 @@ describe("CrossChainRouter", () => {
 		it("should return error when contracts not configured", async () => {
 			const route = {
 				id: "test-route",
-				steps: [{
-					mechanism: BridgeMechanism.EIL_XLP,
-					sourceChain: "eip155:8453",
-					destChain: "eip155:42161",
-					token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-					estimatedTime: 12,
-					estimatedFee: BigInt("1000000"),
-					trustLevel: "trustless" as const,
-				}],
+				steps: [
+					{
+						mechanism: BridgeMechanism.EIL_XLP,
+						sourceChain: "eip155:8453",
+						destChain: "eip155:42161",
+						token: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+						estimatedTime: 12,
+						estimatedFee: BigInt("1000000"),
+						trustLevel: "trustless" as const,
+					},
+				],
 				totalEstimatedTime: 12,
 				totalEstimatedFee: BigInt("1000000"),
 				overallTrustLevel: "trustless" as const,
@@ -333,4 +337,3 @@ describe("Router Factory", () => {
 		expect(fees.protocolFee).toBe(BigInt("2000000"));
 	});
 });
-

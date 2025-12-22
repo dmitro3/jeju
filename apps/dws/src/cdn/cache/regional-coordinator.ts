@@ -323,10 +323,12 @@ export class RegionalCacheCoordinator {
   registerNode(node: RegionalNode): void {
     this.nodes.set(node.nodeId, node);
     
-    if (!this.regionNodes.has(node.region)) {
-      this.regionNodes.set(node.region, new Set());
+    let regionSet = this.regionNodes.get(node.region);
+    if (!regionSet) {
+      regionSet = new Set();
+      this.regionNodes.set(node.region, regionSet);
     }
-    this.regionNodes.get(node.region)!.add(node.nodeId);
+    regionSet.add(node.nodeId);
   }
 
   /**

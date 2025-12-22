@@ -390,7 +390,6 @@ function CaseCard({
 export default function ModerationMarketplace() {
   const { address, isConnected } = useAccount();
   const [stakeAmount, setStakeAmount] = useState('0.01');
-  const [activeCases, setActiveCases] = useState<BanCase[]>([]);
   const [selectedTab, setSelectedTab] = useState<'cases' | 'stake' | 'report' | 'leaderboard'>('cases');
 
   // Read stake info

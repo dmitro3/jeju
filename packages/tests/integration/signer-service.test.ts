@@ -9,14 +9,22 @@ import { keccak256, stringToBytes } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 const TEST_PORT = 4199;
+/**
+ * ⚠️  TEST-ONLY CREDENTIALS ⚠️
+ * These are intentionally weak credentials for local testing only.
+ * Never use these values in production. Production should use:
+ * - Environment variables from a secure secret store
+ * - Strong, randomly generated API keys
+ * - Hardware security module (HSM) managed private keys
+ */
 const TEST_API_KEY = 'test-api-key-12345';
-const TEST_PRIVATE_KEY = '0x' + '1'.repeat(64);
+const TEST_PRIVATE_KEY = '0x' + '1'.repeat(64); // Intentionally predictable for testing
 
 let server: ReturnType<typeof Bun.serve> | null = null;
 
   async function startTestServer(): Promise<void> {
     // Import dynamically to avoid circular deps
-    const { ThresholdSignerService } = await import('../../../scripts/sequencer/signer-service.ts');
+    const { ThresholdSignerService } = await import('../../../packages/deployment/scripts/sequencer/signer-service.ts');
     const service = new ThresholdSignerService(TEST_PRIVATE_KEY, TEST_API_KEY, []);
   
   server = Bun.serve({

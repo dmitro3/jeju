@@ -445,7 +445,7 @@ export class EdgeNodeServer {
     }
 
     // Check for content hash in path
-    if (/[.\-][a-f0-9]{8,}\.[a-z]+$/i.test(path)) {
+    if (/[.-][a-f0-9]{8,}\.[a-z]+$/i.test(path)) {
       return true;
     }
 
@@ -695,6 +695,7 @@ export class EdgeNodeServer {
           BigInt(this.periodCacheMisses),
           signature,
         ],
+        chain: this.chain,
         account: this.account,
       });
       await this.publicClient.waitForTransactionReceipt({ hash }).catch((e: Error) => {

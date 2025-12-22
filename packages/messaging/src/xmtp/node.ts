@@ -12,8 +12,27 @@ import type {
   XMTPIdentity,
   SyncState,
 } from './types';
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
+
+// Maximum sizes to prevent DoS
+const MAX_CONNECTIONS = 10000;
+const MAX_IDENTITIES = 100000;
+const MAX_MESSAGE_HANDLERS = 100;
+const MAX_ENVELOPE_SIZE = 1024 * 1024; // 1MB
+
+// Schema for validating decoded envelopes
+const XMTPEnvelopeSchema = z.object({
+  version: z.number().optional(),
+  id: z.string().min(1).max(100),
+  sender: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  recipients: z.array(z.string().regex(/^0x[a-fA-F0-9]{40}$/)).min(1).max(1000),
+  ciphertext: z.string().min(1), // base64 encoded
+  contentTopic: z.string().min(1).max(500),
+  timestamp: z.number().int().positive(),
+  signature: z.string().min(1), // base64 encoded
+});
 
 // ============ Types ============
 
@@ -119,7 +138,7 @@ export class JejuXMTPNode {
    * Connect to Jeju relay network
    */
   private async connectToRelay(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const wsUrl = this.config.jejuRelayUrl.replace('http', 'ws') + '/ws';
       
       // In production, use actual WebSocket
@@ -135,9 +154,9 @@ export class JejuXMTPNode {
   }
   
   /**
-   * Handle incoming relay message
+   * Handle incoming relay message from WebSocket
    */
-  private async handleRelayMessage(data: Uint8Array): Promise<void> {
+  async handleRelayMessage(data: Uint8Array): Promise<void> {
     // Decode envelope
     const envelope = this.decodeEnvelope(data);
     if (!envelope) return;
@@ -210,10 +229,18 @@ export class JejuXMTPNode {
    * Register an XMTP identity
    */
   async registerIdentity(identity: XMTPIdentity): Promise<void> {
-    this.identityCache.set(identity.address.toLowerCase(), identity);
+    const key = identity.address.toLowerCase();
+    
+    // Check limit to prevent memory exhaustion
+    if (!this.identityCache.has(key) && this.identityCache.size >= MAX_IDENTITIES) {
+      throw new Error('Identity cache at capacity');
+    }
+    
+    this.identityCache.set(key, identity);
     
     // Store in Jeju key registry (would call contract)
-    console.log(`[XMTP Node] Registered identity for ${identity.address}`);
+    // Log truncated address only
+    console.log(`[XMTP Node] Registered identity for ${identity.address.slice(0, 10)}...`);
   }
   
   /**
@@ -284,7 +311,7 @@ export class JejuXMTPNode {
     // Call IPFS API
     const response = await fetch(`${this.config.ipfsUrl}/api/v0/add`, {
       method: 'POST',
-      body: data,
+      body: data.slice() as unknown as BodyInit,
     });
     
     if (!response.ok) {
@@ -302,6 +329,10 @@ export class JejuXMTPNode {
    * Register a message handler
    */
   onMessage(handler: MessageHandler): void {
+    // Check limit to prevent handler accumulation attacks
+    if (this.messageHandlers.size >= MAX_MESSAGE_HANDLERS) {
+      throw new Error('Too many message handlers registered');
+    }
     this.messageHandlers.add(handler);
   }
   
@@ -318,7 +349,14 @@ export class JejuXMTPNode {
    * Register a client connection
    */
   registerClient(address: Address, ws: WebSocket): void {
-    this.connections.set(address.toLowerCase(), ws);
+    const key = address.toLowerCase();
+    
+    // Check limit to prevent DoS
+    if (!this.connections.has(key) && this.connections.size >= MAX_CONNECTIONS) {
+      throw new Error('Connection limit reached');
+    }
+    
+    this.connections.set(key, ws);
   }
   
   /**
@@ -368,20 +406,49 @@ export class JejuXMTPNode {
   }
   
   /**
-   * Decode envelope from bytes
+   * Decode envelope from bytes with size limits and validation
    */
   private decodeEnvelope(data: Uint8Array): XMTPEnvelope | null {
+    // Size limit check
+    if (data.length > MAX_ENVELOPE_SIZE) {
+      console.error('[XMTP Node] Envelope too large, rejecting');
+      return null;
+    }
+    
+    let json: string;
     try {
-      const json = new TextDecoder().decode(data);
-      const parsed = JSON.parse(json);
-      return {
-        ...parsed,
-        ciphertext: Buffer.from(parsed.ciphertext, 'base64'),
-        signature: Buffer.from(parsed.signature, 'base64'),
-      };
+      json = new TextDecoder().decode(data);
     } catch {
       return null;
     }
+    
+    // Safe JSON parsing
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return null;
+    }
+    
+    // Validate envelope structure to prevent prototype pollution
+    const result = XMTPEnvelopeSchema.safeParse(parsed);
+    if (!result.success) {
+      console.error('[XMTP Node] Invalid envelope format:', result.error.message);
+      return null;
+    }
+    
+    const validated = result.data;
+    
+    return {
+      version: validated.version ?? 1,
+      id: validated.id,
+      sender: validated.sender as Address,
+      recipients: validated.recipients as Address[],
+      ciphertext: Buffer.from(validated.ciphertext, 'base64'),
+      contentTopic: validated.contentTopic,
+      timestamp: validated.timestamp,
+      signature: Buffer.from(validated.signature, 'base64'),
+    };
   }
   
   /**

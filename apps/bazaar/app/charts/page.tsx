@@ -23,7 +23,7 @@ function formatVolume(value: bigint | number): string {
 
 function TokenRow({ token, rank }: { token: Token; rank: number }) {
   const priceChange = token.priceChange24h
-  const price = token.price
+  const price = token.priceUSD
   const volume = token.volume24h
   const marketCap = price !== undefined ? price * Number(token.totalSupply) / 1e18 : undefined
 
@@ -191,8 +191,8 @@ export default function ChartsPage() {
         return (b.priceChange24h ?? 0) - (a.priceChange24h ?? 0)
       }
       // mcap
-      const aMcap = (a.price ?? 0) * Number(a.totalSupply) / 1e18
-      const bMcap = (b.price ?? 0) * Number(b.totalSupply) / 1e18
+      const aMcap = (a.priceUSD ?? 0) * Number(a.totalSupply) / 1e18
+      const bMcap = (b.priceUSD ?? 0) * Number(b.totalSupply) / 1e18
       return bMcap - aMcap
     })
   }, [tokens, searchQuery, sortBy])

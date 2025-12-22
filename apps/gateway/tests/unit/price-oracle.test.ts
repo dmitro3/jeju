@@ -5,7 +5,6 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import type { Address } from 'viem';
 import { 
   CHAINLINK_FEEDS, 
   TOKEN_TO_FEED 
@@ -68,7 +67,7 @@ describe('Price Oracle - Chainlink Feed Configuration', () => {
     });
 
     test('all feeds have valid Ethereum addresses', () => {
-      for (const [pair, feed] of Object.entries(CHAINLINK_FEEDS)) {
+      for (const [_pair, feed] of Object.entries(CHAINLINK_FEEDS)) {
         expect(feed.address).toMatch(/^0x[a-fA-F0-9]{40}$/);
         expect(feed.decimals).toBeGreaterThan(0);
       }
@@ -112,7 +111,7 @@ describe('Price Oracle - Chainlink Feed Configuration', () => {
     });
 
     test('all mapped tokens have corresponding feeds', () => {
-      for (const [token, feedKey] of Object.entries(TOKEN_TO_FEED)) {
+      for (const [_token, feedKey] of Object.entries(TOKEN_TO_FEED)) {
         expect(CHAINLINK_FEEDS[feedKey]).toBeDefined();
       }
     });

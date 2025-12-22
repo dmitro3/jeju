@@ -6,7 +6,7 @@ import {
   AlertTriangle, Bug, Zap, Lock, Send, Code, Eye,
   DollarSign, Clock
 } from 'lucide-react'
-import { parseEther, formatEther } from 'viem'
+import { parseEther } from 'viem'
 
 // ============ Types ============
 

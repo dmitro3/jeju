@@ -40,13 +40,13 @@ export * from './providers';
 // SDK
 export * from './sdk';
 
-// Edge Node Entry Points - has external dependencies on scripts/shared
+// Edge Node Entry Points - has external dependencies on packages/deployment/scripts/shared
 // export { EdgeNodeServer } from './edge/server';
 // export { startEdgeNode } from './edge';
 
-// Coordinator Entry Point - has external dependencies on scripts/shared
+// Coordinator Entry Point - has external dependencies on packages/deployment/scripts/shared
 // export { CDNCoordinator, startCoordinator } from './routing/coordinator';
 
-// JNS Gateway Entry Point - has external dependencies on scripts/shared
+// JNS Gateway Entry Point - has external dependencies on packages/deployment/scripts/shared
 // export { JNSGateway, startJNSGateway } from './gateway/jns-gateway';
 

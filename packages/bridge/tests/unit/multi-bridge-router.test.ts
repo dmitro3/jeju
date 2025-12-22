@@ -9,14 +9,14 @@
  * - Error handling
  */
 
-import { describe, expect, it, beforeEach } from "bun:test";
-import {
-	MultiBridgeRouter,
-	createMultiBridgeRouter,
-	type TransferParams,
-	type BridgeProvider,
-} from "../../src/router/multi-bridge-router.js";
+import { beforeEach, describe, expect, it } from "bun:test";
 import { parseUnits } from "viem";
+import {
+	type BridgeProvider,
+	createMultiBridgeRouter,
+	type MultiBridgeRouter,
+	type TransferParams,
+} from "../../src/router/multi-bridge-router.js";
 
 describe("MultiBridgeRouter", () => {
 	let router: MultiBridgeRouter;
@@ -74,7 +74,7 @@ describe("MultiBridgeRouter", () => {
 
 			const routes = await router.findRoutes(params);
 			// CCIP should not be in the results for Solana
-			const ccipRoute = routes.find(r => r.provider === "ccip");
+			const ccipRoute = routes.find((r) => r.provider === "ccip");
 			expect(ccipRoute).toBeUndefined();
 		});
 
@@ -92,7 +92,7 @@ describe("MultiBridgeRouter", () => {
 			if (routes.length > 1) {
 				// First route should have lower or equal time than second
 				expect(routes[0].estimatedTimeSeconds).toBeLessThanOrEqual(
-					routes[1].estimatedTimeSeconds
+					routes[1].estimatedTimeSeconds,
 				);
 			}
 		});
@@ -127,7 +127,7 @@ describe("MultiBridgeRouter", () => {
 			};
 
 			const routes = await router.findRoutes(params);
-			
+
 			for (const route of routes) {
 				expect(route.provider).toBeDefined();
 				expect(route.sourceChainId).toBe(params.sourceChainId);
@@ -223,7 +223,11 @@ describe("MultiBridgeRouter", () => {
 		it("should have correct stat structure", () => {
 			const stats = router.getProviderStats();
 
-			for (const provider of ["zksolbridge", "wormhole", "ccip"] as BridgeProvider[]) {
+			for (const provider of [
+				"zksolbridge",
+				"wormhole",
+				"ccip",
+			] as BridgeProvider[]) {
 				const providerStats = stats[provider];
 				expect(typeof providerStats.successRate).toBe("number");
 				expect(typeof providerStats.avgExecutionTimeSeconds).toBe("number");
@@ -236,7 +240,13 @@ describe("MultiBridgeRouter", () => {
 		it("should recommend provider for EVM to EVM", async () => {
 			const provider = await router.getRecommendedProvider(1, 8453);
 			expect(provider).toBeDefined();
-			expect(["zksolbridge", "wormhole", "ccip", "layerzero", "hyperlane"]).toContain(provider);
+			expect([
+				"zksolbridge",
+				"wormhole",
+				"ccip",
+				"layerzero",
+				"hyperlane",
+			]).toContain(provider);
 		});
 
 		it("should recommend provider for EVM to Solana", async () => {
@@ -284,7 +294,7 @@ describe("MultiBridgeRouter", () => {
 
 			const routes = await router.findRoutes(params);
 			expect(routes.length).toBeGreaterThan(0);
-			
+
 			// Fees should scale with amount
 			for (const route of routes) {
 				expect(route.bridgeFee).toBeGreaterThan(BigInt(0));
@@ -339,4 +349,3 @@ describe("MultiBridgeRouter Events", () => {
 		expect(eventReceived).toBe(true);
 	});
 });
-

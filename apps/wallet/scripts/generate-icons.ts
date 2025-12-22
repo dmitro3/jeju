@@ -76,7 +76,7 @@ async function main() {
     console.log('Generated icon.icns (placeholder - generate with iconutil on macOS)');
 
     console.log('Icons generated successfully!');
-  } catch (e) {
+  } catch (_e) {
     console.log('Sharp not available, creating placeholder icons...');
     
     // Write SVG-based placeholder files

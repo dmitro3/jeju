@@ -59,6 +59,15 @@ let rpcClient: PublicClient | null = null
 const getRpcClient = (): PublicClient => 
   rpcClient ??= createPublicClient({ transport: http(RPC_URL) })
 
+// Security: Maximum limits to prevent DoS via large responses
+const MAX_LIMIT = 500;
+const DEFAULT_LIMIT = 50;
+
+function sanitizeLimit(limit: number | undefined, defaultVal: number = DEFAULT_LIMIT): number {
+  if (limit === undefined || limit <= 0) return defaultVal;
+  return Math.min(limit, MAX_LIMIT);
+}
+
 let indexerHealthy: boolean | null = null
 let healthCheckTime = 0
 const HEALTH_CACHE_MS = 30000
@@ -211,7 +220,8 @@ export async function fetchTokensWithMarketData(options: {
   orderBy?: TokenOrderBy
   minLiquidity?: number
 }): Promise<Token[]> {
-  const { limit = 50, offset = 0, chainId, orderBy = 'volume', minLiquidity } = options
+  const { offset = 0, chainId, orderBy = 'volume', minLiquidity } = options
+  const limit = sanitizeLimit(options.limit)
 
   if (!(await checkIndexerHealth())) {
     return fetchTokensFallback(offset)
@@ -255,7 +265,8 @@ export async function fetchTokens(options: {
   verified?: boolean
   orderBy?: 'volume' | 'recent' | 'holders'
 }): Promise<Token[]> {
-  const { limit = 50, offset = 0, orderBy = 'recent' } = options
+  const { offset = 0, orderBy = 'recent' } = options
+  const limit = sanitizeLimit(options.limit)
 
   if (await checkIndexerHealth()) {
     const data = await gql<{ contracts: Array<{
@@ -351,7 +362,8 @@ export async function fetchPredictionMarkets(options: {
   offset?: number
   resolved?: boolean
 }): Promise<PredictionMarket[]> {
-  const { limit = 50, offset = 0, resolved } = options
+  const { offset = 0, resolved } = options
+  const limit = sanitizeLimit(options.limit)
   if (!(await checkIndexerHealth())) return []
 
   const whereClause = resolved !== undefined ? `where: { resolved_eq: ${resolved} }` : ''
@@ -397,10 +409,10 @@ const INTERVAL_MAP: Record<string, string> = {
 export async function fetchPriceHistory(
   tokenAddress: Address,
   interval: '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
-  limit = 100
+  requestedLimit = 100
 ): Promise<PriceCandle[]> {
   const validatedAddress = AddressSchema.parse(tokenAddress);
-  expect(limit > 0, 'Limit must be positive');
+  const limit = sanitizeLimit(requestedLimit, 100);
   expect(['1m', '5m', '15m', '1h', '4h', '1d'].includes(interval), `Invalid interval: ${interval}`);
   
   if (!(await checkIndexerHealth())) {
@@ -463,10 +475,10 @@ export async function fetchPriceHistory(
   })).reverse()
 }
 
-export async function searchTokens(query: string, limit = 20): Promise<Token[]> {
+export async function searchTokens(query: string, requestedLimit = 20): Promise<Token[]> {
   expect(query, 'Search query is required');
   expect(query.length > 0, 'Search query cannot be empty');
-  expect(limit > 0, 'Limit must be positive');
+  const limit = sanitizeLimit(requestedLimit, 20);
   
   if (!(await checkIndexerHealth())) return []
 

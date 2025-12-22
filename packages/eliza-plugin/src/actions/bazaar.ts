@@ -15,6 +15,7 @@ import {
   expectResponseData,
   expectArray,
   validateServiceExists,
+  truncateOutput,
 } from "../validation";
 
 export const launchTokenAction: Action = {
@@ -127,9 +128,10 @@ export const listNftsAction: Action = {
     // Extract optional collection filter
     const collectionMatch = text.match(/collection[:\s]+([^\s]+)/i);
 
+    const collection = collectionMatch?.[1];
     const response = await client.a2a.callBazaar({
       skillId: "list-nfts",
-      params: { collection: collectionMatch?.[1] },
+      params: collection ? { collection } : {},
     });
 
     const responseData = expectResponseData(
@@ -151,15 +153,21 @@ export const listNftsAction: Action = {
       return;
     }
 
+    // Sanitize external NFT data to prevent injection
     const nftList = nfts
       .slice(0, 10)
-      .map((n) => `• ${n.name} (${n.collection}) - ${n.price} ETH`)
+      .map((n) => {
+        const safeName = truncateOutput(n.name, 100);
+        const safeCollection = truncateOutput(n.collection, 100);
+        const safePrice = truncateOutput(n.price, 50);
+        return `• ${safeName} (${safeCollection}) - ${safePrice} ETH`;
+      })
       .join("\n");
 
     callback?.({
       text: `NFTs on marketplace (${nfts.length}):
 ${nftList}`,
-      content: { nfts },
+      content: { nfts: nfts.slice(0, 10) },
     });
   },
 
@@ -221,9 +229,14 @@ export const listNamesForSaleAction: Action = {
       return;
     }
 
+    // Sanitize external name data to prevent injection
     const nameList = names
       .slice(0, 15)
-      .map((n) => `• ${n.name} - ${n.price} ETH`)
+      .map((n) => {
+        const safeName = truncateOutput(n.name, 100);
+        const safePrice = truncateOutput(n.price, 50);
+        return `• ${safeName} - ${safePrice} ETH`;
+      })
       .join("\n");
 
     callback?.({
@@ -231,7 +244,7 @@ export const listNamesForSaleAction: Action = {
 ${nameList}
 
 Use 'buy name [name]' to purchase.`,
-      content: { names },
+      content: { names: names.slice(0, 15) },
     });
   },
 

@@ -218,7 +218,9 @@ export class AutocratAgentRuntimeManager {
   private initialized = false;
   private dwsAvailable: boolean | null = null;
 
-  private constructor() {}
+  private constructor() {
+    // Singleton pattern - private constructor prevents external instantiation
+  }
 
   static getInstance(): AutocratAgentRuntimeManager {
     return (AutocratAgentRuntimeManager.instance ??= new AutocratAgentRuntimeManager());

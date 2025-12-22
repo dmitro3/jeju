@@ -46,12 +46,6 @@ const MARKETPLACE_ABI = parseAbi([
   'function nextAuctionId() view returns (uint256)',
 ])
 
-// Predimarket ABI
-const PREDIMARKET_ABI = parseAbi([
-  'function getMarket(bytes32 sessionId) view returns (uint256 yesShares, uint256 noShares, uint256 liquidityB, bool resolved, bool outcome)',
-  'function getUserPosition(bytes32 sessionId, address user) view returns (uint256 yesShares, uint256 noShares)',
-])
-
 // Helper to connect wallet
 async function connectWallet(page: Page, metamask: MetaMask) {
   await page.goto('/')

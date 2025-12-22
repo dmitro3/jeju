@@ -9,15 +9,12 @@ import type {
   SocialLink, 
   RepositoryClaim, 
   DependencyClaim,
-  DAOContribution,
-  VerificationStatus,
   SocialPlatform,
 } from '../types/funding';
 import { 
   parseContributorType, 
   parseVerificationStatus, 
   getContributorTypeIndex,
-  SOCIAL_PLATFORMS,
 } from '../types/funding';
 import { keccak256, toBytes } from 'viem';
 

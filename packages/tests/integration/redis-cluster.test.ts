@@ -192,9 +192,11 @@ describe.skipIf(!REDIS_AVAILABLE)('RedisClusterClient with Encryption', () => {
   let client: RedisClusterClient;
 
   beforeAll(async () => {
-    // Generate a 32-byte encryption key
+    // Generate a random 32-byte encryption key for testing
+    // WARNING: In production, use a cryptographically secure key from environment variables
+    // This is intentionally a test-only key pattern that should NEVER be used in production
     const encryptionKey = Buffer.from(
-      'test-encryption-key-32bytes-long'
+      'TEST_ONLY_KEY_DO_NOT_USE_IN_PROD'
     ).toString('hex').slice(0, 64);
 
     const config: Partial<RedisClusterConfig> = {
@@ -217,7 +219,8 @@ describe.skipIf(!REDIS_AVAILABLE)('RedisClusterClient with Encryption', () => {
   });
 
   it('should encrypt and decrypt values transparently', async () => {
-    const sensitiveData = 'super-secret-api-key-12345';
+    // Test data - clearly fake placeholder value for testing encryption
+    const sensitiveData = 'test-value-for-encryption-verification';
     
     await client.set('encrypted-key', sensitiveData);
     const retrieved = await client.get('encrypted-key');
@@ -226,7 +229,8 @@ describe.skipIf(!REDIS_AVAILABLE)('RedisClusterClient with Encryption', () => {
   });
 
   it('should handle special characters in encrypted data', async () => {
-    const specialData = '{"api_key": "sk-123", "webhook": "https://example.com?a=1&b=2"}';
+    // Test JSON with special characters - clearly fake placeholder values
+    const specialData = '{"test_field": "value-123", "url": "https://example.com?a=1&b=2"}';
     
     await client.set('json-data', specialData);
     const retrieved = await client.get('json-data');

@@ -434,15 +434,15 @@ function determineResult(
   confidence: number
 ): ValidationResult {
   if (sandboxResult?.exploitTriggered) {
-    return ValidationResult.VALID;
+    return ValidationResult.VERIFIED;
   }
 
   if (confidence >= 70) {
-    return ValidationResult.VALID;
+    return ValidationResult.LIKELY_VALID;
   }
 
   if (confidence >= 40) {
-    return ValidationResult.NEEDS_REVIEW;
+    return ValidationResult.NEEDS_MORE_INFO;
   }
 
   return ValidationResult.INVALID;

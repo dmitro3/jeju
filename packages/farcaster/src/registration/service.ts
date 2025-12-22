@@ -12,7 +12,6 @@ import {
   type Address,
   type Hex,
   encodeFunctionData,
-  parseEther,
   formatEther,
 } from 'viem';
 import { optimism } from 'viem/chains';
@@ -162,10 +161,20 @@ const BUNDLER_ABI = [
   },
 ] as const;
 
+// ============ Resolved Config (all required) ============
+
+interface ResolvedConfig {
+  rpcUrl: string;
+  idGatewayAddress: Address;
+  storageRegistryAddress: Address;
+  keyRegistryAddress: Address;
+  bundlerAddress: Address;
+}
+
 // ============ Registration Service ============
 
 export class FIDRegistrationService {
-  private config: RegistrationConfig;
+  private config: ResolvedConfig;
   private publicClient: PublicClient;
   private walletClient: WalletClient | null = null;
   
@@ -181,7 +190,7 @@ export class FIDRegistrationService {
     this.publicClient = createPublicClient({
       chain: optimism,
       transport: http(this.config.rpcUrl),
-    });
+    }) as PublicClient;
   }
   
   /**
@@ -200,6 +209,9 @@ export class FIDRegistrationService {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     // Get current price
     const price = await this.getRegistrationPrice(request.storageUnits ?? 1);
@@ -213,7 +225,9 @@ export class FIDRegistrationService {
     
     // Send transaction
     const txHash = await this.walletClient.sendTransaction({
-      to: this.config.idGatewayAddress!,
+      account: this.walletClient.account,
+      chain: optimism,
+      to: this.config.idGatewayAddress,
       data,
       value: price.fidPrice,
     });
@@ -255,6 +269,9 @@ export class FIDRegistrationService {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     // Get total price
     const price = await this.getBundledPrice(request.storageUnits);
@@ -286,7 +303,9 @@ export class FIDRegistrationService {
     
     // Send transaction
     const txHash = await this.walletClient.sendTransaction({
-      to: this.config.bundlerAddress!,
+      account: this.walletClient.account,
+      chain: optimism,
+      to: this.config.bundlerAddress,
       data,
       value: price + (request.extraEth ?? 0n),
     });
@@ -323,6 +342,9 @@ export class FIDRegistrationService {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
     }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
+    }
     
     const unitPrice = await this.getStorageUnitPrice();
     const totalPrice = unitPrice * BigInt(units);
@@ -334,7 +356,9 @@ export class FIDRegistrationService {
     });
     
     const txHash = await this.walletClient.sendTransaction({
-      to: this.config.storageRegistryAddress!,
+      account: this.walletClient.account,
+      chain: optimism,
+      to: this.config.storageRegistryAddress,
       data,
       value: totalPrice,
     });
@@ -351,7 +375,7 @@ export class FIDRegistrationService {
    */
   async getStorageInfo(fid: number): Promise<StorageInfo> {
     const units = await this.publicClient.readContract({
-      address: this.config.storageRegistryAddress!,
+      address: this.config.storageRegistryAddress,
       abi: STORAGE_REGISTRY_ABI,
       functionName: 'rentedUnitsOf',
       args: [BigInt(fid)],
@@ -370,9 +394,12 @@ export class FIDRegistrationService {
   /**
    * Register a signer key for FID
    */
-  async registerSigner(fid: number, publicKey: Hex): Promise<Hex> {
+  async registerSigner(_fid: number, publicKey: Hex): Promise<Hex> {
     if (!this.walletClient) {
       throw new Error('Wallet client not set');
+    }
+    if (!this.walletClient.account) {
+      throw new Error('Wallet client must have an account');
     }
     
     const KEY_REGISTRY_ABI = [
@@ -397,7 +424,9 @@ export class FIDRegistrationService {
     });
     
     const txHash = await this.walletClient.sendTransaction({
-      to: this.config.keyRegistryAddress!,
+      account: this.walletClient.account,
+      chain: optimism,
+      to: this.config.keyRegistryAddress,
       data,
     });
     
@@ -505,13 +534,44 @@ export class FIDRegistrationService {
    * Check username availability
    */
   async checkUsernameAvailability(username: string): Promise<UsernameAvailability> {
-    // Validate format
+    // Minimum length validation (Farcaster requires at least 1 char)
     if (username.length < 1) {
       return { available: false, reason: 'too_short' };
     }
     
-    if (!/^[a-z0-9_-]+$/i.test(username)) {
+    // Maximum length validation (Farcaster max is 16 chars)
+    if (username.length > 16) {
       return { available: false, reason: 'invalid' };
+    }
+    
+    // Must start with a letter or number (not underscore/hyphen)
+    if (!/^[a-z0-9]/i.test(username)) {
+      return { available: false, reason: 'invalid' };
+    }
+    
+    // Only allow lowercase letters, numbers, underscores, and hyphens
+    // Enforce lowercase to match Farcaster requirements
+    if (!/^[a-z0-9_-]+$/.test(username.toLowerCase())) {
+      return { available: false, reason: 'invalid' };
+    }
+    
+    // Disallow consecutive special characters
+    if (/[_-]{2,}/.test(username)) {
+      return { available: false, reason: 'invalid' };
+    }
+    
+    // Must not end with underscore or hyphen
+    if (/[_-]$/.test(username)) {
+      return { available: false, reason: 'invalid' };
+    }
+    
+    // Reserved usernames that could be confusing
+    const reservedUsernames = [
+      'admin', 'root', 'system', 'farcaster', 'warpcast',
+      'support', 'help', 'security', 'official', 'api',
+    ];
+    if (reservedUsernames.includes(username.toLowerCase())) {
+      return { available: false, reason: 'reserved' };
     }
     
     // Check hub for existing registration
@@ -528,7 +588,7 @@ export class FIDRegistrationService {
   async getRegistrationPrice(storageUnits: number = 1): Promise<RegistrationPrice> {
     const [fidPrice, unitPrice] = await Promise.all([
       this.publicClient.readContract({
-        address: this.config.idGatewayAddress!,
+        address: this.config.idGatewayAddress,
         abi: ID_GATEWAY_ABI,
         functionName: 'price',
       }),
@@ -549,7 +609,7 @@ export class FIDRegistrationService {
    */
   async getBundledPrice(storageUnits: number): Promise<bigint> {
     return this.publicClient.readContract({
-      address: this.config.bundlerAddress!,
+      address: this.config.bundlerAddress,
       abi: BUNDLER_ABI,
       functionName: 'price',
       args: [BigInt(storageUnits)],
@@ -561,7 +621,7 @@ export class FIDRegistrationService {
    */
   async getStorageUnitPrice(): Promise<bigint> {
     return this.publicClient.readContract({
-      address: this.config.storageRegistryAddress!,
+      address: this.config.storageRegistryAddress,
       abi: STORAGE_REGISTRY_ABI,
       functionName: 'unitPrice',
     });

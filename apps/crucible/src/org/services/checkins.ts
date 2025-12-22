@@ -85,8 +85,10 @@ export class CheckinService {
 
   getResponses(state: OrgState, scheduleId: string, params?: { start?: number; end?: number; limit?: number }): CheckinResponse[] {
     let responses = state.checkinResponses.filter(r => r.scheduleId === scheduleId);
-    if (params?.start) responses = responses.filter(r => r.submittedAt >= params.start!);
-    if (params?.end) responses = responses.filter(r => r.submittedAt <= params.end!);
+    const startTime = params?.start;
+    const endTime = params?.end;
+    if (startTime !== undefined) responses = responses.filter(r => r.submittedAt >= startTime);
+    if (endTime !== undefined) responses = responses.filter(r => r.submittedAt <= endTime);
     responses.sort((a, b) => b.submittedAt - a.submittedAt);
     if (params?.limit) responses = responses.slice(0, params.limit);
     return responses;
@@ -115,7 +117,7 @@ export class CheckinService {
 
     const blockers = responses.filter(r => r.blockers?.length).flatMap(r => {
       const member = state.teamMembers.find(m => m.agentId === r.responderAgentId);
-      return r.blockers!.map(b => ({ memberName: member?.displayName ?? `Agent ${r.responderAgentId.slice(0, 8)}`, blocker: b, date: r.submittedAt }));
+      return (r.blockers ?? []).map(b => ({ memberName: member?.displayName ?? `Agent ${r.responderAgentId.slice(0, 8)}`, blocker: b, date: r.submittedAt }));
     });
 
     const expected = state.teamMembers.length * this.calcExpected(schedule.frequency, params.start, params.end);
@@ -154,7 +156,9 @@ export class CheckinService {
     const sorted = [...responses].sort((a, b) => b.submittedAt - a.submittedAt);
     let streak = 1;
     for (let i = 1; i < sorted.length; i++) {
-      if (sorted[i - 1]!.submittedAt - sorted[i]!.submittedAt <= 172800000) streak++;
+      const prev = sorted[i - 1];
+      const curr = sorted[i];
+      if (prev && curr && prev.submittedAt - curr.submittedAt <= 172800000) streak++;
       else break;
     }
     return streak;

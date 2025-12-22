@@ -331,7 +331,7 @@ export class EdgeCache {
    */
   private hasContentHash(path: string): boolean {
     // Match patterns like: .a1b2c3d4. or -a1b2c3d4.
-    return /[.\-][a-f0-9]{8,}\.[a-z]+$/i.test(path);
+    return /[.-][a-f0-9]{8,}\.[a-z]+$/i.test(path);
   }
 
   /**

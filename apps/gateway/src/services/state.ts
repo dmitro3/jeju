@@ -154,7 +154,7 @@ async function ensureTablesExist(): Promise<void> {
   }
   
   for (const idx of indexes) {
-    await cqlClient.exec(idx, [], CQL_DATABASE_ID).catch(() => {});
+    await cqlClient.exec(idx, [], CQL_DATABASE_ID).catch(() => { /* index may already exist */ });
   }
   
   console.log('[Gateway State] CovenantSQL tables ensured');

@@ -13,10 +13,11 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, readContract, waitForTransactionReceipt, formatEther, formatUnits, parseUnits, decodeEventLog, type Address, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, formatEther, formatUnits, parseUnits, decodeEventLog, type Address, type PublicClient, type WalletClient } from 'viem';
+import { readContract, waitForTransactionReceipt } from 'viem/actions';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
-import { Logger } from '../../../scripts/shared/logger';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
+import { Logger } from '../../../packages/deployment/scripts/shared/logger';
 import { TEST_WALLETS } from '../shared/constants';
 
 const logger = new Logger('cloud-x402-e2e');

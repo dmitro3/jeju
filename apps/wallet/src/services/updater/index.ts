@@ -414,7 +414,7 @@ export class UpdateService {
       // Tauri v2: Use invoke to call a custom command that handles file writing
       // BaseDirectory.AppData = 14 in Tauri v2
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke<void>('save_pending_update', { data: Array.from(data) });
+      await invoke('save_pending_update', { data: Array.from(data) });
     } else if (typeof indexedDB !== 'undefined') {
       const db = await this.getIndexedDB();
       const tx = db.transaction('updates', 'readwrite');
@@ -463,7 +463,7 @@ export class UpdateService {
     try {
       // Tauri v2: invoke is in @tauri-apps/api/core
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke<void>('install_update');
+      await invoke('install_update');
       
       this.state.installing = false;
       this.notify('onInstallComplete');

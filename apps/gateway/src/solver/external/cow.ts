@@ -133,44 +133,49 @@ export interface CowSolution {
   prices: Record<string, bigint>;
 }
 
-interface CowApiOrder {
-  uid: string;
-  owner: string;
-  sellToken: string;
-  buyToken: string;
-  sellAmount: string;
-  buyAmount: string;
-  validTo: number;
-  appData: string;
-  feeAmount: string;
-  kind: string;
-  partiallyFillable: boolean;
-  receiver: string;
-  signature: string;
-  signingScheme: string;
-  status: string;
-  creationDate: string;
-  executedSellAmount: string;
-  executedBuyAmount: string;
-}
+import { z } from 'zod';
 
-interface CowApiAuction {
-  id: number;
-  orders: CowApiOrder[];
-}
+// SECURITY: Zod schemas for CoW API responses to prevent prototype pollution and validate data
+const CowApiOrderSchema = z.object({
+  uid: z.string().min(1),
+  owner: z.string().min(1),
+  sellToken: z.string().min(1),
+  buyToken: z.string().min(1),
+  sellAmount: z.string().min(1),
+  buyAmount: z.string().min(1),
+  validTo: z.number().int().positive(),
+  appData: z.string(),
+  feeAmount: z.string(),
+  kind: z.string().min(1),
+  partiallyFillable: z.boolean(),
+  receiver: z.string().optional(),
+  signature: z.string(),
+  signingScheme: z.string(),
+  status: z.string(),
+  creationDate: z.string(),
+  executedSellAmount: z.string().optional().default('0'),
+  executedBuyAmount: z.string().optional().default('0'),
+});
 
-interface CowApiQuote {
-  quote: {
-    sellToken: string;
-    buyToken: string;
-    sellAmount: string;
-    buyAmount: string;
-    feeAmount: string;
-    validTo: number;
-    kind: string;
-  };
-  id: number;
-}
+const CowApiAuctionSchema = z.object({
+  id: z.number().int().positive(),
+  orders: z.array(CowApiOrderSchema),
+});
+
+const CowApiQuoteSchema = z.object({
+  quote: z.object({
+    sellToken: z.string().min(1),
+    buyToken: z.string().min(1),
+    sellAmount: z.string().min(1),
+    buyAmount: z.string().min(1),
+    feeAmount: z.string(),
+    validTo: z.number().int().positive(),
+    kind: z.string().min(1),
+  }),
+  id: z.number().int(),
+});
+
+type CowApiOrder = z.infer<typeof CowApiOrderSchema>;
 
 export class CowProtocolSolver extends EventEmitter {
   private clients: Map<number, { public: PublicClient; wallet?: WalletClient }>;
@@ -248,7 +253,14 @@ export class CowProtocolSolver extends EventEmitter {
 
     if (!response.ok) return null;
 
-    const data = await response.json() as CowApiQuote;
+    // SECURITY: Validate API response with Zod schema
+    const rawData = await response.json();
+    const parseResult = CowApiQuoteSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      console.error('[CoW] Invalid quote response:', parseResult.error.message);
+      return null;
+    }
+    const data = parseResult.data;
     
     return {
       sellToken: data.quote.sellToken as Address,
@@ -422,9 +434,10 @@ export class CowProtocolSolver extends EventEmitter {
       return { success: false, error: 'Chain not supported' };
     }
 
+    if (!client.wallet.account) throw new Error('Wallet has no account');
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account: client.wallet.account,
       address: token,
       abi: [{
         type: 'function',
@@ -462,8 +475,14 @@ export class CowProtocolSolver extends EventEmitter {
 
     if (!response.ok) return [];
 
-    const data = await response.json() as CowApiOrder[];
-    return this.parseOrders(data, chainId);
+    // SECURITY: Validate API response with Zod schema
+    const rawData = await response.json();
+    const parseResult = z.array(CowApiOrderSchema).safeParse(rawData);
+    if (!parseResult.success) {
+      console.error('[CoW] Invalid orders response:', parseResult.error.message);
+      return [];
+    }
+    return this.parseOrders(parseResult.data, chainId);
   }
 
   /**
@@ -484,8 +503,14 @@ export class CowProtocolSolver extends EventEmitter {
 
     if (!response.ok) return [];
 
-    const data = await response.json() as CowApiOrder[];
-    return this.parseOrders(data, chainId);
+    // SECURITY: Validate API response with Zod schema
+    const rawData = await response.json();
+    const parseResult = z.array(CowApiOrderSchema).safeParse(rawData);
+    if (!parseResult.success) {
+      console.error('[CoW] Invalid orders response:', parseResult.error.message);
+      return [];
+    }
+    return this.parseOrders(parseResult.data, chainId);
   }
 
   /**
@@ -664,7 +689,14 @@ export class CowProtocolSolver extends EventEmitter {
 
     if (!response.ok) return null;
 
-    const data = await response.json() as CowApiAuction;
+    // SECURITY: Validate API response with Zod schema
+    const rawData = await response.json();
+    const parseResult = CowApiAuctionSchema.safeParse(rawData);
+    if (!parseResult.success) {
+      console.error('[CoW] Invalid auction response:', parseResult.error.message);
+      return null;
+    }
+    const data = parseResult.data;
     
     const tokenSet = new Set<Address>();
     const orders = this.parseOrders(data.orders, chainId);

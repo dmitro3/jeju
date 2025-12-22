@@ -12,11 +12,8 @@ import {
   getAvailableGPUNodes,
   GPUType,
   TEEProvider,
-  type GPUCapabilities,
   type TEEAttestation,
-  type TEEGPUNode,
   type GPUJobRequest,
-  type GPUJobResult,
 } from '../src/containers/tee-gpu-provider';
 
 // Test account

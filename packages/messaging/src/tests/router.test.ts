@@ -5,8 +5,8 @@
  * node selection algorithms, and retry logic.
  */
 
-import { describe, test, expect, beforeEach } from 'bun:test';
-import { XMTPMessageRouter, type RouterStats, type RelayNode } from '../xmtp/router';
+import { describe, test, expect } from 'bun:test';
+import { type RouterStats, type RelayNode } from '../xmtp/router';
 import type { XMTPEnvelope } from '../xmtp/types';
 import type { Address } from 'viem';
 
@@ -17,6 +17,7 @@ import type { Address } from 'viem';
  */
 function createMockEnvelope(overrides?: Partial<XMTPEnvelope>): XMTPEnvelope {
   return {
+    version: 1,
     id: `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     sender: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address,
     recipients: ['0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address],

@@ -15,6 +15,25 @@ import {
   MCPPromptGetSchema,
 } from './types';
 
+// Configure CORS with allowed origins from environment
+const CORS_ORIGINS = process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3000', 'http://localhost:4020'];
+
+const corsConfig = {
+  origin: (origin: string) => {
+    // Allow requests with no origin (like mobile apps or curl) in development
+    if (!origin && process.env.NODE_ENV !== 'production') {
+      return '*';
+    }
+    if (CORS_ORIGINS.includes(origin)) {
+      return origin;
+    }
+    return '';
+  },
+  credentials: true,
+  allowMethods: ['GET', 'POST', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+};
+
 // ============================================================================
 // Configuration
 // ============================================================================
@@ -171,7 +190,7 @@ const MCP_PROMPTS = [
 
 export function createMonitoringA2AServer(): Hono {
   const app = new Hono();
-  app.use('/*', cors());
+  app.use('/*', cors(corsConfig));
 
   app.get('/.well-known/agent-card.json', (c) => c.json(AGENT_CARD));
 
@@ -237,7 +256,7 @@ async function executeSkill(skillId: string, params: Record<string, unknown>): P
 
 export function createMonitoringMCPServer(): Hono {
   const app = new Hono();
-  app.use('/*', cors());
+  app.use('/*', cors(corsConfig));
 
   app.post('/initialize', (c) => c.json({
     protocolVersion: '2024-11-05',

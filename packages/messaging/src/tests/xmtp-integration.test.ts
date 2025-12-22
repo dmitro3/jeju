@@ -5,9 +5,9 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { JejuXMTPNode, createXMTPNode } from '../xmtp/node';
-import { XMTPMessageRouter, createRouter } from '../xmtp/router';
-import { XMTPSyncService, createSyncService } from '../xmtp/sync';
+import { JejuXMTPNode } from '../xmtp/node';
+import { XMTPMessageRouter } from '../xmtp/router';
+import { XMTPSyncService } from '../xmtp/sync';
 import type { XMTPEnvelope, XMTPIdentity } from '../xmtp/types';
 
 // ============ Test Helpers ============
@@ -259,10 +259,9 @@ describe('XMTP End-to-End Flow', () => {
     // 5. Create and process message
     const envelope = createTestEnvelope(alice, [bob]);
     
-    let messageReceived = false;
     node.onMessage(async (e) => {
       if (e.id === envelope.id) {
-        messageReceived = true;
+        // Message received successfully
       }
     });
     

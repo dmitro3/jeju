@@ -8,10 +8,12 @@
 
 import { useState } from 'react'
 import { useAccount } from 'wagmi'
-import { useGameItems, getRarityInfo, type GameItem } from '@/hooks/nft/useGameItems'
+import { useGameItems } from '@/hooks/nft/useGameItems'
 import { getGameContracts } from '@/config/contracts'
 import { JEJU_CHAIN_ID } from '@/config/chains'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { getRarityInfo, filterItemsByCategory } from '@/lib/games'
+import type { GameItem, ItemCategory } from '@/schemas/games'
 
 /**
  * Hyperscape Items Page
@@ -24,14 +26,14 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 export default function HyperscapeItemsPage() {
   const { address, isConnected } = useAccount()
   const [activeFilter, setActiveFilter] = useState<'all' | 'my-items'>('all')
-  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [categoryFilter, setCategoryFilter] = useState<ItemCategory>('all')
   const [selectedItem, setSelectedItem] = useState<GameItem | null>(null)
 
   // Get Hyperscape's Items.sol contract address from config
   const gameContracts = getGameContracts(JEJU_CHAIN_ID)
   const { items, isLoading, error, hasChain } = useGameItems(gameContracts.items, activeFilter)
 
-  const filters = [
+  const filters: { id: ItemCategory; label: string }[] = [
     { id: 'all', label: 'All Items' },
     { id: 'weapons', label: 'Weapons' },
     { id: 'armor', label: 'Armor' },
@@ -39,23 +41,8 @@ export default function HyperscapeItemsPage() {
     { id: 'resources', label: 'Resources' },
   ]
 
-  // Filter items by category (based on item type in name/metadata)
-  const filteredItems = items.filter((item) => {
-    if (categoryFilter === 'all') return true
-    const name = item.name.toLowerCase()
-    switch (categoryFilter) {
-      case 'weapons':
-        return name.includes('sword') || name.includes('bow') || name.includes('staff') || item.attack > 0
-      case 'armor':
-        return name.includes('helmet') || name.includes('body') || name.includes('legs') || name.includes('shield') || item.defense > 0
-      case 'tools':
-        return name.includes('hatchet') || name.includes('pickaxe') || name.includes('fishing')
-      case 'resources':
-        return name.includes('logs') || name.includes('ore') || name.includes('fish') || item.stackable
-      default:
-        return true
-    }
-  })
+  // Filter items by category using centralized lib function
+  const filteredItems = filterItemsByCategory(items as GameItem[], categoryFilter)
 
   return (
     <div>

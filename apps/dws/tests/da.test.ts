@@ -4,19 +4,18 @@
 
 import { describe, it, expect, beforeEach } from 'bun:test';
 import {
-  ReedSolomonCodec,
   createReedSolomonCodec,
   createCommitment,
   verifyProof,
-  DASampler,
   BlobManager,
   Disperser,
   DAOperator,
-  DAClient,
   computeBlobId,
+  generateSampleIndices,
+  calculateRequiredSamples,
 } from '../src/da';
-import type { Chunk, BlobCommitment, DAOperatorInfo } from '../src/da/types';
-import { keccak256, toBytes, toHex, type Address, type Hex } from 'viem';
+import type { DAOperatorInfo } from '../src/da/types';
+import { keccak256, toBytes, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 
 describe('Reed-Solomon Erasure Coding', () => {
@@ -159,7 +158,7 @@ describe('Blob Manager', () => {
     const data2 = new TextEncoder().encode('Blob 2');
     
     const { blob: blob1 } = blobManager.submit({ data: data1, submitter: testAddress });
-    const { blob: blob2 } = blobManager.submit({ data: data2, submitter: testAddress });
+    const { blob: _blob2 } = blobManager.submit({ data: data2, submitter: testAddress });
     
     blobManager.updateStatus(blob1.id, 'available');
     
@@ -173,8 +172,6 @@ describe('Blob Manager', () => {
 
 describe('Data Availability Sampling', () => {
   it('should generate random sample indices', () => {
-    const { generateSampleIndices } = require('../src/da/sampling');
-    
     const indices = generateSampleIndices(32, 8);
     
     expect(indices.length).toBe(8);
@@ -183,8 +180,6 @@ describe('Data Availability Sampling', () => {
   });
 
   it('should calculate required samples for confidence', () => {
-    const { calculateRequiredSamples } = require('../src/da/sampling');
-    
     // 99.99% confidence with 50% availability threshold
     const samples = calculateRequiredSamples(0.9999, 0.5);
     expect(samples).toBeGreaterThanOrEqual(13); // ~13.3 samples needed

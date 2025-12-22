@@ -285,7 +285,7 @@ export class ServiceMesh {
   /**
    * Verify a peer certificate
    */
-  async verifyCertificate(cert: string, expectedService?: ServiceSelector): Promise<{
+  async verifyCertificate(cert: string, _expectedService?: ServiceSelector): Promise<{
     valid: boolean;
     service?: ServiceIdentity;
   }> {

@@ -8,7 +8,7 @@ test.describe('Gateway Wallet Connection', () => {
   test('should display homepage and connect wallet with screenshots', async ({ page, wallet }) => {
     // Screenshot 1: Navigate to homepage
     await page.goto(GATEWAY_URL);
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => { /* timeout acceptable */ });
     await page.screenshot({ path: 'test-results/screenshots/01-homepage.png', fullPage: true });
     console.log('📸 Screenshot 1: Homepage');
     

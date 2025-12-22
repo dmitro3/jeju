@@ -1,13 +1,36 @@
 /**
  * System utilities for checking dependencies
+ * 
+ * Security notes:
+ * - All external command execution is validated
+ * - Port numbers are sanitized
+ * - Path construction uses safe patterns
  */
 
 import { execa } from 'execa';
 import which from 'which';
 import { existsSync } from 'fs';
 import { platform, arch, homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import type { HealthCheckResult } from '../types';
+
+/** Allowlist of commands that can have their version checked */
+const ALLOWED_VERSION_COMMANDS = new Set([
+  'docker',
+  'kurtosis',
+  'forge',
+  'bun',
+  'socat',
+  'node',
+  'npm',
+  'git',
+  'anvil',
+  'cast',
+  'helm',
+  'kubectl',
+  'helmfile',
+  'terraform',
+]);
 
 export async function checkCommand(cmd: string): Promise<boolean> {
   try {
@@ -19,8 +42,18 @@ export async function checkCommand(cmd: string): Promise<boolean> {
 }
 
 export async function getCommandVersion(cmd: string, versionFlag = '--version'): Promise<string | null> {
+  // Validate command against allowlist to prevent arbitrary command execution
+  if (!ALLOWED_VERSION_COMMANDS.has(cmd)) {
+    return null;
+  }
+  
+  // Validate version flag to prevent command injection
+  if (!/^--?[a-zA-Z][a-zA-Z0-9-]*$/.test(versionFlag)) {
+    return null;
+  }
+  
   try {
-    const result = await execa(cmd, [versionFlag]);
+    const result = await execa(cmd, [versionFlag], { timeout: 5000 });
     const output = result.stdout || result.stderr;
     // Extract version number from output
     const match = output.match(/\d+\.\d+(\.\d+)?/);
@@ -162,33 +195,41 @@ export async function installKurtosis(): Promise<boolean> {
   
   try {
     if (os === 'darwin') {
-      // macOS - use Homebrew
+      // macOS - use Homebrew (safe package manager install)
       const hasBrew = await checkCommand('brew');
       if (!hasBrew) {
         return false;
       }
-      await execa('brew', ['install', 'kurtosis-tech/tap/kurtosis']);
+      await execa('brew', ['install', 'kurtosis-tech/tap/kurtosis'], { timeout: 120000 });
       return true;
     } else if (os === 'linux') {
-      // Linux - try install script first
-      try {
-        const response = await fetch('https://get.kurtosis.com');
-        const script = await response.text();
-        await execa('bash', ['-c', script]);
-        return true;
-      } catch {
-        // Fallback to GitHub releases
-        const archStr = arch() === 'x64' ? 'amd64' : 'arm64';
-        const releaseUrl = 'https://api.github.com/repos/kurtosis-tech/kurtosis-cli-release-artifacts/releases/latest';
-        const releaseInfo = await fetch(releaseUrl).then(r => r.json()) as { tag_name: string };
-        const version = releaseInfo.tag_name;
-        const tarball = `kurtosis-cli_${version}_linux_${archStr}.tar.gz`;
-        const url = `https://github.com/kurtosis-tech/kurtosis-cli-release-artifacts/releases/download/${version}/${tarball}`;
-        
-        await execa('curl', ['-fsSL', url, '-o', `/tmp/${tarball}`]);
-        await execa('tar', ['-xzf', `/tmp/${tarball}`, '-C', '/usr/local/bin', 'kurtosis']);
-        return true;
+      // Linux - download binary directly (safer than piping to bash)
+      // SECURITY: Never pipe web content to shell. Download binary directly.
+      const archStr = arch() === 'x64' ? 'amd64' : 'arm64';
+      const releaseUrl = 'https://api.github.com/repos/kurtosis-tech/kurtosis-cli-release-artifacts/releases/latest';
+      const releaseInfo = await fetch(releaseUrl, { signal: AbortSignal.timeout(10000) }).then(r => r.json()) as { tag_name: string };
+      const version = releaseInfo.tag_name;
+      
+      // Validate version format to prevent injection
+      if (!/^[\d.]+$/.test(version.replace(/^v/, ''))) {
+        throw new Error('Invalid version format from GitHub API');
       }
+      
+      const tarball = `kurtosis-cli_${version}_linux_${archStr}.tar.gz`;
+      const url = `https://github.com/kurtosis-tech/kurtosis-cli-release-artifacts/releases/download/${version}/${tarball}`;
+      
+      // Use cryptographically secure temp path to prevent race conditions
+      const { randomBytes } = await import('crypto');
+      const tmpPath = `/tmp/kurtosis-${randomBytes(16).toString('hex')}.tar.gz`;
+      await execa('curl', ['-fsSL', url, '-o', tmpPath], { timeout: 60000 });
+      
+      // Extract only the kurtosis binary to prevent writing arbitrary files
+      await execa('tar', ['-xzf', tmpPath, '-C', '/usr/local/bin', '--no-wildcards', 'kurtosis'], { timeout: 30000 });
+      
+      // Clean up temp file
+      await execa('rm', ['-f', tmpPath], { timeout: 5000 });
+      
+      return true;
     }
     return false;
   } catch {
@@ -197,28 +238,49 @@ export async function installKurtosis(): Promise<boolean> {
 }
 
 export async function isPortAvailable(port: number): Promise<boolean> {
-  const result = await execa('lsof', ['-i', `:${port}`], { reject: false });
+  // Validate port number
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Invalid port number');
+  }
+  const result = await execa('lsof', ['-i', `:${port}`], { reject: false, timeout: 5000 });
   return result.exitCode !== 0;
 }
 
 export async function killPort(port: number): Promise<void> {
-  const result = await execa('lsof', ['-ti', `:${port}`], { reject: false });
+  // Validate port number to prevent command injection
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Invalid port number');
+  }
+  
+  const result = await execa('lsof', ['-ti', `:${port}`], { reject: false, timeout: 5000 });
   if (result.exitCode === 0 && result.stdout) {
     const pids = result.stdout.trim().split('\n');
     for (const pid of pids) {
-      await execa('kill', ['-9', pid], { reject: false });
+      // Validate PID is numeric only
+      if (/^\d+$/.test(pid)) {
+        await execa('kill', ['-9', pid], { reject: false, timeout: 5000 });
+      }
     }
   }
 }
 
 export function findMonorepoRoot(): string {
-  let dir = process.cwd();
-  while (dir !== '/') {
+  let dir = resolve(process.cwd());
+  const root = platform() === 'win32' ? dir.split(':')[0] + ':/' : '/';
+  
+  // Limit traversal to prevent infinite loops
+  let iterations = 0;
+  const maxIterations = 50;
+  
+  while (dir !== root && iterations < maxIterations) {
+    iterations++;
     if (existsSync(join(dir, 'bun.lock')) && existsSync(join(dir, 'packages'))) {
       return dir;
     }
-    dir = join(dir, '..');
+    const parent = resolve(dir, '..');
+    if (parent === dir) break; // Reached filesystem root
+    dir = parent;
   }
-  return process.cwd();
+  return resolve(process.cwd());
 }
 

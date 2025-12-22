@@ -3,23 +3,43 @@
  * Consolidated from gateway and bazaar
  */
 
-import { useCallback } from 'react';
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
-import type { Address } from 'viem';
-import { parseEther } from 'viem';
-import { LIQUIDITY_VAULT_ABI } from '../contracts';
-import { parseLPPosition, type LPPosition, type RawPositionTuple } from './liquidity-utils';
+import { useCallback } from "react";
+import {
+  useReadContract,
+  useWriteContract,
+  useWaitForTransactionReceipt,
+  useAccount,
+} from "wagmi";
+import type { Address } from "viem";
+import { parseEther } from "viem";
+import { LIQUIDITY_VAULT_ABI } from "../contracts";
+import { parseLPPosition, type RawPositionTuple } from "./liquidity-utils";
 
-export type { LPPosition } from './liquidity-utils';
+export type { LPPosition } from "./liquidity-utils";
+import type { LPPosition } from "./liquidity-utils";
 
-export function useLiquidityVault(vaultAddress: Address | undefined) {
+export interface UseLiquidityVaultResult {
+  lpPosition: LPPosition | null;
+  addETHLiquidity: (amount: bigint | string) => Promise<void>;
+  removeETHLiquidity: (shares: bigint | string) => Promise<void>;
+  claimFees: () => Promise<void>;
+  isLoading: boolean;
+  isAddSuccess: boolean;
+  isRemoveSuccess: boolean;
+  isClaimSuccess: boolean;
+  refetchPosition: () => void;
+}
+
+export function useLiquidityVault(
+  vaultAddress: Address | undefined,
+): UseLiquidityVaultResult {
   const { address: userAddress } = useAccount();
 
   // Read LP position (tuple format)
   const { data: lpPosition, refetch: refetchPosition } = useReadContract({
     address: vaultAddress,
     abi: LIQUIDITY_VAULT_ABI,
-    functionName: 'getLPPosition',
+    functionName: "getLPPosition",
     args: userAddress ? [userAddress] : undefined,
   });
 
@@ -27,7 +47,7 @@ export function useLiquidityVault(vaultAddress: Address | undefined) {
   const { data: lpBalance } = useReadContract({
     address: vaultAddress,
     abi: LIQUIDITY_VAULT_ABI,
-    functionName: 'balanceOf',
+    functionName: "balanceOf",
     args: userAddress ? [userAddress] : undefined,
   });
 
@@ -35,55 +55,76 @@ export function useLiquidityVault(vaultAddress: Address | undefined) {
   const { data: totalSupply } = useReadContract({
     address: vaultAddress,
     abi: LIQUIDITY_VAULT_ABI,
-    functionName: 'totalSupply',
+    functionName: "totalSupply",
   });
 
   // Write: Add ETH liquidity
-  const { writeContract: addETHWrite, data: addHash, isPending: isAddingETH } = useWriteContract();
-  const { isLoading: isConfirmingAdd, isSuccess: isAddSuccess } = useWaitForTransactionReceipt({ hash: addHash });
+  const {
+    writeContract: addETHWrite,
+    data: addHash,
+    isPending: isAddingETH,
+  } = useWriteContract();
+  const { isLoading: isConfirmingAdd, isSuccess: isAddSuccess } =
+    useWaitForTransactionReceipt({ hash: addHash });
 
-  // Write: Remove ETH liquidity  
-  const { writeContract: removeETHWrite, data: removeHash, isPending: isRemovingETH } = useWriteContract();
-  const { isLoading: isConfirmingRemove, isSuccess: isRemoveSuccess } = useWaitForTransactionReceipt({ hash: removeHash });
+  // Write: Remove ETH liquidity
+  const {
+    writeContract: removeETHWrite,
+    data: removeHash,
+    isPending: isRemovingETH,
+  } = useWriteContract();
+  const { isLoading: isConfirmingRemove, isSuccess: isRemoveSuccess } =
+    useWaitForTransactionReceipt({ hash: removeHash });
 
   // Write: Claim fees
-  const { writeContract: claimWrite, data: claimHash, isPending: isClaiming } = useWriteContract();
-  const { isLoading: isConfirmingClaim, isSuccess: isClaimSuccess } = useWaitForTransactionReceipt({ hash: claimHash });
+  const {
+    writeContract: claimWrite,
+    data: claimHash,
+    isPending: isClaiming,
+  } = useWriteContract();
+  const { isLoading: isConfirmingClaim, isSuccess: isClaimSuccess } =
+    useWaitForTransactionReceipt({ hash: claimHash });
 
-  const addETHLiquidity = useCallback(async (amount: bigint | string) => {
-    if (!vaultAddress) {
-      throw new Error('Vault address not configured');
-    }
-    const value = typeof amount === 'string' ? parseEther(amount) : amount;
-    addETHWrite({
-      address: vaultAddress,
-      abi: LIQUIDITY_VAULT_ABI,
-      functionName: 'addETHLiquidity',
-      value,
-    });
-  }, [vaultAddress, addETHWrite]);
+  const addETHLiquidity = useCallback(
+    async (amount: bigint | string) => {
+      if (!vaultAddress) {
+        throw new Error("Vault address not configured");
+      }
+      const value = typeof amount === "string" ? parseEther(amount) : amount;
+      addETHWrite({
+        address: vaultAddress,
+        abi: LIQUIDITY_VAULT_ABI,
+        functionName: "addETHLiquidity",
+        value,
+      });
+    },
+    [vaultAddress, addETHWrite],
+  );
 
-  const removeETHLiquidity = useCallback(async (shares: bigint | string) => {
-    if (!vaultAddress) {
-      throw new Error('Vault address not configured');
-    }
-    const amount = typeof shares === 'string' ? parseEther(shares) : shares;
-    removeETHWrite({
-      address: vaultAddress,
-      abi: LIQUIDITY_VAULT_ABI,
-      functionName: 'removeETHLiquidity',
-      args: [amount],
-    });
-  }, [vaultAddress, removeETHWrite]);
+  const removeETHLiquidity = useCallback(
+    async (shares: bigint | string) => {
+      if (!vaultAddress) {
+        throw new Error("Vault address not configured");
+      }
+      const amount = typeof shares === "string" ? parseEther(shares) : shares;
+      removeETHWrite({
+        address: vaultAddress,
+        abi: LIQUIDITY_VAULT_ABI,
+        functionName: "removeETHLiquidity",
+        args: [amount],
+      });
+    },
+    [vaultAddress, removeETHWrite],
+  );
 
   const claimFees = useCallback(async () => {
     if (!vaultAddress) {
-      throw new Error('Vault address not configured');
+      throw new Error("Vault address not configured");
     }
     claimWrite({
       address: vaultAddress,
       abi: LIQUIDITY_VAULT_ABI,
-      functionName: 'claimFees',
+      functionName: "claimFees",
     });
   }, [vaultAddress, claimWrite]);
 
@@ -99,7 +140,13 @@ export function useLiquidityVault(vaultAddress: Address | undefined) {
     addETHLiquidity,
     removeETHLiquidity,
     claimFees,
-    isLoading: isAddingETH || isConfirmingAdd || isRemovingETH || isConfirmingRemove || isClaiming || isConfirmingClaim,
+    isLoading:
+      isAddingETH ||
+      isConfirmingAdd ||
+      isRemovingETH ||
+      isConfirmingRemove ||
+      isClaiming ||
+      isConfirmingClaim,
     isAddSuccess,
     isRemoveSuccess,
     isClaimSuccess,

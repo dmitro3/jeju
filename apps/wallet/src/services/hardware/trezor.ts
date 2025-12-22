@@ -201,12 +201,12 @@ export class TrezorKeyring {
     const transaction = isEIP1559
       ? {
           ...baseTx,
-          maxFeePerGas: toHex(tx.maxFeePerGas!),
-          maxPriorityFeePerGas: toHex(tx.maxPriorityFeePerGas!),
+          maxFeePerGas: toHex(tx.maxFeePerGas ?? 0n),
+          maxPriorityFeePerGas: toHex(tx.maxPriorityFeePerGas ?? 0n),
         }
       : {
           ...baseTx,
-          gasPrice: toHex(tx.gasPrice || 0n),
+          gasPrice: toHex(tx.gasPrice ?? 0n),
         };
     
     const result = await TrezorConnect.ethereumSignTransaction({

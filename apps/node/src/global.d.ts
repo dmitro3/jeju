@@ -7,9 +7,8 @@
  * @see https://eips.ethereum.org/EIPS/eip-1193
  */
 interface EIP1193Provider {
-  request(args: { method: 'eth_requestAccounts' }): Promise<string[]>;
+  request(args: { method: 'eth_requestAccounts' | 'eth_accounts' }): Promise<string[]>;
   request(args: { method: 'eth_chainId' }): Promise<string>;
-  request(args: { method: 'eth_accounts' }): Promise<string[]>;
   request(args: { method: string; params?: readonly unknown[] }): Promise<unknown>;
   on(event: 'accountsChanged', handler: (accounts: string[]) => void): void;
   on(event: 'chainChanged', handler: (chainId: string) => void): void;

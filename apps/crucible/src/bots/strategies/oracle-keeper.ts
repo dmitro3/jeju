@@ -57,7 +57,7 @@ const REDSTONE_ENDPOINTS: Record<string, string> = {
   testnet: 'https://api.redstone.finance/prices',
 };
 
-const CHAINLINK_FEEDS: Record<string, Record<string, string>> = {
+const _CHAINLINK_FEEDS: Record<string, Record<string, string>> = {
   '1': { // Ethereum
     'ETH': '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419',
     'BTC': '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c',
@@ -242,7 +242,7 @@ export class OracleKeeperStrategy {
       args: [token as `0x${string}`],
     }) as [bigint, bigint];
 
-    const [onChainPrice, decimals] = onChainResult;
+    const [onChainPrice] = onChainResult;
 
     // Check if stale
     const isFresh = await this.publicClient.readContract({

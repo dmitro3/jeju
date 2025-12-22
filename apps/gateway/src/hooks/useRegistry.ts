@@ -184,7 +184,7 @@ export function useRegistryAppDetails(agentId: bigint) {
     depositedAt: stakeInfo ? (stakeInfo as { token: string; amount: bigint; depositedAt: bigint }).depositedAt : 0n,
   } : null;
 
-  return { app, isLoading, refetch: async () => {} };
+  return { app, isLoading, refetch: async () => { /* placeholder for future implementation */ } };
 }
 
 export function useRegistryMarketplaceActions() {

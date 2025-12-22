@@ -11,7 +11,8 @@
 
 import { Command } from 'commander';
 import prompts from 'prompts';
-import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, mkdirSync, readFileSync, readdirSync } from 'fs';
+import type { Dirent } from 'node:fs';
 import { join } from 'path';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { logger } from '../lib/logger';
@@ -318,8 +319,9 @@ async function generateOperatorKeys(outputDir: string): Promise<Record<string, {
   const keys: Record<string, { address: string; privateKey: string }> = {};
 
   for (const role of roles) {
-    const account = privateKeyToAccount(generatePrivateKey());
-    keys[role] = { address: account.address, privateKey: account.privateKey };
+    const pk = generatePrivateKey();
+    const account = privateKeyToAccount(pk);
+    keys[role] = { address: account.address, privateKey: pk };
   }
 
   writeFileSync(join(outputDir, 'keys.json'), JSON.stringify(keys, null, 2));
@@ -438,7 +440,7 @@ import { createPublicClient, createWalletClient, http, getBalance, type Address 
 import { privateKeyToAccount } from 'viem/accounts';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { inferChainFromRpcUrl } from '../../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../../packages/deployment/scripts/shared/chain-utils';
 
 const keys = JSON.parse(readFileSync(join(import.meta.dir, 'keys.json'), 'utf-8'));
 const chainConfig = JSON.parse(readFileSync(join(import.meta.dir, 'chain.json'), 'utf-8'));
@@ -472,7 +474,7 @@ import { createPublicClient, createWalletClient, http, type Address } from 'viem
 import { privateKeyToAccount } from 'viem/accounts';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { inferChainFromRpcUrl } from '../../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../../packages/deployment/scripts/shared/chain-utils';
 
 const keys = JSON.parse(readFileSync(join(import.meta.dir, 'keys.json'), 'utf-8'));
 const chainConfig = JSON.parse(readFileSync(join(import.meta.dir, 'chain.json'), 'utf-8'));
@@ -511,7 +513,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { parseAbi } from 'viem';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { inferChainFromRpcUrl } from '../../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../../packages/deployment/scripts/shared/chain-utils';
 
 const keys = JSON.parse(readFileSync(join(import.meta.dir, 'keys.json'), 'utf-8'));
 const chainConfig = JSON.parse(readFileSync(join(import.meta.dir, 'chain.json'), 'utf-8'));
@@ -757,8 +759,8 @@ forkCommand
     }
 
     const forks = readdirSync(forksDir, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name);
+      .filter((d: Dirent) => d.isDirectory())
+      .map((d: Dirent) => d.name);
 
     if (forks.length === 0) {
       logger.info('No forks found. Run `fork` to create one.');

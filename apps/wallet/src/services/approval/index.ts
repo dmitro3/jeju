@@ -69,8 +69,26 @@ class ApprovalService {
         const existing = approvalMap.get(key);
         const timestamp = new Date(a.timestamp).getTime();
         
+        // Validate timestamp is valid
+        if (isNaN(timestamp)) {
+          console.warn(`Invalid timestamp for approval ${key}, skipping`);
+          continue;
+        }
+        
         if (!existing || timestamp > existing.lastUpdated) {
-          const allowance = BigInt(a.value);
+          // Validate value is a valid BigInt string before conversion
+          let allowance: bigint;
+          try {
+            // Ensure the value is a valid numeric string
+            if (typeof a.value !== 'string' || !/^\d+$/.test(a.value)) {
+              console.warn(`Invalid approval value for ${key}: ${a.value}, skipping`);
+              continue;
+            }
+            allowance = BigInt(a.value);
+          } catch {
+            console.warn(`Failed to parse approval value for ${key}: ${a.value}, skipping`);
+            continue;
+          }
           const isUnlimited = allowance >= maxUint256 / 2n;
           
           approvalMap.set(key, {

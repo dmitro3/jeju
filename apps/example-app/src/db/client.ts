@@ -83,15 +83,25 @@ export class TodoRepository {
     }
   }
 
+  // Default pagination limits to prevent DoS
+  private static readonly DEFAULT_LIMIT = 100;
+  private static readonly MAX_LIMIT = 500;
+
   async listByOwner(
     owner: Address,
     options?: {
       completed?: boolean;
       priority?: 'low' | 'medium' | 'high';
       search?: string;
+      limit?: number;
+      offset?: number;
     },
   ): Promise<Todo[]> {
     await this.checkFallback();
+
+    // Apply pagination limits (DoS prevention)
+    const limit = Math.min(options?.limit ?? TodoRepository.DEFAULT_LIMIT, TodoRepository.MAX_LIMIT);
+    const offset = Math.max(options?.offset ?? 0, 0);
 
     if (useFallback) {
       const todos = Array.from(memoryStore.values())
@@ -112,6 +122,7 @@ export class TodoRepository {
           return true;
         })
         .sort((a, b) => b.created_at - a.created_at)
+        .slice(offset, offset + limit) // Apply pagination
         .map(rowToTodo);
       return todos;
     }
@@ -134,7 +145,8 @@ export class TodoRepository {
       params.push(`%${options.search}%`, `%${options.search}%`);
     }
 
-    sql += ' ORDER BY created_at DESC';
+    sql += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(limit, offset);
 
     const result = await this.db.query<TodoRow>(sql, params);
     return result.rows.map(rowToTodo);

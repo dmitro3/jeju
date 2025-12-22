@@ -10,10 +10,10 @@
  */
 
 import type { Address, Hex, PublicClient, WalletClient } from 'viem';
-import { createPublicClient, createWalletClient, http, toBytes, toHex, keccak256, encodeFunctionData } from 'viem';
+import { createPublicClient, createWalletClient, http, toBytes, toHex, keccak256 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { DAClient, createDAClient, type DAClientConfig } from '../client';
-import type { BlobCommitment, AvailabilityAttestation, BlobSubmissionResult } from '../types';
+import { DAClient, createDAClient } from '../client';
+import type { BlobCommitment, AvailabilityAttestation } from '../types';
 
 // L1 Contract ABIs
 const DACommitmentVerifierABI = [
@@ -406,7 +406,7 @@ export class RollupDAAdapter {
     }
 
     let usedCalldataFallback = false;
-    let daCommitment: Hex;
+    let daCommitment: Hex | undefined;
     let retryCount = 0;
 
     // Try DA submission with retries
@@ -432,7 +432,7 @@ export class RollupDAAdapter {
     }
 
     // Fallback to calldata if DA failed
-    if (!daCommitment!) {
+    if (!daCommitment) {
       if (!this.config.enableCalldataFallback) {
         throw new Error('DA submission failed and calldata fallback is disabled');
       }

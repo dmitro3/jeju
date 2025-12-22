@@ -2,15 +2,21 @@
  * jeju dws - Decentralized Web Services CLI
  *
  * Manage DWS services: storage, git (JejuGit), pkg (JejuPkg), CI/CD, CDN
+ * 
+ * Security notes:
+ * - All file paths are validated before use
+ * - CIDs are validated against known formats
+ * - User inputs are sanitized before API calls
  */
 
 import { Command } from 'commander';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve, normalize } from 'path';
 import { logger } from '../lib/logger';
 import { getChainStatus, bootstrapContracts } from '../lib/chain';
 import { createInfrastructureService } from '../services/infrastructure';
 import { findMonorepoRoot } from '../lib/system';
+import { validateAddress, validateCID, sanitizeErrorMessage } from '../lib/security';
 import { DEFAULT_PORTS } from '../types';
 import { 
   validate, 
@@ -34,7 +40,13 @@ function getDwsUrl(): string {
 }
 
 function getDefaultAddress(): Address {
-  return (process.env.DEPLOYER_ADDRESS || '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266') as Address;
+  const envAddress = process.env.DEPLOYER_ADDRESS;
+  const defaultAddress = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266';
+  
+  if (envAddress) {
+    return validateAddress(envAddress);
+  }
+  return defaultAddress as Address;
 }
 
 export const dwsCommand = new Command('dws')
@@ -422,16 +434,22 @@ async function startDws(options: { network: string; port: string }): Promise<voi
 async function uploadFile(filePath: string): Promise<void> {
   logger.header('UPLOAD FILE');
 
-  if (!existsSync(filePath)) {
-    logger.error(`File not found: ${filePath}`);
+  // Resolve and normalize path to prevent traversal
+  const resolvedPath = resolve(normalize(filePath));
+  
+  if (!existsSync(resolvedPath)) {
+    logger.error(`File not found: ${resolvedPath}`);
     process.exit(1);
   }
 
   const dwsUrl = getDwsUrl();
-  const content = readFileSync(filePath);
-  const filename = filePath.split('/').pop() || 'file';
+  const content = readFileSync(resolvedPath);
+  
+  // Extract and validate filename
+  const rawFilename = resolvedPath.split('/').pop() || 'file';
+  const filename = rawFilename.replace(/[^a-zA-Z0-9._-]/g, '_'); // Sanitize filename
 
-  logger.keyValue('File', filePath);
+  logger.keyValue('File', resolvedPath);
   logger.keyValue('Size', `${content.length} bytes`);
   logger.newline();
 
@@ -448,7 +466,7 @@ async function uploadFile(filePath: string): Promise<void> {
 
     if (!response.ok) {
       const error = await response.text();
-      throw new Error(error);
+      throw new Error(sanitizeErrorMessage(error));
     }
 
     const rawResult = await response.json();
@@ -459,7 +477,7 @@ async function uploadFile(filePath: string): Promise<void> {
     logger.newline();
     logger.info(`Download with: jeju dws download ${result.cid}`);
   } catch (error) {
-    logger.error(`Upload failed: ${error}`);
+    logger.error(`Upload failed: ${sanitizeErrorMessage(error as Error)}`);
     process.exit(1);
   }
 }
@@ -467,15 +485,60 @@ async function uploadFile(filePath: string): Promise<void> {
 async function downloadFile(cid: string, options: { output?: string }): Promise<void> {
   logger.header('DOWNLOAD FILE');
 
+  // Validate CID format to prevent path injection
+  const validCid = validateCID(cid);
+  
   const dwsUrl = getDwsUrl();
-  const outputPath = options.output || cid;
+  
+  // Sanitize output path - resolve and ensure it's in current directory or below
+  let outputPath = options.output || validCid;
+  
+  // SECURITY: Check for null bytes which could bypass path checks
+  if (outputPath.includes('\0')) {
+    logger.error('Invalid output path: null bytes not allowed');
+    process.exit(1);
+  }
+  
+  outputPath = resolve(normalize(outputPath));
+  
+  // Prevent writing outside current directory
+  const cwd = resolve(process.cwd());
+  if (!outputPath.startsWith(cwd + '/') && outputPath !== cwd) {
+    logger.error('Output path must be within current directory');
+    process.exit(1);
+  }
+  
+  // SECURITY: Ensure parent directory exists and is actually a directory
+  const parentDir = join(outputPath, '..');
+  const resolvedParent = resolve(parentDir);
+  if (existsSync(resolvedParent)) {
+    const { statSync } = await import('fs');
+    const parentStat = statSync(resolvedParent);
+    if (!parentStat.isDirectory()) {
+      logger.error('Parent path is not a directory');
+      process.exit(1);
+    }
+  }
+  
+  // SECURITY: Check output path is not a symlink pointing outside cwd
+  if (existsSync(outputPath)) {
+    const { lstatSync, realpathSync } = await import('fs');
+    const lstat = lstatSync(outputPath);
+    if (lstat.isSymbolicLink()) {
+      const realPath = realpathSync(outputPath);
+      if (!realPath.startsWith(cwd + '/') && realPath !== cwd) {
+        logger.error('Output path symlink points outside current directory');
+        process.exit(1);
+      }
+    }
+  }
 
-  logger.keyValue('CID', cid);
+  logger.keyValue('CID', validCid);
   logger.keyValue('Output', outputPath);
   logger.newline();
 
   try {
-    const response = await fetch(`${dwsUrl}/storage/download/${cid}`, {
+    const response = await fetch(`${dwsUrl}/storage/download/${validCid}`, {
       signal: AbortSignal.timeout(60000),
     });
 
@@ -495,7 +558,7 @@ async function downloadFile(cid: string, options: { output?: string }): Promise<
     logger.keyValue('Size', `${content.length} bytes`);
     logger.keyValue('Saved to', outputPath);
   } catch (error) {
-    logger.error(`Download failed: ${error}`);
+    logger.error(`Download failed: ${sanitizeErrorMessage(error as Error)}`);
     process.exit(1);
   }
 }
@@ -589,8 +652,15 @@ async function createRepo(
 ): Promise<void> {
   logger.header('CREATE REPOSITORY');
 
+  // Validate repository name
+  const repoNamePattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+  if (!name || !repoNamePattern.test(name) || name.length > 100) {
+    logger.error('Invalid repository name');
+    process.exit(1);
+  }
+
   const dwsUrl = getDwsUrl();
-  const address = options.address || getDefaultAddress();
+  const address = options.address ? validateAddress(options.address) : getDefaultAddress();
 
   logger.keyValue('Name', name);
   logger.keyValue('Owner', address);
@@ -672,7 +742,22 @@ async function searchPackages(query: string, options: { limit: string }): Promis
 
 async function getPackageInfo(name: string): Promise<void> {
   const dwsUrl = getDwsUrl();
-  const encodedName = encodeURIComponent(name).replace('%40', '@').replace('%2F', '/');
+  
+  // Validate package name format
+  if (!name || typeof name !== 'string') {
+    logger.error('Package name is required');
+    process.exit(1);
+  }
+  
+  // Validate package name pattern (npm-style: @scope/package or package)
+  const packagePattern = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+  if (!packagePattern.test(name)) {
+    logger.error('Invalid package name format');
+    process.exit(1);
+  }
+  
+  // Safely encode package name
+  const encodedName = encodeURIComponent(name).replace(/%40/g, '@').replace(/%2F/g, '/');
 
   try {
     const response = await fetch(`${dwsUrl}/pkg/${encodedName}`, {

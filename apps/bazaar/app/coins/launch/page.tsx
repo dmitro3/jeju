@@ -3,11 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAccount } from 'wagmi'
 import { JEJU_CHAIN_ID } from '@/config/chains'
-import { hasLaunchpad } from '@/config/contracts'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { useTokenLaunchpad, type BondingCurveConfig, type ICOConfig } from '@/hooks/launchpad'
-import { parseEther, formatEther } from 'viem'
+import {
+  DEFAULT_BONDING_CONFIG,
+  DEFAULT_ICO_CONFIG,
+  DEGEN_ICO_CONFIG,
+} from '@/lib/launchpad'
 
 type LaunchType = 'bonding' | 'ico' | 'modern'
 type LaunchPreset = 'pump' | 'ico' | 'degen' | 'custom'
@@ -36,46 +39,14 @@ const PRESETS: Record<LaunchPreset, { name: string; description: string; emoji: 
   },
 }
 
-// Default configurations for each preset
-const DEFAULT_BONDING_CONFIG: BondingCurveConfig = {
-  virtualEthReserves: '30',
-  graduationTarget: '10',
-  tokenSupply: '1000000000',
-}
-
-const DEFAULT_ICO_CONFIG: ICOConfig = {
-  presaleAllocationBps: 3000, // 30%
-  presalePrice: '0.0001',
-  lpFundingBps: 8000, // 80%
-  lpLockDuration: 30 * 24 * 60 * 60, // 30 days
-  buyerLockDuration: 7 * 24 * 60 * 60, // 7 days
-  softCap: '5',
-  hardCap: '50',
-  presaleDuration: 7 * 24 * 60 * 60, // 7 days
-}
-
-// Degen preset (shorter presale, smaller allocations)
-const DEGEN_ICO_CONFIG: ICOConfig = {
-  presaleAllocationBps: 1500, // 15%
-  presalePrice: '0.00005',
-  lpFundingBps: 9000, // 90%
-  lpLockDuration: 90 * 24 * 60 * 60, // 90 days
-  buyerLockDuration: 0, // No lock
-  softCap: '2',
-  hardCap: '20',
-  presaleDuration: 2 * 24 * 60 * 60, // 2 days
-}
-
 export default function LaunchTokenPage() {
-  const { isConnected, chain, address } = useAccount()
+  const { isConnected, chain } = useAccount()
   const isCorrectChain = chain?.id === JEJU_CHAIN_ID || chain?.id === 1337
-  const launchpadAvailable = hasLaunchpad(chain?.id || JEJU_CHAIN_ID)
   const successToastShown = useRef(false)
 
   // Launchpad hook
   const {
     isAvailable,
-    launchpadAddress,
     launchCount,
     defaultCommunityVault,
     txHash,

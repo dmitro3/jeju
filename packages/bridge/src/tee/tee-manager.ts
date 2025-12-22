@@ -5,8 +5,13 @@
 
 import type { Hex } from "viem";
 import { keccak256, toBytes } from "viem";
-import type { CrossChainTransfer, Hash32, TEEAttestation } from "../types/index.js";
+import type {
+	CrossChainTransfer,
+	Hash32,
+	TEEAttestation,
+} from "../types/index.js";
 import { toHash32 } from "../types/index.js";
+import { computeMerkleRoot, createLogger } from "../utils/index.js";
 import { createAWSNitroProvider } from "./aws-nitro-provider.js";
 import { createGCPConfidentialProvider } from "./gcp-confidential-provider.js";
 import { createMockProvider } from "./mock-provider.js";
@@ -21,7 +26,6 @@ import type {
 	TEEProvider,
 	TEEProviderConfig,
 } from "./types.js";
-import { createLogger, computeMerkleRoot } from "../utils/index.js";
 
 const log = createLogger("tee-manager");
 
@@ -55,13 +59,17 @@ export class TEEManager {
 		return this.environment;
 	}
 
-	async requestAttestation(request: AttestationRequest): Promise<AttestationResponse> {
+	async requestAttestation(
+		request: AttestationRequest,
+	): Promise<AttestationResponse> {
 		if (!this.initialized) await this.initialize();
 		if (!this.provider) throw new Error("TEE provider not initialized");
 		return this.provider.requestAttestation(request);
 	}
 
-	async verifyAttestation(attestation: AttestationResponse): Promise<AttestationVerification> {
+	async verifyAttestation(
+		attestation: AttestationResponse,
+	): Promise<AttestationVerification> {
 		if (!this.initialized) await this.initialize();
 		if (!this.provider) throw new Error("TEE provider not initialized");
 		return this.provider.verifyAttestation(attestation);
@@ -85,7 +93,11 @@ export class TEEManager {
 			(data) => this.keccakHash(data),
 		);
 		const attestData = keccak256(
-			new Uint8Array([...batchId, ...transfersRoot, ...toBytes(BigInt(transfers.length))]),
+			new Uint8Array([
+				...batchId,
+				...transfersRoot,
+				...toBytes(BigInt(transfers.length)),
+			]),
 		);
 
 		const attestation = await this.provider.requestAttestation({
@@ -93,7 +105,12 @@ export class TEEManager {
 			nonce: BigInt(Date.now()),
 		});
 
-		return { batchId, transfersRoot, transferCount: transfers.length, attestation };
+		return {
+			batchId,
+			transfersRoot,
+			transferCount: transfers.length,
+			attestation,
+		};
 	}
 
 	async getStatus(): Promise<{
@@ -146,12 +163,20 @@ export class TEEManager {
 	}
 
 	private async detectAWS(): Promise<TEEEnvironment> {
-		const env: TEEEnvironment = { provider: "aws", inTEE: false, capabilities: [], details: {} };
+		const env: TEEEnvironment = {
+			provider: "aws",
+			inTEE: false,
+			capabilities: [],
+			details: {},
+		};
 
 		try {
-			const response = await fetch("http://169.254.169.254/latest/meta-data/instance-id", {
-				signal: AbortSignal.timeout(1000),
-			});
+			const response = await fetch(
+				"http://169.254.169.254/latest/meta-data/instance-id",
+				{
+					signal: AbortSignal.timeout(1000),
+				},
+			);
 
 			if (response.ok) {
 				env.details.instanceId = await response.text();
@@ -164,9 +189,12 @@ export class TEEManager {
 					env.details.enclaveId = process.env.AWS_ENCLAVE_ID;
 				}
 
-				const regionResp = await fetch("http://169.254.169.254/latest/meta-data/placement/region", {
-					signal: AbortSignal.timeout(1000),
-				});
+				const regionResp = await fetch(
+					"http://169.254.169.254/latest/meta-data/placement/region",
+					{
+						signal: AbortSignal.timeout(1000),
+					},
+				);
 				if (regionResp.ok) env.details.region = await regionResp.text();
 			}
 		} catch {
@@ -177,13 +205,21 @@ export class TEEManager {
 	}
 
 	private async detectGCP(): Promise<TEEEnvironment> {
-		const env: TEEEnvironment = { provider: "gcp", inTEE: false, capabilities: [], details: {} };
+		const env: TEEEnvironment = {
+			provider: "gcp",
+			inTEE: false,
+			capabilities: [],
+			details: {},
+		};
 
 		try {
-			const response = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/id", {
-				headers: { "Metadata-Flavor": "Google" },
-				signal: AbortSignal.timeout(1000),
-			});
+			const response = await fetch(
+				"http://metadata.google.internal/computeMetadata/v1/instance/id",
+				{
+					headers: { "Metadata-Flavor": "Google" },
+					signal: AbortSignal.timeout(1000),
+				},
+			);
 
 			if (response.ok) {
 				env.details.instanceId = await response.text();
@@ -191,18 +227,27 @@ export class TEEManager {
 
 				const attrsResp = await fetch(
 					"http://metadata.google.internal/computeMetadata/v1/instance/attributes/",
-					{ headers: { "Metadata-Flavor": "Google" }, signal: AbortSignal.timeout(1000) },
+					{
+						headers: { "Metadata-Flavor": "Google" },
+						signal: AbortSignal.timeout(1000),
+					},
 				);
 
 				if (attrsResp.ok) {
 					const attrs = await attrsResp.text();
-					if (attrs.includes("confidential-compute") || attrs.includes("enable-vtpm")) {
+					if (
+						attrs.includes("confidential-compute") ||
+						attrs.includes("enable-vtpm")
+					) {
 						env.inTEE = true;
 						env.capabilities = ["attestation", "key_gen"];
 
 						const machineResp = await fetch(
 							"http://metadata.google.internal/computeMetadata/v1/instance/machine-type",
-							{ headers: { "Metadata-Flavor": "Google" }, signal: AbortSignal.timeout(1000) },
+							{
+								headers: { "Metadata-Flavor": "Google" },
+								signal: AbortSignal.timeout(1000),
+							},
 						);
 						if (machineResp.ok) {
 							const machineType = await machineResp.text();
@@ -211,10 +256,13 @@ export class TEEManager {
 					}
 				}
 
-				const zoneResp = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/zone", {
-					headers: { "Metadata-Flavor": "Google" },
-					signal: AbortSignal.timeout(1000),
-				});
+				const zoneResp = await fetch(
+					"http://metadata.google.internal/computeMetadata/v1/instance/zone",
+					{
+						headers: { "Metadata-Flavor": "Google" },
+						signal: AbortSignal.timeout(1000),
+					},
+				);
 				if (zoneResp.ok) {
 					const zone = await zoneResp.text();
 					env.details.region = zone.split("/").pop();
@@ -295,9 +343,12 @@ class PhalaProviderAdapter implements ITEEProvider {
 		return Boolean(this.config.endpoint ?? process.env.PHALA_ENDPOINT);
 	}
 
-	async requestAttestation(request: AttestationRequest): Promise<AttestationResponse> {
+	async requestAttestation(
+		request: AttestationRequest,
+	): Promise<AttestationResponse> {
 		const operatorAddress = this.config.operatorAddress;
-		if (!operatorAddress) throw new Error("Phala TEE requires operatorAddress in config");
+		if (!operatorAddress)
+			throw new Error("Phala TEE requires operatorAddress in config");
 
 		const response = await this.client.requestAttestation({
 			data: request.data,
@@ -316,7 +367,9 @@ class PhalaProviderAdapter implements ITEEProvider {
 		};
 	}
 
-	async verifyAttestation(attestation: AttestationResponse): Promise<AttestationVerification> {
+	async verifyAttestation(
+		attestation: AttestationResponse,
+	): Promise<AttestationVerification> {
 		const result = await this.client.verifyAttestation({
 			quote: attestation.quote,
 			mrEnclave: attestation.measurement,
@@ -340,7 +393,9 @@ class PhalaProviderAdapter implements ITEEProvider {
 			throw new Error("Attestation missing public key");
 		}
 		return {
-			measurement: toHash32(Buffer.from(attestation.measurement.slice(2), "hex")),
+			measurement: toHash32(
+				Buffer.from(attestation.measurement.slice(2), "hex"),
+			),
 			quote: attestation.quote,
 			publicKey: attestation.publicKey,
 			timestamp: BigInt(attestation.timestamp),
@@ -353,7 +408,10 @@ class PhalaProviderAdapter implements ITEEProvider {
 		capabilities: TEECapability[];
 		lastAttestationTime?: number;
 	}> {
-		return { available: await this.isAvailable(), capabilities: this.capabilities };
+		return {
+			available: await this.isAvailable(),
+			capabilities: this.capabilities,
+		};
 	}
 }
 
@@ -364,7 +422,9 @@ export function getTEEManager(config?: Partial<TEEProviderConfig>): TEEManager {
 	return globalManager;
 }
 
-export function createTEEManager(config?: Partial<TEEProviderConfig>): TEEManager {
+export function createTEEManager(
+	config?: Partial<TEEProviderConfig>,
+): TEEManager {
 	return new TEEManager(config);
 }
 

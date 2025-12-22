@@ -39,6 +39,7 @@ const SimulateArgsSchema = z.object({
 const StartArgsSchema = z.object({
   chainId: EVMChainIdSchema,
   rpcUrl: z.string().url(),
+  // Private key must come from environment variable only - never accept from CLI
   privateKey: z.string().regex(/^0x[a-fA-F0-9]{64}$/, 'Invalid private key format'),
 });
 
@@ -85,15 +86,16 @@ async function main(): Promise<void> {
 
 async function runBot(args: string[]): Promise<void> {
   // Get values from args or environment
+  // SECURITY: Private key MUST come from environment variable only
   const chainIdRaw = args[0] ? Number(args[0]) : 8453;
   const rpcUrlRaw = args[1] ?? process.env.RPC_URL;
-  const privateKeyRaw = args[2] ?? process.env.PRIVATE_KEY;
+  const privateKeyRaw = process.env.PRIVATE_KEY;
 
   if (!rpcUrlRaw) {
     throw new Error('RPC_URL required: provide as argument or set RPC_URL environment variable');
   }
   if (!privateKeyRaw) {
-    throw new Error('PRIVATE_KEY required: provide as argument or set PRIVATE_KEY environment variable');
+    throw new Error('PRIVATE_KEY environment variable is required');
   }
 
   // Validate with Zod
@@ -329,8 +331,9 @@ Usage:
   bun run src/cli.ts <command> [options]
 
 Commands:
-  start [chainId] [rpcUrl] [privateKey]
+  start [chainId] [rpcUrl]
     Start the bot engine with all strategies enabled
+    Requires PRIVATE_KEY environment variable to be set
 
   backtest [strategy] [startDate] [endDate] [capital]
     Run a backtest for the specified strategy
@@ -348,9 +351,9 @@ Commands:
   help
     Show this help message
 
-Environment Variables:
-  RPC_URL       - Ethereum RPC URL
-  PRIVATE_KEY   - Wallet private key (for start command)
+Environment Variables (required for start command):
+  RPC_URL       - Ethereum RPC URL (can also pass as CLI argument)
+  PRIVATE_KEY   - Wallet private key (MUST be set as env var for security)
 `);
 }
 

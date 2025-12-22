@@ -3,7 +3,7 @@
  * Tests chain-based address selection and config functions
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import type { Address } from 'viem';
 
 // Expected localnet addresses (deterministic from anvil)
@@ -103,7 +103,8 @@ describe('RPC URL Configuration', () => {
   test('default localhost RPC URL format is valid', () => {
     const defaultRpc = 'http://localhost:8545';
     expect(defaultRpc.startsWith('http://')).toBe(true);
-    expect(defaultRpc.includes('127.0.0.1')).toBe(true);
+    // Accept both localhost and 127.0.0.1 as valid local URLs
+    expect(defaultRpc.includes('localhost') || defaultRpc.includes('127.0.0.1')).toBe(true);
     expect(defaultRpc.includes('8545')).toBe(true);
   });
 

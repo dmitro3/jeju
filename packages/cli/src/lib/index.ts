@@ -8,4 +8,5 @@ export * from './chain';
 export * from './keys';
 export * from './testing';
 export * from './http';
+export * from './security';
 

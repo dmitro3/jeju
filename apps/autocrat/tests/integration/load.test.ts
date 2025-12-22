@@ -1,7 +1,7 @@
 // Load Testing for Council API
 // These tests require the API to be running at API_URL (default: localhost:8010)
 // Run with REQUIRE_API=true to fail instead of skip when API is down
-import { describe, test, expect, beforeAll, setDefaultTimeout } from 'bun:test';
+import { describe, test, expect, setDefaultTimeout } from 'bun:test';
 
 setDefaultTimeout(30000);
 

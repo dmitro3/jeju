@@ -209,7 +209,7 @@ describe('CoW Profitability Analysis', () => {
 
   it('should find profitable orders when prices are favorable', () => {
     // Create mock auction
-    const auction = {
+    const _auction = {
       id: 1,
       chainId: 1,
       orders: [{

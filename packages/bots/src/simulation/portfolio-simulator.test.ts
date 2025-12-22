@@ -11,7 +11,7 @@
  */
 
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { PortfolioSimulator, type SimulatedSwap } from './portfolio-simulator';
+import { PortfolioSimulator } from './portfolio-simulator';
 import type { Token, OraclePrice } from '../types';
 import { WEIGHT_PRECISION, BPS_PRECISION } from '../schemas';
 

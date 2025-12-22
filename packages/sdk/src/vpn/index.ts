@@ -45,7 +45,12 @@ export async function createVPNPaymentHeader(
   params: VPNPaymentParams,
 ): Promise<VPNPaymentHeader> {
   const timestamp = Math.floor(Date.now() / 1000);
-  const nonce = `${wallet.address}-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
+  // Use cryptographically secure random bytes for nonce
+  const randomPart = crypto.getRandomValues(new Uint8Array(6));
+  const randomHex = Array.from(randomPart)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  const nonce = `${wallet.address}-${timestamp}-${randomHex}`;
 
   const message = `x402:exact:jeju:${config.contracts.vpnRegistry}:${params.amount}:0x0000000000000000000000000000000000000000:${params.resource}:${nonce}:${timestamp}`;
   const signature = await wallet.signMessage(message);
@@ -144,7 +149,11 @@ export function createVPNAgentClient(
   endpoint: string,
   wallet: { address: string; signMessage: (msg: string) => Promise<string> },
 ): VPNAgentClient {
+  // Use atomic counter pattern to avoid race conditions
   let messageCounter = 0;
+  const getNextMessageId = (): number => {
+    return ++messageCounter;
+  };
 
   async function buildAuthHeaders(): Promise<Record<string, string>> {
     const timestamp = Date.now().toString();
@@ -169,7 +178,8 @@ export function createVPNAgentClient(
       headers["x-payment"] = paymentHeader;
     }
 
-    const messageId = `msg-${++messageCounter}-${Date.now()}`;
+    const msgId = getNextMessageId();
+    const messageId = `msg-${msgId}-${Date.now()}`;
     const body = {
       jsonrpc: "2.0",
       method: "message/send",
@@ -179,7 +189,7 @@ export function createVPNAgentClient(
           parts: [{ kind: "data", data: { skillId, params } }],
         },
       },
-      id: messageCounter,
+      id: msgId,
     };
 
     const response = await fetch(`${endpoint}/a2a`, {

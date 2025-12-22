@@ -142,8 +142,14 @@ router.post('/submit', async (c) => {
   const service = getBugBountyService();
   const body = await parseAndValidateBody(c, BugBountySubmitRequestSchema, 'Bounty submission request');
 
-  // Use placeholder if no wallet connected (would be handled by frontend)
-  const researcher = (body.researcher ?? '0x0000000000000000000000000000000000000000') as Address;
+  // Require valid researcher address - placeholder addresses are security risk
+  // as they could allow reward claims by unauthorized parties
+  const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+  expect(
+    body.researcher !== undefined && body.researcher !== ZERO_ADDR,
+    'Valid researcher address is required for bounty submissions'
+  );
+  const researcher = body.researcher as Address;
   const researcherAgentId = parseBigInt(body.researcherAgentId ?? '0', 'Researcher agent ID');
 
   const submission = await service.submit(body, researcher, researcherAgentId);

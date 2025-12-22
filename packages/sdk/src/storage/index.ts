@@ -245,7 +245,10 @@ export function createStorageModule(
     return new Uint8Array(await response.arrayBuffer());
   }
 
-  async function retrieveJson<T>(cid: string, schema: ZodSchema<T>): Promise<T> {
+  async function retrieveJson<T>(
+    cid: string,
+    schema: ZodSchema<T>,
+  ): Promise<T> {
     const response = await fetch(`${gatewayUrl}/ipfs/${cid}`);
     if (!response.ok) {
       throw new Error(`Retrieve failed: ${response.statusText}`);

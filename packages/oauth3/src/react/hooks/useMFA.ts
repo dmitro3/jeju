@@ -251,6 +251,9 @@ export function useMFA(options: UseMFAOptions = {}): UseMFAReturn {
     const credential = await navigator.credentials.get({ publicKey }) as PublicKeyCredential;
 
     // Verify credential
+    const assertionResponse = credential.response as AuthenticatorAssertionResponse;
+    const userHandle = assertionResponse.userHandle;
+    
     const verifyResponse = await fetch(`${url}/mfa/passkey/authenticate/verify`, {
       method: 'POST',
       headers: {
@@ -263,12 +266,10 @@ export function useMFA(options: UseMFAOptions = {}): UseMFAReturn {
           id: credential.id,
           rawId: arrayBufferToBase64(credential.rawId),
           response: {
-            clientDataJSON: arrayBufferToBase64((credential.response as AuthenticatorAssertionResponse).clientDataJSON),
-            authenticatorData: arrayBufferToBase64((credential.response as AuthenticatorAssertionResponse).authenticatorData),
-            signature: arrayBufferToBase64((credential.response as AuthenticatorAssertionResponse).signature),
-            userHandle: (credential.response as AuthenticatorAssertionResponse).userHandle
-              ? arrayBufferToBase64((credential.response as AuthenticatorAssertionResponse).userHandle!)
-              : undefined,
+            clientDataJSON: arrayBufferToBase64(assertionResponse.clientDataJSON),
+            authenticatorData: arrayBufferToBase64(assertionResponse.authenticatorData),
+            signature: arrayBufferToBase64(assertionResponse.signature),
+            userHandle: userHandle ? arrayBufferToBase64(userHandle) : undefined,
           },
           type: credential.type,
         },

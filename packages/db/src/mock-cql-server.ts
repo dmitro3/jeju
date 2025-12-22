@@ -12,7 +12,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Context } from 'hono';
 import { z } from 'zod';
-import { parsePort } from './utils.js';
+import { parsePort, sanitizeRows } from './utils.js';
 
 const DEFAULT_PORT = 4661;
 const DEFAULT_DATA_DIR = '.cql-data';
@@ -110,7 +110,9 @@ async function handleCQLQuery(c: Context): Promise<Response> {
       blockHeight: 0,
     });
   } else {
-    const rows = stmt.all(...params);
+    const rawRows = stmt.all(...params);
+    // Sanitize rows to prevent prototype pollution attacks
+    const rows = sanitizeRows(rawRows as Record<string, unknown>[]);
     const executionTime = Math.round(performance.now() - start);
     
     return c.json({

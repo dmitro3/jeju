@@ -39,6 +39,8 @@ const ProxyConfigSchema = z.object({
   authTokenTtlMs: z.number().default(30000),
   metricsPort: z.number().optional(),
   drainTimeoutMs: z.number().default(30000),
+  // Security: Maximum message size from coordinator (default 64KB)
+  maxCoordinatorMessageBytes: z.number().min(1024).max(1024 * 1024).default(64 * 1024),
 });
 
 export type ProxyConfig = z.infer<typeof ProxyConfigSchema>;
@@ -177,6 +179,7 @@ export class ResidentialProxyService {
   private draining = false;
   private activeConnections = new Map<string, net.Socket | Duplex>();
   private metricsReportInterval: ReturnType<typeof setInterval> | null = null;
+  private tokenCleanupInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private coordinatorBreaker = new CircuitBreaker(5, 30000);
   private validTokens = new Map<string, number>(); // requestId -> expiry
@@ -290,6 +293,9 @@ export class ResidentialProxyService {
 
     // Metrics reporting
     this.metricsReportInterval = setInterval(() => this.reportMetrics(), 60000);
+    
+    // Periodic token cleanup to prevent memory leaks from expired tokens
+    this.tokenCleanupInterval = setInterval(() => this.cleanupExpiredTokens(), 30000);
 
     console.log(`[Proxy] Started on port ${this.config.localPort}`);
   }
@@ -322,6 +328,7 @@ export class ResidentialProxyService {
     // Cleanup
     this.running = false;
     if (this.metricsReportInterval) clearInterval(this.metricsReportInterval);
+    if (this.tokenCleanupInterval) clearInterval(this.tokenCleanupInterval);
     if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     if (this.ws) this.ws.close();
     if (this.metricsServer) this.metricsServer.close();
@@ -716,7 +723,15 @@ export class ResidentialProxyService {
         });
 
         ws.on('message', (data) => {
-          const message = CoordinatorMessageSchema.parse(JSON.parse(data.toString()));
+          // Defense in depth: check message size from coordinator
+          const rawData = Buffer.isBuffer(data) ? data : Buffer.from(data as ArrayBuffer);
+          if (rawData.length > this.config.maxCoordinatorMessageBytes) {
+            console.error(`[Proxy] Coordinator message too large: ${rawData.length} bytes, closing connection`);
+            ws.close(1009, 'Message too large');
+            return;
+          }
+          
+          const message = CoordinatorMessageSchema.parse(JSON.parse(rawData.toString()));
           this.handleCoordinatorMessage(message);
         });
 

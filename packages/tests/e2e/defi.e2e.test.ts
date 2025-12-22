@@ -5,6 +5,7 @@ import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import type { ChainConfig } from "@jejunetwork/types";
 import { getContractAddresses } from "@jejunetwork/contracts";
+import { TEST_ACCOUNTS } from "../shared/utils";
 
 const CONFIG_PATH = join(process.cwd(), "config", "chain", "localnet.json");
 
@@ -37,9 +38,7 @@ describe("DeFi E2E Tests", () => {
     }
     config = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
 
-    _account = privateKeyToAccount(
-      "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-    );
+    _account = privateKeyToAccount(TEST_ACCOUNTS.deployer.privateKey);
 
     publicClient = createPublicClient({
       transport: http(config.rpcUrl),

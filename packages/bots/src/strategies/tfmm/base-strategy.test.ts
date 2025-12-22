@@ -15,7 +15,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 import { BaseTFMMStrategy, type StrategyContext, type WeightCalculation } from './base-strategy';
 import { OracleAggregator } from '../../oracles';
 import { WEIGHT_PRECISION, BPS_PRECISION } from '../../schemas';
-import type { TFMMRiskParameters, OraclePrice, Token } from '../../types';
+import type { TFMMRiskParameters, OraclePrice } from '../../types';
 
 // Concrete implementation for testing protected methods
 class TestableStrategy extends BaseTFMMStrategy {

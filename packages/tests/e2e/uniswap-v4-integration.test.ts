@@ -12,9 +12,11 @@ import { describe, test, expect, beforeAll } from 'bun:test';
 import { createPublicClient, createWalletClient, http, formatEther, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import { rawDeployments } from '@jejunetwork/contracts';
-import { getLocalnetRpcUrl } from '../../scripts/shared/get-localnet-rpc';
+import { getLocalnetRpcUrl } from '../../packages/deployment/scripts/shared/get-localnet-rpc';
+import { TEST_ACCOUNTS } from '../shared/utils';
 
-const PRIVATE_KEY = process.env.PRIVATE_KEY || "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+// Use shared test accounts (Anvil defaults) - fallback to env var for CI
+const PRIVATE_KEY = process.env.PRIVATE_KEY || TEST_ACCOUNTS.deployer.privateKey;
 
 interface V4Deployment {
     poolManager: string;

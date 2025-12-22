@@ -1,7 +1,7 @@
 import { useState, type ComponentType } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount } from 'wagmi';
-import { Wallet, Factory, DropletIcon, BarChart3, Zap, Server, Book, Waves, Activity, Tag, Sparkles, Droplet, Radio, Shield, type LucideProps } from 'lucide-react';
+import { Wallet, Factory, BarChart3, Zap, Server, Book, Waves, Activity, Tag, Sparkles, Droplet, Radio, Shield, type LucideProps } from 'lucide-react';
 import { ThemeToggle } from './ThemeProvider';
 
 // Fix for Lucide React 19 type compatibility

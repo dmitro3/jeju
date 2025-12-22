@@ -161,7 +161,7 @@ test.describe('Moderation & ERC-8004', () => {
     
     // Look for tier indicators (Small, Medium, High)
     const body = await page.textContent('body')
-    const hasTierInfo = body?.includes('Small') || 
+    const _hasTierInfo = body?.includes('Small') || 
                        body?.includes('Medium') ||
                        body?.includes('High') ||
                        body?.includes('Tier')

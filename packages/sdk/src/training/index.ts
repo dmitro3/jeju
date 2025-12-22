@@ -289,8 +289,16 @@ export function createTrainingModule(
   wallet: JejuWallet,
   network: NetworkType,
 ): TrainingModule {
-  const coordinatorAddress = requireContract("training", "TrainingCoordinator", network);
-  const rewardsAddress = requireContract("training", "TrainingRewards", network);
+  const coordinatorAddress = requireContract(
+    "training",
+    "TrainingCoordinator",
+    network,
+  );
+  const rewardsAddress = requireContract(
+    "training",
+    "TrainingRewards",
+    network,
+  );
 
   return {
     async createRun(params) {

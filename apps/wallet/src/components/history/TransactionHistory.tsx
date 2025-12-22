@@ -175,10 +175,12 @@ export const TransactionHistory: React.FC<TransactionHistoryProps> = ({
       const date = new Date(tx.timestamp);
       const key = date.toDateString();
       
-      if (!groups.has(key)) {
-        groups.set(key, []);
+      const existing = groups.get(key);
+      if (existing) {
+        existing.push(tx);
+      } else {
+        groups.set(key, [tx]);
       }
-      groups.get(key)!.push(tx);
     }
     
     return groups;

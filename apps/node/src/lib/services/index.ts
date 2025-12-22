@@ -101,6 +101,8 @@ export function createNodeServices(
     region: edgeConfig?.region ?? 'global',
     staleThresholdMs: edgeConfig?.staleThresholdMs ?? 300000,
     requireOnChainRegistration: edgeConfig?.requireOnChainRegistration ?? false,
+    maxMessageSizeBytes: edgeConfig?.maxMessageSizeBytes ?? 1024 * 1024,
+    allowedOrigins: edgeConfig?.allowedOrigins ?? [],
     ...edgeConfig,
   };
 

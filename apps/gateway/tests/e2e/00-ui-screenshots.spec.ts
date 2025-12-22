@@ -12,7 +12,7 @@ test.describe('Gateway UI Screenshots - No Wallet Required', () => {
   test('capture all screens without wallet connection', async ({ page }) => {
     // Screenshot 1: Homepage (disconnected state)
     await page.goto(GATEWAY_URL);
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => { /* timeout acceptable */ });
     await page.waitForTimeout(2000);
     await page.screenshot({ 
       path: 'test-results/screenshots/00-01-homepage-disconnected.png', 

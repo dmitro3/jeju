@@ -259,8 +259,9 @@ export class NodeStatsReporter {
       }
     });
 
+    const server = this.metricsServer;
     await new Promise<void>((resolve) => {
-      this.metricsServer!.listen(this.config.metricsPort, resolve);
+      server.listen(this.config.metricsPort, resolve);
     });
 
     console.log(`[NodeStatsReporter] Metrics on port ${this.config.metricsPort}`);
@@ -464,9 +465,14 @@ export class NodeStatsReporter {
       outputs: []
     }] as const;
     
+    const account = this.walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client account not configured');
+    }
+    
     const hash = await this.walletClient.writeContract({
       chain: base,
-      account: this.walletClient.account!,
+      account,
       address: this.statsContractAddress,
       abi: reportStatsAbi,
       functionName: 'reportStats',
@@ -547,9 +553,14 @@ export class NodeStatsReporter {
       outputs: []
     }] as const;
     
+    const account = this.walletClient.account;
+    if (!account) {
+      throw new Error('Wallet client account not configured');
+    }
+    
     const hash = await this.walletClient.writeContract({
       chain: base,
-      account: this.walletClient.account!,
+      account,
       address: this.statsContractAddress,
       abi: claimRewardsAbi,
       functionName: 'claimRewards',

@@ -10,7 +10,6 @@
 
 import { keccak256, stringToHex, encodePacked, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { AutocratBlockchain } from './blockchain';
 import { indexProposal, findSimilarProposals } from './local-services';
 import { checkDWSCompute, dwsGenerate } from './agents/runtime';
 import { parseJson, type QualityCriteria } from './shared';
@@ -171,8 +170,6 @@ const WEIGHTS: Record<keyof QualityCriteria, number> = {
 
 export class ProposalAssistant {
   private daoContexts: Map<string, DAOContext> = new Map();
-
-  constructor(_blockchain: AutocratBlockchain) {}
 
   // ============ DAO Context Management ============
 
@@ -693,6 +690,6 @@ Return JSON: {"title":"...","summary":"...","description":"..."}`;
 
 let instance: ProposalAssistant | null = null;
 
-export function getProposalAssistant(blockchain: AutocratBlockchain): ProposalAssistant {
-  return (instance ??= new ProposalAssistant(blockchain));
+export function getProposalAssistant(): ProposalAssistant {
+  return (instance ??= new ProposalAssistant());
 }

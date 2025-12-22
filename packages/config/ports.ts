@@ -22,6 +22,22 @@
  * - Clear naming convention
  */
 
+/**
+ * Safely parse a port number from environment variable
+ * Returns the default if the env var is not set, empty, or invalid
+ * @param envValue - The environment variable value to parse
+ * @param defaultPort - The default port to use if parsing fails
+ */
+function safeParsePort(envValue: string | undefined, defaultPort: number): number {
+  if (!envValue) return defaultPort;
+  const parsed = parseInt(envValue, 10);
+  // Check for NaN or invalid port numbers
+  if (Number.isNaN(parsed) || parsed < 0 || parsed > 65535) {
+    return defaultPort;
+  }
+  return parsed;
+}
+
 // ============================================================================
 // Core Apps (4000-4999 range)
 // ============================================================================
@@ -31,91 +47,91 @@ export const CORE_PORTS = {
   GATEWAY: {
     DEFAULT: 4001,
     ENV_VAR: 'GATEWAY_PORT',
-    get: () => parseInt(process.env.GATEWAY_PORT || process.env.PAYMASTER_DASHBOARD_PORT || '4001')
+    get: () => safeParsePort(process.env.GATEWAY_PORT ?? process.env.PAYMASTER_DASHBOARD_PORT, 4001)
   },
 
   /** Node Explorer API - Node operator tracking backend */
   NODE_EXPLORER_API: {
     DEFAULT: 4002,
     ENV_VAR: 'NODE_EXPLORER_API_PORT',
-    get: () => parseInt(process.env.NODE_EXPLORER_API_PORT || '4002')
+    get: () => safeParsePort(process.env.NODE_EXPLORER_API_PORT, 4002)
   },
 
   /** Node Explorer UI - Node operator dashboard frontend */
   NODE_EXPLORER_UI: {
     DEFAULT: 4003,
     ENV_VAR: 'NODE_EXPLORER_UI_PORT',
-    get: () => parseInt(process.env.NODE_EXPLORER_UI_PORT || '4003')
+    get: () => safeParsePort(process.env.NODE_EXPLORER_UI_PORT, 4003)
   },
 
   /** Documentation - VitePress docs site */
   DOCUMENTATION: {
     DEFAULT: 4004,
     ENV_VAR: 'DOCUMENTATION_PORT',
-    get: () => parseInt(process.env.DOCUMENTATION_PORT || '4004')
+    get: () => safeParsePort(process.env.DOCUMENTATION_PORT, 4004)
   },
 
   /** Predimarket - Prediction market platform */
   PREDIMARKET: {
     DEFAULT: 4005,
     ENV_VAR: 'PREDIMARKET_PORT',
-    get: () => parseInt(process.env.PREDIMARKET_PORT || '4005')
+    get: () => safeParsePort(process.env.PREDIMARKET_PORT, 4005)
   },
 
   /** Bazaar - DeFi + NFT Marketplace */
   BAZAAR: {
     DEFAULT: 4006,
     ENV_VAR: 'BAZAAR_PORT',
-    get: () => parseInt(process.env.BAZAAR_PORT || '4006')
+    get: () => safeParsePort(process.env.BAZAAR_PORT, 4006)
   },
 
   /** Compute Marketplace - Decentralized AI inference marketplace */
   COMPUTE: {
     DEFAULT: 4007,
     ENV_VAR: 'COMPUTE_PORT',
-    get: () => parseInt(process.env.COMPUTE_PORT || '4007')
+    get: () => safeParsePort(process.env.COMPUTE_PORT, 4007)
   },
 
   /** Compute Node API - Provider node endpoint */
   COMPUTE_NODE_API: {
     DEFAULT: 4008,
     ENV_VAR: 'COMPUTE_NODE_API_PORT',
-    get: () => parseInt(process.env.COMPUTE_NODE_API_PORT || '4008')
+    get: () => safeParsePort(process.env.COMPUTE_NODE_API_PORT, 4008)
   },
 
   /** IPFS Storage Service - Decentralized file storage with x402 payments */
   IPFS: {
     DEFAULT: 3100,
     ENV_VAR: 'IPFS_PORT',
-    get: () => parseInt(process.env.IPFS_PORT || '3100')
+    get: () => safeParsePort(process.env.IPFS_PORT, 3100)
   },
 
   /** IPFS Node (Kubo) - IPFS daemon API */
   IPFS_NODE: {
     DEFAULT: 4100,
     ENV_VAR: 'IPFS_NODE_PORT',
-    get: () => parseInt(process.env.IPFS_NODE_PORT || '4100')
+    get: () => safeParsePort(process.env.IPFS_NODE_PORT, 4100)
   },
 
   /** Indexer GraphQL - Subsquid data indexing */
   INDEXER_GRAPHQL: {
     DEFAULT: 4350,
     ENV_VAR: 'INDEXER_GRAPHQL_PORT',
-    get: () => parseInt(process.env.INDEXER_GRAPHQL_PORT || '4350')
+    get: () => safeParsePort(process.env.INDEXER_GRAPHQL_PORT, 4350)
   },
 
   /** Indexer Database - PostgreSQL */
   INDEXER_DATABASE: {
     DEFAULT: 23798,
     ENV_VAR: 'INDEXER_DB_PORT',
-    get: () => parseInt(process.env.INDEXER_DB_PORT || '23798')
+    get: () => safeParsePort(process.env.INDEXER_DB_PORT, 23798)
   },
 
   /** x402 Facilitator - Payment verification and settlement service */
   FACILITATOR: {
     DEFAULT: 3402,
     ENV_VAR: 'FACILITATOR_PORT',
-    get: () => parseInt(process.env.FACILITATOR_PORT || '3402')
+    get: () => safeParsePort(process.env.FACILITATOR_PORT, 3402)
   },
 } as const;
 
@@ -133,7 +149,7 @@ export const VENDOR_PORTS = {
     DEFAULT: 3333,
     JEJU: 5013,
     ENV_VAR: 'VITE_PORT',
-    get: () => parseInt(process.env.VITE_PORT || process.env.VENDOR_HYPERSCAPE_CLIENT_PORT || '3333')
+    get: () => safeParsePort(process.env.VITE_PORT ?? process.env.VENDOR_HYPERSCAPE_CLIENT_PORT, 3333)
   },
 
   /** 
@@ -145,77 +161,77 @@ export const VENDOR_PORTS = {
     DEFAULT: 5555,
     JEJU: 5014,
     ENV_VAR: 'PORT',
-    get: () => parseInt(process.env.PORT || process.env.VENDOR_HYPERSCAPE_SERVER_PORT || '5555')
+    get: () => safeParsePort(process.env.PORT ?? process.env.VENDOR_HYPERSCAPE_SERVER_PORT, 5555)
   },
 
   /** Launchpad Frontend - Token launchpad UI */
   LAUNCHPAD_FRONTEND: {
     DEFAULT: 5003,
     ENV_VAR: 'VENDOR_LAUNCHPAD_FRONTEND_PORT',
-    get: () => parseInt(process.env.VENDOR_LAUNCHPAD_FRONTEND_PORT || '5003')
+    get: () => safeParsePort(process.env.VENDOR_LAUNCHPAD_FRONTEND_PORT, 5003)
   },
 
   /** Launchpad Backend - Token launchpad API */
   LAUNCHPAD_BACKEND: {
     DEFAULT: 5004,
     ENV_VAR: 'VENDOR_LAUNCHPAD_BACKEND_PORT',
-    get: () => parseInt(process.env.VENDOR_LAUNCHPAD_BACKEND_PORT || '5004')
+    get: () => safeParsePort(process.env.VENDOR_LAUNCHPAD_BACKEND_PORT, 5004)
   },
 
   /** OTC Trading Desk (TheDesk) - AI-powered OTC trading agent */
   OTC_DESK: {
     DEFAULT: 5005,
     ENV_VAR: 'VENDOR_OTC_DESK_PORT',
-    get: () => parseInt(process.env.VENDOR_OTC_DESK_PORT || process.env.VENDOR_THEDESK_PORT || '5005')
+    get: () => safeParsePort(process.env.VENDOR_OTC_DESK_PORT ?? process.env.VENDOR_THEDESK_PORT, 5005)
   },
 
   /** OTC Trading Desk Database (PostgreSQL) */
   OTC_DESK_DB: {
     DEFAULT: 5439,
     ENV_VAR: 'VENDOR_OTC_DESK_DB_PORT',
-    get: () => parseInt(process.env.VENDOR_OTC_DESK_DB_PORT || '5439')
+    get: () => safeParsePort(process.env.VENDOR_OTC_DESK_DB_PORT, 5439)
   },
 
   /** OTC Trading Desk Worker */
   OTC_DESK_WORKER: {
     DEFAULT: 3137,
     ENV_VAR: 'VENDOR_OTC_DESK_WORKER_PORT',
-    get: () => parseInt(process.env.VENDOR_OTC_DESK_WORKER_PORT || '3137')
+    get: () => safeParsePort(process.env.VENDOR_OTC_DESK_WORKER_PORT, 3137)
   },
 
   /** Cloud - cloud dashboard */
   CLOUD: {
     DEFAULT: 5006,
     ENV_VAR: 'VENDOR_CLOUD_PORT',
-    get: () => parseInt(process.env.VENDOR_CLOUD_PORT || '5006')
+    get: () => safeParsePort(process.env.VENDOR_CLOUD_PORT, 5006)
   },
 
   /** Caliguland Frontend */
   CALIGULAND_FRONTEND: {
     DEFAULT: 5007,
     ENV_VAR: 'VENDOR_CALIGULAND_FRONTEND_PORT',
-    get: () => parseInt(process.env.VENDOR_CALIGULAND_FRONTEND_PORT || '5007')
+    get: () => safeParsePort(process.env.VENDOR_CALIGULAND_FRONTEND_PORT, 5007)
   },
 
   /** Caliguland Game Server */
   CALIGULAND_GAME: {
     DEFAULT: 5008,
     ENV_VAR: 'VENDOR_CALIGULAND_GAME_PORT',
-    get: () => parseInt(process.env.VENDOR_CALIGULAND_GAME_PORT || '5008')
+    get: () => safeParsePort(process.env.VENDOR_CALIGULAND_GAME_PORT, 5008)
   },
 
   /** Caliguland Auth */
   CALIGULAND_AUTH: {
     DEFAULT: 5009,
     ENV_VAR: 'VENDOR_CALIGULAND_AUTH_PORT',
-    get: () => parseInt(process.env.VENDOR_CALIGULAND_AUTH_PORT || '5009')
+    get: () => safeParsePort(process.env.VENDOR_CALIGULAND_AUTH_PORT, 5009)
   },
 
   /** redteam */
   ELIZAGOTCHI: {
     DEFAULT: 5010,
     ENV_VAR: 'VENDOR_ELIZAGOTCHI_PORT',
-    get: () => parseInt(process.env.VENDOR_ELIZAGOTCHI_PORT || '5010')
+    get: () => safeParsePort(process.env.VENDOR_ELIZAGOTCHI_PORT, 5010)
   },
 } as const;
 
@@ -228,42 +244,42 @@ export const INFRA_PORTS = {
   L1_RPC: {
     DEFAULT: 8545,
     ENV_VAR: 'L1_RPC_PORT',
-    get: () => parseInt(process.env.L1_RPC_PORT || '8545')
+    get: () => safeParsePort(process.env.L1_RPC_PORT, 8545)
   },
 
   /** L2 RPC - Jeju localnet L2 (main chain) */
   L2_RPC: {
     DEFAULT: 9545,
     ENV_VAR: 'L2_RPC_PORT',
-    get: () => parseInt(process.env.L2_RPC_PORT || '9545')
+    get: () => safeParsePort(process.env.L2_RPC_PORT, 9545)
   },
 
   /** L2 WebSocket */
   L2_WS: {
     DEFAULT: 6547,
     ENV_VAR: 'L2_WS_PORT',
-    get: () => parseInt(process.env.L2_WS_PORT || '6547')
+    get: () => safeParsePort(process.env.L2_WS_PORT, 6547)
   },
 
   /** Prometheus */
   PROMETHEUS: {
     DEFAULT: 9090,
     ENV_VAR: 'PROMETHEUS_PORT',
-    get: () => parseInt(process.env.PROMETHEUS_PORT || '9090')
+    get: () => safeParsePort(process.env.PROMETHEUS_PORT, 9090)
   },
 
   /** Grafana */
   GRAFANA: {
     DEFAULT: 4010,
     ENV_VAR: 'GRAFANA_PORT',
-    get: () => parseInt(process.env.GRAFANA_PORT || '4010')
+    get: () => safeParsePort(process.env.GRAFANA_PORT, 4010)
   },
 
   /** Kurtosis UI */
   KURTOSIS_UI: {
     DEFAULT: 9711,
     ENV_VAR: 'KURTOSIS_UI_PORT',
-    get: () => parseInt(process.env.KURTOSIS_UI_PORT || '9711')
+    get: () => safeParsePort(process.env.KURTOSIS_UI_PORT, 9711)
   },
 } as const;
 
@@ -384,10 +400,12 @@ export function checkPortConflicts(): { hasConflicts: boolean; conflicts: string
   
   // Check for duplicates
   Object.entries(allPorts).forEach(([name, port]) => {
-    if (!usedPorts.has(port)) {
-      usedPorts.set(port, []);
+    const existing = usedPorts.get(port);
+    if (existing) {
+      existing.push(name);
+    } else {
+      usedPorts.set(port, [name]);
     }
-    usedPorts.get(port)!.push(name);
   });
   
   // Find conflicts

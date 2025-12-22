@@ -1,5 +1,4 @@
 import { testWithSynpress } from '@synthetixio/synpress'
-import type { Page } from "@playwright/test";
 import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
 import { basicSetup } from '../../synpress.config'
 
@@ -8,13 +7,13 @@ const { expect } = test
 
 test.describe('Wallet Connection with Synpress', () => {
   test('should connect MetaMask wallet to Bazaar', async ({ context, page, metamaskPage, extensionId }) => {
-    const metamask = new MetaMask(context, metamaskPage, basicSetup.walletPassword, extensionId)
+    const _metamask = new MetaMask(context, metamaskPage, basicSetup.walletPassword, extensionId)
 
     await page.goto('/')
 
     await page.getByRole('button', { name: /Connect Wallet/i }).click()
 
-    await metamask.connectToDapp()
+    await _metamask.connectToDapp()
 
     // Wait for wallet address to appear in header
     await expect(page.getByText(/0xf39F/i)).toBeVisible({ timeout: 15000 })
@@ -34,7 +33,7 @@ test.describe('Wallet Connection with Synpress', () => {
   })
 
   test('should be on the network network', async ({ context, page, metamaskPage, extensionId }) => {
-    const metamask = new MetaMask(context, metamaskPage, basicSetup.walletPassword, extensionId)
+    const _metamask = new MetaMask(context, metamaskPage, basicSetup.walletPassword, extensionId)
 
     await page.goto('/')
     

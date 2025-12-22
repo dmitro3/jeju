@@ -10,16 +10,12 @@
 
 import { Hono } from 'hono';
 import type { Address, Hex } from 'viem';
-import { toBytes, toHex, keccak256 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { toBytes, toHex } from 'viem';
 import {
   Disperser,
   createDisperser,
   DAOperator,
   createDAOperator,
-  BlobManager,
-  DASampler,
-  computeBlobId,
   type BlobSubmissionRequest,
   type DAOperatorInfo,
   type SampleRequest,

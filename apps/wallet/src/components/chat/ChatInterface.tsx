@@ -153,7 +153,7 @@ export function ChatInterface({ onActionConfirmed, onActionRejected, onActionCom
 
       // Fall back to inference gateway (streaming)
       let fullContent = '';
-      let responseData: Partial<ChatResponse> = {};
+      const responseData: Partial<ChatResponse> = {};
 
       for await (const chunk of inferenceClient.chatStream({
         messages: [{ role: 'user', content: contextualContent }],

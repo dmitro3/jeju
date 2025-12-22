@@ -3,6 +3,12 @@ import path from 'path';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Security: Limit API request body size to 10MB
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '10mb',
+    },
+  },
   turbopack: {
     resolveAlias: {
       'porto/internal': './lib/stubs/porto-stub.js',

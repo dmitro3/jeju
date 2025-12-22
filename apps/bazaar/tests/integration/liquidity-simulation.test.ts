@@ -13,8 +13,8 @@ import {
   http,
   parseEther,
   formatEther,
-  parseAbi,
   encodeAbiParameters,
+  keccak256,
   type Address,
   type PublicClient,
   type WalletClient,
@@ -29,7 +29,6 @@ import { rawDeployments } from '@jejunetwork/contracts'
 const RPC_URL = process.env.L2_RPC_URL || 'http://localhost:9545'
 const CHAIN_ID = 420691 // network localnet chain ID
 const DEPLOYER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`
-const DEPLOYER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address
 const WETH_ADDRESS = '0x4200000000000000000000000000000000000006' as Address
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as Address
 
@@ -39,28 +38,6 @@ const localnet = {
   nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
   rpcUrls: { default: { http: [RPC_URL] } },
 }
-
-// =============================================================================
-// ABIS
-// =============================================================================
-
-const POOL_MANAGER_ABI = parseAbi([
-  'function initialize((address,address,uint24,int24,address) key, uint160 sqrtPriceX96, bytes hookData) returns (int24 tick)',
-  'function getSlot0(bytes32 poolId) view returns (uint160 sqrtPriceX96, int24 tick, uint24 protocolFee, uint24 lpFee)',
-  'function getLiquidity(bytes32 poolId) view returns (uint128)',
-])
-
-const POSITION_MANAGER_ABI = parseAbi([
-  'function mint((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline)) payable returns (uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)',
-  'function positions(uint256 tokenId) view returns (uint96 nonce, address operator, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity, uint256 feeGrowthInside0LastX128, uint256 feeGrowthInside1LastX128, uint128 tokensOwed0, uint128 tokensOwed1)',
-  'function collect((uint256 tokenId, address recipient, uint128 amount0Max, uint128 amount1Max)) returns (uint256 amount0, uint256 amount1)',
-])
-
-const ERC20_ABI = parseAbi([
-  'function balanceOf(address account) view returns (uint256)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)',
-])
 
 // =============================================================================
 // TYPES
@@ -97,20 +74,15 @@ function computePoolId(key: PoolKey): `0x${string}` {
   )
   
   // keccak256 of the encoded data
-  const { keccak256 } = require('viem')
   return keccak256(encoded)
 }
-
-// Initial price: 1 token0 = 1 token1 (1:1 ratio)
-// sqrtPriceX96 = sqrt(1) * 2^96 = 79228162514264337593543950336
-const SQRT_PRICE_1_1 = 79228162514264337593543950336n
 
 // =============================================================================
 // SETUP
 // =============================================================================
 
 let publicClient: PublicClient
-let walletClient: WalletClient
+let _walletClient: WalletClient
 let poolManager: Address | null = null
 let positionManager: Address | null = null
 let skipTests = false
@@ -132,7 +104,7 @@ beforeAll(async () => {
   })
 
   const account = privateKeyToAccount(DEPLOYER_KEY)
-  walletClient = createWalletClient({
+  _walletClient = createWalletClient({
     account,
     chain: localnet,
     transport: http(RPC_URL),

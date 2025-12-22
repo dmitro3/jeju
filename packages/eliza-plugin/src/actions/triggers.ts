@@ -10,7 +10,7 @@ import {
   type State,
 } from "@elizaos/core";
 import { JEJU_SERVICE_NAME, type JejuService } from "../service";
-import { getMessageText, validateServiceExists } from "../validation";
+import { getMessageText, validateServiceExists, isUrlSafeToFetch } from "../validation";
 
 export const createTriggerAction: Action = {
   name: "CREATE_TRIGGER",
@@ -67,6 +67,15 @@ export const createTriggerAction: Action = {
       return;
     }
     const endpoint = urlMatch[0];
+
+    // Validate endpoint URL is safe (prevent SSRF via trigger creation)
+    // Note: For triggers, we're more permissive but still block obvious internal URLs
+    if (!isUrlSafeToFetch(endpoint)) {
+      callback?.({
+        text: "Cannot create trigger pointing to internal or private URLs for security reasons.",
+      });
+      return;
+    }
 
     // Extract name - required
     const nameMatch = text.match(/(?:named?|called?)\s+["']?([^"'\s]+)["']?/i);

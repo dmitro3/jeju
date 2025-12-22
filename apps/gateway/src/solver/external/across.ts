@@ -249,10 +249,11 @@ export class AcrossAdapter extends EventEmitter {
       message: deposit.message,
     };
 
+    if (!client.wallet.account) throw new Error('Wallet has no account');
     const isNativeToken = deposit.outputToken === '0x0000000000000000000000000000000000000000';
     const hash = await client.wallet.writeContract({
       chain: client.wallet.chain,
-      account: client.wallet.account!,
+      account: client.wallet.account,
       address: spokePool,
       abi: FILL_RELAY_ABI,
       functionName: 'fillV3Relay',

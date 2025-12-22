@@ -73,9 +73,25 @@ interface EventMessage {
 
 type WindowMessage = ResponseMessage | EventMessage | { type: string };
 
+// Maximum pending requests to prevent memory exhaustion
+const MAX_PENDING_REQUESTS = 100;
+
+// Request timeout duration (5 minutes)
+const REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Cleanup interval for stale requests (30 seconds)
+const CLEANUP_INTERVAL_MS = 30 * 1000;
+
+interface PendingRequest {
+  resolve: (v: EIP1193Param) => void;
+  reject: (e: Error) => void;
+  createdAt: number;
+}
+
 class NetworkProvider {
   private events: Map<ProviderEventName, Set<EventCallback>> = new Map();
-  private pendingRequests: Map<string, { resolve: (v: EIP1193Param) => void; reject: (e: Error) => void }> = new Map();
+  private pendingRequests: Map<string, PendingRequest> = new Map();
+  private cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
   
   readonly isJeju = true;
   readonly isMetaMask = true; // For compatibility
@@ -87,6 +103,20 @@ class NetworkProvider {
   constructor() {
     this.setupEventListener();
     this.initialize();
+    this.startCleanupInterval();
+  }
+  
+  private startCleanupInterval(): void {
+    // Periodically clean up stale pending requests to prevent memory leaks
+    this.cleanupIntervalId = setInterval(() => {
+      const now = Date.now();
+      for (const [id, req] of this.pendingRequests) {
+        if (now - req.createdAt > REQUEST_TIMEOUT_MS) {
+          req.reject(new Error('Request timed out'));
+          this.pendingRequests.delete(id);
+        }
+      }
+    }, CLEANUP_INTERVAL_MS);
   }
 
   private setupEventListener(): void {
@@ -166,25 +196,30 @@ class NetworkProvider {
   }
 
   async request(args: RequestArguments): Promise<EIP1193Param> {
+    // Prevent unbounded growth of pending requests (DoS protection)
+    if (this.pendingRequests.size >= MAX_PENDING_REQUESTS) {
+      throw new Error('Too many pending requests');
+    }
+    
     const id = crypto.randomUUID();
     
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+      this.pendingRequests.set(id, { resolve, reject, createdAt: Date.now() });
       
       window.postMessage({
         type: 'jeju_request',
         method: args.method,
         params: args.params,
         id,
-      }, '*');
+      }, window.location.origin);
       
-      // Timeout after 5 minutes
+      // Timeout after 5 minutes (kept for individual request timeout)
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
           reject(new Error('Request timed out'));
         }
-      }, 300000);
+      }, REQUEST_TIMEOUT_MS);
     });
   }
 
@@ -208,10 +243,12 @@ class NetworkProvider {
 
   // Event emitter interface - EIP-1193 compliant
   on<T extends ProviderEventName>(event: T, callback: TypedEventCallback<T>): this {
-    if (!this.events.has(event)) {
-      this.events.set(event, new Set());
+    const existing = this.events.get(event);
+    if (existing) {
+      existing.add(callback as EventCallback);
+    } else {
+      this.events.set(event, new Set([callback as EventCallback]));
     }
-    this.events.get(event)!.add(callback as EventCallback);
     return this;
   }
 

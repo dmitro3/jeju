@@ -178,28 +178,31 @@ export class LedgerKeyring {
     let rawTxHex: string;
     
     if (isEIP1559) {
-      // EIP-1559 transaction
+      // EIP-1559 transaction - maxFeePerGas and maxPriorityFeePerGas are guaranteed by isEIP1559
+      const maxFeePerGas = tx.maxFeePerGas ?? 0n;
+      const maxPriorityFeePerGas = tx.maxPriorityFeePerGas ?? 0n;
       const txData = {
         to: tx.to,
         value: toHex(tx.value),
         data: tx.data,
         nonce: toHex(tx.nonce),
         gasLimit: toHex(tx.gasLimit),
-        maxFeePerGas: toHex(tx.maxFeePerGas!),
-        maxPriorityFeePerGas: toHex(tx.maxPriorityFeePerGas!),
+        maxFeePerGas: toHex(maxFeePerGas),
+        maxPriorityFeePerGas: toHex(maxPriorityFeePerGas),
         chainId: toHex(tx.chainId),
         type: '0x02',
       };
       rawTxHex = this.serializeEIP1559Tx(txData);
     } else {
       // Legacy transaction
+      const gasPrice = tx.gasPrice ?? 0n;
       const txData = {
         to: tx.to,
         value: toHex(tx.value),
         data: tx.data,
         nonce: toHex(tx.nonce),
         gasLimit: toHex(tx.gasLimit),
-        gasPrice: toHex(tx.gasPrice!),
+        gasPrice: toHex(gasPrice),
         chainId: toHex(tx.chainId),
       };
       rawTxHex = this.serializeLegacyTx(txData);

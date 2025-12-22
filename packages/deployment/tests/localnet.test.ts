@@ -138,7 +138,7 @@ describe("parsePortFromUrl", () => {
 
 describe("constructRpcUrl", () => {
   it("should construct valid URLs", () => {
-    expect(constructRpcUrl("127.0.0.1", 8545)).toBe("http://localhost:8545");
+    expect(constructRpcUrl("127.0.0.1", 8545)).toBe("http://127.0.0.1:8545");
     expect(constructRpcUrl("localhost", 9545)).toBe("http://localhost:9545");
   });
 

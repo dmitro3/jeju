@@ -3,7 +3,7 @@
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import { useQuery } from '@tanstack/react-query'
-import { fetchTokenDetails, fetchPriceHistory, fetchToken24hStats, type Token } from '@/lib/data-client'
+import { fetchTokenDetails, fetchPriceHistory, fetchToken24hStats } from '@/lib/data-client'
 import { PriceChart, type Candle } from '@/components/charts/PriceChart'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { formatUnits, type Address } from 'viem'

@@ -9,6 +9,7 @@ export { z } from 'zod';
 export * from './utils/common';
 export * from './utils/rpc';
 export * from './utils/api-marketplace';
+export * from './utils/crypto';
 
 // x402 Payment handling
 export {

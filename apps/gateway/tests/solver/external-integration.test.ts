@@ -188,7 +188,7 @@ describe('Supported Chains Configuration', () => {
   });
 
   it('all chain IDs should be valid', () => {
-    for (const [name, chainId] of Object.entries(SUPPORTED_CHAINS)) {
+    for (const [_name, chainId] of Object.entries(SUPPORTED_CHAINS)) {
       expect(chainId).toBeGreaterThan(0);
       expect(typeof chainId).toBe('number');
     }
@@ -199,19 +199,19 @@ describe('Protocol Address Validation', () => {
   const addressRegex = /^0x[a-fA-F0-9]{40}$/;
 
   it('Across SpokePool addresses should be valid', () => {
-    for (const [chainId, address] of Object.entries(ACROSS_SPOKE_POOLS)) {
+    for (const [_chainId, address] of Object.entries(ACROSS_SPOKE_POOLS)) {
       expect(address).toMatch(addressRegex);
     }
   });
 
   it('UniswapX Reactor addresses should be valid', () => {
-    for (const [chainId, address] of Object.entries(UNISWAPX_REACTORS)) {
+    for (const [_chainId, address] of Object.entries(UNISWAPX_REACTORS)) {
       expect(address).toMatch(addressRegex);
     }
   });
 
   it('CoW Settlement addresses should be valid', () => {
-    for (const [chainId, address] of Object.entries(COW_SETTLEMENT)) {
+    for (const [_chainId, address] of Object.entries(COW_SETTLEMENT)) {
       expect(address).toMatch(addressRegex);
     }
   });

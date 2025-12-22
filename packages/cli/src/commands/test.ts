@@ -257,9 +257,8 @@ testCommand
     const apps = discoverApps(rootDir);
 
     for (const app of apps) {
-      // Use slug for file system lookup, falling back to name
-      const appSlug = app.slug || app.name;
-      const result = await runAppTests(rootDir, appSlug, mode, options, testEnv);
+      // Use name for file system lookup
+      const result = await runAppTests(rootDir, app.name, mode, options, testEnv);
       results.push(result);
 
       if (!result.passed && options.ci) {
@@ -713,7 +712,7 @@ async function runInfraTests(
   if (options.deploy) {
     logger.info('Testing testnet deployment...');
     try {
-      await execa('bun', ['run', 'scripts/deploy/testnet.ts', '--dry-run'], {
+      await execa('bun', ['run', 'packages/deployment/scripts/deploy/testnet.ts', '--dry-run'], {
         cwd: rootDir,
         stdio: 'inherit',
         env: { ...process.env, ...env, DRY_RUN: 'true' },
@@ -1048,7 +1047,7 @@ async function setupE2EInfra(rootDir: string, options: Record<string, unknown>):
     if (existsSync(bootstrapFile)) {
       logger.success('Contracts already deployed');
     } else {
-      const bootstrapScript = join(rootDir, 'scripts/bootstrap/bootstrap-localnet-complete.ts');
+      const bootstrapScript = join(rootDir, 'packages/deployment/scripts/bootstrap-localnet-complete.ts');
       
       if (existsSync(bootstrapScript)) {
         logger.info('Deploying contracts...');

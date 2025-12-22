@@ -33,7 +33,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { Address, Hex } from 'viem';
+import type { Address } from 'viem';
 import { validateBody, validateParams } from '../server/routes/shared';
 
 // ============================================================================
@@ -321,7 +321,7 @@ export function createTerraformProviderRouter(): Hono {
 
   router.post('/terraform/v1/resources/dws_worker', async (c) => {
     const body = await validateBody(workerResourceSchema, c);
-    const owner = c.req.header('x-jeju-address') as Address;
+    const _owner = c.req.header('x-jeju-address') as Address;
 
     // Create worker via DWS API
     const workerId = `tf-worker-${Date.now()}`;

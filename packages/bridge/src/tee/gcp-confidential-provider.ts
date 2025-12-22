@@ -18,6 +18,7 @@ import { keccak256, toBytes } from "viem";
 import { z } from "zod";
 import type { TEEAttestation } from "../types/index.js";
 import { toHash32 } from "../types/index.js";
+import { createLogger } from "../utils/logger.js";
 import type {
 	AttestationRequest,
 	AttestationResponse,
@@ -28,7 +29,6 @@ import type {
 	TEECapability,
 	TEEProvider,
 } from "./types.js";
-import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("gcp-tee");
 
@@ -67,9 +67,7 @@ export class GCPConfidentialProvider implements ITEEProvider {
 			log.info("Running in Confidential VM environment");
 			await this.initializeConfidentialVM();
 		} else {
-			log.info(
-				"Not in Confidential VM, using simulated mode",
-			);
+			log.info("Not in Confidential VM, using simulated mode");
 			this.instanceId = `gcp-sim-${Date.now().toString(36)}`;
 			this.publicKey = new Uint8Array(33);
 			crypto.getRandomValues(this.publicKey);
@@ -252,7 +250,10 @@ export class GCPConfidentialProvider implements ITEEProvider {
 		crypto.getRandomValues(this.publicKey);
 		this.publicKey[0] = 0x02;
 
-		log.info("GCP instance initialized", { instanceId: this.instanceId, gpuTee: this.hasGpuTEE });
+		log.info("GCP instance initialized", {
+			instanceId: this.instanceId,
+			gpuTee: this.hasGpuTEE,
+		});
 	}
 
 	private async detectGPUTEE(): Promise<boolean> {
@@ -381,15 +382,15 @@ export class GCPConfidentialProvider implements ITEEProvider {
 		// This requires the Google Cloud SDK or equivalent JWT verification
 		throw new Error(
 			"[GCPConfidential] Production attestation verification requires Google Cloud SDK. " +
-			"Install @google-cloud/attestation or implement JWT signature verification with Google's public keys."
+				"Install @google-cloud/attestation or implement JWT signature verification with Google's public keys.",
 		);
 	}
 
 	private verifySimulatedToken(quote: Uint8Array): boolean {
 		// Validate simulated JWT structure
-		const tokenString = Buffer.from(quote).toString('utf-8');
-		const parts = tokenString.split('.');
-		
+		const tokenString = Buffer.from(quote).toString("utf-8");
+		const parts = tokenString.split(".");
+
 		if (parts.length !== 3) {
 			log.error("Invalid token: not a valid JWT format");
 			return false;
@@ -404,11 +405,13 @@ export class GCPConfidentialProvider implements ITEEProvider {
 			iat: z.number().optional(),
 		});
 
-		const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+		const payloadJson = Buffer.from(parts[1], "base64url").toString("utf-8");
 		const parseResult = ClaimsSchema.safeParse(JSON.parse(payloadJson));
-		
+
 		if (!parseResult.success) {
-			log.error("Invalid token: missing required claims", { errors: parseResult.error.issues });
+			log.error("Invalid token: missing required claims", {
+				errors: parseResult.error.issues,
+			});
 			return false;
 		}
 
@@ -429,7 +432,10 @@ export class GCPConfidentialProvider implements ITEEProvider {
 
 		// Verify token is not from the future (issued time)
 		if (claims.iat && claims.iat > now + 60) {
-			log.error("Invalid token: issued in the future", { iat: claims.iat, now });
+			log.error("Invalid token: issued in the future", {
+				iat: claims.iat,
+				now,
+			});
 			return false;
 		}
 
@@ -446,9 +452,11 @@ export function createGCPConfidentialProvider(
 ): GCPConfidentialProvider {
 	const project = config?.project ?? process.env.GCP_PROJECT;
 	if (!project) {
-		throw new Error("GCP_PROJECT is required - set via config or environment variable");
+		throw new Error(
+			"GCP_PROJECT is required - set via config or environment variable",
+		);
 	}
-	
+
 	return new GCPConfidentialProvider({
 		project,
 		zone: config?.zone ?? process.env.GCP_ZONE ?? "us-central1-a",

@@ -5,6 +5,34 @@ import { isAddress, isHex, type Address, type Hex } from 'viem';
 export type { Address, Hex };
 
 // ============================================================================
+// Security Constants - Prevent DoS via unbounded inputs
+// ============================================================================
+
+/** Maximum array length for most schemas (prevents memory exhaustion) */
+export const MAX_ARRAY_LENGTH = 1000;
+
+/** Maximum array length for small arrays (signatures, sources) */
+export const MAX_SMALL_ARRAY_LENGTH = 100;
+
+/** Maximum string length for general strings */
+export const MAX_STRING_LENGTH = 10000;
+
+/** Maximum string length for short strings (names, symbols) */
+export const MAX_SHORT_STRING_LENGTH = 256;
+
+/** Maximum string length for URLs */
+export const MAX_URL_LENGTH = 2048;
+
+/** Maximum string length for CIDs/hashes */
+export const MAX_CID_LENGTH = 128;
+
+/** Maximum keys in a z.record */
+export const MAX_RECORD_KEYS = 100;
+
+/** Maximum recursion depth for nested schemas */
+export const MAX_RECURSION_DEPTH = 10;
+
+// ============================================================================
 // Core Primitive Schemas
 // ============================================================================
 
@@ -79,13 +107,15 @@ export const TimestampSchema = z.number().int().positive();
 
 /**
  * CID Schema (IPFS content identifier)
+ * Limited to MAX_CID_LENGTH to prevent DoS
  */
-export const CidSchema = z.string().min(1, 'CID is required');
+export const CidSchema = z.string().min(1, 'CID is required').max(MAX_CID_LENGTH, 'CID too long');
 
 /**
  * URL Schema
+ * Limited to MAX_URL_LENGTH to prevent DoS
  */
-export const UrlSchema = z.string().url('Invalid URL');
+export const UrlSchema = z.string().max(MAX_URL_LENGTH, 'URL too long').url('Invalid URL');
 
 /**
  * Email Schema
@@ -250,11 +280,17 @@ export function expectNonNegative(value: number | bigint, message: string): numb
 /**
  * Validate data against a Zod schema, throw on failure (fail-fast)
  * This is the primary validation function - validates and returns typed data
+ * 
+ * Security: Error messages show field paths but not actual values to prevent data leakage
  */
 export function expectValid<T>(schema: ZodSchema<T>, value: unknown, context?: string): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    const errors = result.error.issues.map((e: ZodIssue) => `${e.path.join('.')}: ${e.message}`).join(', ');
+    // Only include field paths and messages, NOT actual values (security)
+    const errors = result.error.issues.map((e: ZodIssue) => {
+      const path = e.path.length > 0 ? e.path.join('.') : 'root';
+      return `${path}: ${e.message}`;
+    }).join(', ');
     throw new Error(`Validation failed${context ? ` in ${context}` : ''}: ${errors}`);
   }
   return result.data;
@@ -278,31 +314,34 @@ export function validateOrNull<T>(schema: ZodSchema<T>, value: unknown): T | nul
 
 /**
  * Validate an Ethereum address, throw if invalid
+ * Security: Does not expose the invalid value in error messages
  */
 export function expectAddress(value: unknown, context?: string): Address {
   if (typeof value !== 'string' || !isAddress(value)) {
-    throw new Error(context ? `${context}: Invalid address ${value}` : `Invalid address: ${value}`);
+    throw new Error(context ? `${context}: Invalid address` : 'Invalid address');
   }
   return value as Address;
 }
 
 /**
  * Validate a hex string, throw if invalid
+ * Security: Does not expose the invalid value in error messages
  */
 export function expectHex(value: unknown, context?: string): Hex {
   if (typeof value !== 'string' || !isHex(value)) {
-    throw new Error(context ? `${context}: Invalid hex ${value}` : `Invalid hex: ${value}`);
+    throw new Error(context ? `${context}: Invalid hex` : 'Invalid hex');
   }
   return value as Hex;
 }
 
 /**
  * Validate a chain ID, throw if invalid
+ * Security: Does not expose the invalid value in error messages
  */
 export function expectChainId(value: unknown, context?: string): number {
   const result = ChainIdSchema.safeParse(value);
   if (!result.success) {
-    throw new Error(context ? `${context}: Invalid chain ID ${value}` : `Invalid chain ID: ${value}`);
+    throw new Error(context ? `${context}: Invalid chain ID` : 'Invalid chain ID');
   }
   return result.data;
 }

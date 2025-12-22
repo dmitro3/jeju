@@ -11,7 +11,7 @@
  */
 
 import { z } from 'zod';
-import { AddressSchema } from './validation';
+import { AddressSchema, MAX_ARRAY_LENGTH, MAX_SMALL_ARRAY_LENGTH, MAX_SHORT_STRING_LENGTH, MAX_STRING_LENGTH, MAX_RECORD_KEYS } from './validation';
 import { SupportedChainIdSchema } from './eil';
 export { SupportedChainIdSchema };
 export type { SupportedChainId } from './eil';
@@ -51,24 +51,24 @@ export const FillInstructionSchema = z.object({
 export type FillInstruction = z.infer<typeof FillInstructionSchema>;
 
 export const IntentSchema = z.object({
-  intentId: z.string(),
+  intentId: z.string().max(MAX_SHORT_STRING_LENGTH),
   user: AddressSchema,
-  nonce: z.string(),
+  nonce: z.string().max(MAX_SHORT_STRING_LENGTH),
   sourceChainId: SupportedChainIdSchema,
-  openDeadline: z.number(),  // Block number when intent expires if unclaimed
-  fillDeadline: z.number(),  // Block number when fill must complete
+  openDeadline: z.number(),
+  fillDeadline: z.number(),
   
   // What user provides
-  inputs: z.array(IntentInputSchema),
+  inputs: z.array(IntentInputSchema).max(MAX_SMALL_ARRAY_LENGTH),
   
   // What user receives
-  outputs: z.array(IntentOutputSchema),
+  outputs: z.array(IntentOutputSchema).max(MAX_SMALL_ARRAY_LENGTH),
   
   // Fill instructions for solvers
-  fillInstructions: z.array(FillInstructionSchema).optional(),
+  fillInstructions: z.array(FillInstructionSchema).max(MAX_SMALL_ARRAY_LENGTH).optional(),
   
   // Signature
-  signature: z.string(),
+  signature: z.string().max(MAX_STRING_LENGTH),
   
   // Status tracking
   status: IntentStatusSchema,
@@ -78,11 +78,11 @@ export const IntentSchema = z.object({
   
   // Execution details
   solver: AddressSchema.optional(),
-  txHash: z.string().optional(),
-  inputSettlerTx: z.string().optional(),
-  outputSettlerTx: z.string().optional(),
-  attestationTx: z.string().optional(),
-  fee: z.string().optional(),
+  txHash: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
+  inputSettlerTx: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
+  outputSettlerTx: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
+  attestationTx: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
+  fee: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
   executionTimeMs: z.number().optional(),
 });
 export type Intent = z.infer<typeof IntentSchema>;
@@ -143,30 +143,33 @@ export type SolverLiquidity = z.infer<typeof SolverLiquiditySchema>;
 
 export const SolverSchema = z.object({
   address: AddressSchema,
-  name: z.string(),
-  endpoint: z.string().optional(),       // A2A endpoint for direct communication
+  name: z.string().max(MAX_SHORT_STRING_LENGTH),
+  endpoint: z.string().max(MAX_SHORT_STRING_LENGTH).optional(),
   
   // Supported chains and tokens
-  supportedChains: z.array(SupportedChainIdSchema),
-  supportedTokens: z.record(z.string(), z.array(AddressSchema)), // chainId -> tokens[]
+  supportedChains: z.array(SupportedChainIdSchema).max(MAX_SMALL_ARRAY_LENGTH),
+  supportedTokens: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.array(AddressSchema).max(MAX_ARRAY_LENGTH)).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} chain entries` }
+  ),
   
   // Liquidity positions
-  liquidity: z.array(SolverLiquiditySchema),
+  liquidity: z.array(SolverLiquiditySchema).max(MAX_ARRAY_LENGTH),
   
   // Performance metrics
-  reputation: z.number(),                // 0-100 score
+  reputation: z.number(),
   totalFills: z.number(),
   successfulFills: z.number(),
   failedFills: z.number(),
-  successRate: z.number(),               // 0-100 percentage
+  successRate: z.number(),
   avgResponseMs: z.number(),
   avgFillTimeMs: z.number(),
-  totalVolumeUsd: z.string(),
-  totalFeesEarnedUsd: z.string(),
+  totalVolumeUsd: z.string().max(MAX_SHORT_STRING_LENGTH),
+  totalFeesEarnedUsd: z.string().max(MAX_SHORT_STRING_LENGTH),
   
   // Registration
   status: SolverStatusSchema,
-  stakedAmount: z.string(),
+  stakedAmount: z.string().max(MAX_SHORT_STRING_LENGTH),
   registeredAt: z.number(),
   lastActiveAt: z.number().optional(),
 });
@@ -313,29 +316,41 @@ export type OracleAttestation = z.infer<typeof OracleAttestationSchema>;
 
 export const OIFConfigSchema = z.object({
   // Settlement contract addresses per chain
-  inputSettlers: z.record(z.string(), AddressSchema),     // chainId -> address
-  outputSettlers: z.record(z.string(), AddressSchema),    // chainId -> address
+  inputSettlers: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), AddressSchema).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} input settlers` }
+  ),
+  outputSettlers: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), AddressSchema).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} output settlers` }
+  ),
   solverRegistry: AddressSchema,
   
   // Oracle configuration
-  oracles: z.record(z.string(), z.object({
+  oracles: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.object({
     type: OracleTypeSchema,
     address: AddressSchema,
-    config: z.record(z.string(), z.string()).optional(),
-  })),
+    config: z.record(z.string().max(MAX_SHORT_STRING_LENGTH), z.string().max(MAX_STRING_LENGTH)).refine(
+      (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+      { message: `Cannot have more than ${MAX_RECORD_KEYS} config entries` }
+    ).optional(),
+  })).refine(
+    (obj) => Object.keys(obj).length <= MAX_RECORD_KEYS,
+    { message: `Cannot have more than ${MAX_RECORD_KEYS} oracles` }
+  ),
   
   // Fee configuration
-  minFee: z.string(),             // Minimum fee in wei
-  maxFee: z.string(),             // Maximum fee in wei
-  protocolFeePercent: z.number(), // Basis points taken by protocol
+  minFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  maxFee: z.string().max(MAX_SHORT_STRING_LENGTH),
+  protocolFeePercent: z.number(),
   
   // Timing configuration
-  defaultOpenDeadline: z.number(),   // Blocks
-  defaultFillDeadline: z.number(),   // Blocks
-  claimDelay: z.number(),            // Blocks before solver can claim
+  defaultOpenDeadline: z.number(),
+  defaultFillDeadline: z.number(),
+  claimDelay: z.number(),
   
   // Solver requirements
-  minSolverStake: z.string(),
+  minSolverStake: z.string().max(MAX_SHORT_STRING_LENGTH),
   slashingPercent: z.number(),
 });
 export type OIFConfig = z.infer<typeof OIFConfigSchema>;

@@ -19,13 +19,14 @@ import {
   type Address,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { TEST_ACCOUNTS, JEJU_RPC_URL, JEJU_CHAIN_ID } from '../shared/utils';
 
-const RPC_URL = process.env.L2_RPC_URL || process.env.JEJU_RPC_URL || 'http://localhost:9545';
-const CHAIN_ID = parseInt(process.env.CHAIN_ID || '1337');
+const RPC_URL = process.env.L2_RPC_URL || process.env.JEJU_RPC_URL || JEJU_RPC_URL;
+const CHAIN_ID = parseInt(process.env.CHAIN_ID || String(JEJU_CHAIN_ID));
 
-// Anvil test account #0
-const TEST_PRIVATE_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
-const TEST_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address;
+// Use shared test accounts (Anvil defaults)
+const TEST_PRIVATE_KEY = TEST_ACCOUNTS.deployer.privateKey;
+const TEST_ADDRESS = TEST_ACCOUNTS.deployer.address as Address;
 
 const chain = {
   id: CHAIN_ID,

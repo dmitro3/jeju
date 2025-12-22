@@ -11,9 +11,6 @@ import {
   createPublicClient,
   createWalletClient,
   http,
-  parseEther,
-  formatEther,
-  parseAbi,
   type Address,
   type PublicClient,
   type WalletClient,
@@ -28,7 +25,6 @@ import { rawDeployments } from '@jejunetwork/contracts'
 const RPC_URL = process.env.L2_RPC_URL || 'http://localhost:9545'
 const CHAIN_ID = 420691 // network localnet chain ID
 const DEPLOYER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80' as `0x${string}`
-const DEPLOYER_ADDRESS = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' as Address
 
 const localnet = {
   id: CHAIN_ID,
@@ -94,7 +90,7 @@ class LMSR {
 // =============================================================================
 
 let publicClient: PublicClient
-let walletClient: WalletClient
+let _walletClient: WalletClient
 let skipTests = false
 let prediMarketAddress: Address | null = null
 
@@ -115,7 +111,7 @@ beforeAll(async () => {
   })
 
   const account = privateKeyToAccount(DEPLOYER_KEY)
-  walletClient = createWalletClient({
+  _walletClient = createWalletClient({
     account,
     chain: localnet,
     transport: http(RPC_URL),

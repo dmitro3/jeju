@@ -114,20 +114,15 @@ program
   .option('-a, --all', 'Enable all services')
   .option('-m, --minimal', 'Only essential services')
   .option('-n, --network <network>', 'Network (mainnet, testnet, localnet)', 'localnet')
-  .option('-k, --key <key>', 'Private key (or set JEJU_PRIVATE_KEY)')
   .option('--cpu', 'Enable CPU compute')
   .option('--gpu', 'Enable GPU compute')
   .option('--accept-non-tee', 'Accept non-confidential compute risks')
   .action(async (options) => {
     // Validate options
     const NetworkSchema = z.enum(['mainnet', 'testnet', 'localnet']);
-    const KeySchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional();
     
     try {
       options.network = NetworkSchema.parse(options.network);
-      if (options.key) {
-        options.key = KeySchema.parse(options.key);
-      }
     } catch (e) {
       if (e instanceof z.ZodError) {
         console.error(chalk.red('\n  Configuration Error:'));
@@ -171,15 +166,26 @@ program
       rpcUrl = process.env.JEJU_RPC_URL;
     }
     
-    const privateKey = options.key || process.env.JEJU_PRIVATE_KEY;
+    // Private key must be provided via environment variable for security
+    // (command line args are visible in process lists)
+    const privateKey = process.env.JEJU_PRIVATE_KEY;
     
     if (!privateKey) {
       console.log(chalk.yellow('  Warning: No private key configured. Some services require a wallet.\n'));
-      console.log('  Set JEJU_PRIVATE_KEY or use --key flag.\n');
+      console.log('  Set JEJU_PRIVATE_KEY environment variable.\n');
+    } else {
+      // Validate key format without exposing the key
+      const KeySchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
+      const keyValidation = KeySchema.safeParse(privateKey);
+      if (!keyValidation.success) {
+        console.error(chalk.red('\n  Invalid JEJU_PRIVATE_KEY format. Must be 0x followed by 64 hex characters.\n'));
+        process.exit(1);
+      }
     }
     
     console.log(`  Network: ${options.network}`);
     console.log(`  RPC: ${rpcUrl}`);
+    console.log(`  Wallet: ${privateKey ? 'Configured (via env)' : 'Not configured'}`);
     console.log(`  CPU Compute: ${options.cpu ? 'Enabled' : 'Disabled'}`);
     console.log(`  GPU Compute: ${options.gpu ? 'Enabled' : 'Disabled'}`);
     
@@ -190,7 +196,7 @@ program
     if (options.all) args.push('--all');
     if (options.minimal) args.push('--minimal');
     if (options.network) args.push('--network', options.network);
-    if (options.key) args.push('--key', options.key);
+    // Private key passed via env only, not via command line args
     
     const daemon = spawn('bun', args, {
       cwd: import.meta.dir.replace('/src', ''),
@@ -288,7 +294,6 @@ program
 program
   .command('register')
   .description('Register as a compute provider on the marketplace')
-  .requiredOption('-k, --key <key>', 'Private key (or set JEJU_PRIVATE_KEY)')
   .option('-n, --network <network>', 'Network (mainnet, testnet, localnet)', 'localnet')
   .option('--cpu', 'Register CPU compute')
   .option('--gpu', 'Register GPU compute')
@@ -311,9 +316,18 @@ program
       process.exit(1);
     }
     
-    const privateKey = options.key || process.env.JEJU_PRIVATE_KEY;
+    // Private key must be provided via environment variable for security
+    const privateKey = process.env.JEJU_PRIVATE_KEY;
     if (!privateKey) {
-      console.log(chalk.red('  Error: Private key required for registration.\n'));
+      console.log(chalk.red('  Error: JEJU_PRIVATE_KEY environment variable required for registration.\n'));
+      process.exit(1);
+    }
+    
+    // Validate key format
+    const KeySchema = z.string().regex(/^0x[a-fA-F0-9]{64}$/);
+    const keyValidation = KeySchema.safeParse(privateKey);
+    if (!keyValidation.success) {
+      console.error(chalk.red('\n  Invalid JEJU_PRIVATE_KEY format. Must be 0x followed by 64 hex characters.\n'));
       process.exit(1);
     }
     

@@ -41,7 +41,7 @@ function modInverse(a: bigint, mod: bigint): bigint {
 /**
  * Evaluate polynomial at point
  */
-function evaluatePolynomial(coeffs: bigint[], x: bigint): bigint {
+function _evaluatePolynomial(coeffs: bigint[], x: bigint): bigint {
   let result = 0n;
   let power = 1n;
   
@@ -176,7 +176,7 @@ function computeMerkleRoot(leaves: Hex[]): Hex {
 export function createOpeningProof(
   chunks: Uint8Array[],
   chunkIndex: number,
-  commitment: BlobCommitment
+  _commitment: BlobCommitment
 ): ChunkProof {
   // Compute Merkle proof
   const leaves = chunks.map(c => keccak256(c));

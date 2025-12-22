@@ -215,11 +215,26 @@ describe('Storage URL Generation', () => {
     const { getStorageService } = await import('../services/storage');
     const storage = getStorageService();
 
-    const cid = 'QmTest123456789';
+    // Use a valid CIDv0 format (Qm + 44 base58btc chars)
+    const cid = 'QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG';
     const url = storage.getUrl(cid);
 
     expect(url).toContain('ipfs');
     expect(url).toContain(cid);
+  });
+
+  test('should reject invalid CIDs', async () => {
+    const { getStorageService } = await import('../services/storage');
+    const storage = getStorageService();
+
+    // Test path traversal attempt
+    expect(() => storage.getUrl('../../../etc/passwd')).toThrow('Invalid CID');
+    
+    // Test invalid format
+    expect(() => storage.getUrl('invalid-cid')).toThrow('Invalid CID');
+    
+    // Test empty CID
+    expect(() => storage.getUrl('')).toThrow('CID is required');
   });
 });
 

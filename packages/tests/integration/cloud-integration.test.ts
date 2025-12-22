@@ -1,15 +1,16 @@
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, createWalletClient, http, parseAbi, waitForTransactionReceipt, getLogs, decodeEventLog, type Address } from 'viem';
+import { createPublicClient, createWalletClient, http, parseAbi, decodeEventLog, type Address } from 'viem';
+import { waitForTransactionReceipt, getLogs } from 'viem/actions';
 import { privateKeyToAccount } from 'viem/accounts';
-import { inferChainFromRpcUrl } from '../../../scripts/shared/chain-utils';
+import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils';
 import { 
   CloudIntegration, 
   ViolationType,
   defaultCloudServices,
   type CloudConfig,
   type AgentMetadata 
-} from '../../../scripts/shared/cloud-integration';
-import { Logger } from '../../../scripts/shared/logger';
+} from '../../../packages/deployment/scripts/shared/cloud-integration';
+import { Logger } from '../../../packages/deployment/scripts/shared/logger';
 import { L1_LOCALNET, TEST_WALLETS } from '../shared/constants';
 
 // Check if localnet is available (L1 for cloud integration)
@@ -128,7 +129,7 @@ describe.skipIf(!localnetAvailable)('Cloud Integration', () => {
   test('should record violation for low reputation', async () => {
     // Set low reputation (should auto-record violation)
     await integration.setReputation(
-      signer,
+      walletClient.account,
       testAgentId,
       15,
       'security',
@@ -143,7 +144,7 @@ describe.skipIf(!localnetAvailable)('Cloud Integration', () => {
   
   test('should record explicit violation', async () => {
     await integration.recordViolation(
-      signer,
+      walletClient.account,
       testAgentId,
       ViolationType.API_ABUSE,
       80,
@@ -160,7 +161,7 @@ describe.skipIf(!localnetAvailable)('Cloud Integration', () => {
   
   test('should propose ban for serious violation', async () => {
     const proposalId = await integration.proposeBan(
-      signer,
+      walletClient.account,
       testAgentId,
       ViolationType.HACKING,
       'ipfs://QmHackingEvidence'
@@ -218,68 +219,70 @@ describe.skipIf(!localnetAvailable)('Cloud Integration', () => {
       expect(violation).toHaveProperty('reporter');
     });
   });
-});
-
-describe('Cloud Integration - Security', () => {
-  test('should reject unauthorized reputation updates', async () => {
-    // Create unauthorized signer
-    const { generatePrivateKey } = await import('viem/accounts');
-    const unauthorizedAccount = privateKeyToAccount(generatePrivateKey());
+  
+  // Security Tests (nested to access shared test state)
+  describe('Security', () => {
+    test('should reject unauthorized reputation updates', async () => {
+      // Create unauthorized signer
+      const { generatePrivateKey } = await import('viem/accounts');
+      const unauthorizedAccount = privateKeyToAccount(generatePrivateKey());
+      
+      // This should fail (not authorized operator)
+      try {
+        await integration.setReputation(
+          unauthorizedAccount,
+          1n,
+          50,
+          'quality',
+          'test',
+          'Unauthorized attempt'
+        );
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeDefined();
+      }
+    });
     
-    // This should fail (not authorized operator)
-    try {
-      await integration.setReputation(
-        unauthorizedAccount,
-        1n,
-        50,
-        'quality',
-        'test',
-        'Unauthorized attempt'
-      );
-      expect(false).toBe(true); // Should not reach here
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
+    test('should reject invalid reputation scores', async () => {
+      try {
+        await integration.setReputation(
+          walletClient.account,
+          1n,
+          150, // Invalid score > 100
+          'quality',
+          'test',
+          'Invalid score'
+        );
+        expect(false).toBe(true); // Should not reach here
+      } catch (error) {
+        expect(error).toBeDefined();
+      }
+    });
   });
   
-  test('should reject invalid reputation scores', async () => {
-    try {
-      await integration.setReputation(
-        walletClient.account,
-        1n,
-        150, // Invalid score > 100
-        'quality',
-        'test',
-        'Invalid score'
-      );
-      expect(false).toBe(true); // Should not reach here
-    } catch (error) {
-      expect(error).toBeDefined();
-    }
-  });
-});
-
-describe.skipIf(!localnetAvailable)('Cloud Integration - Performance', () => {
-  test('should handle batch reputation updates', async () => {
-    const startTime = Date.now();
-    const updates = 5;
-    
-    for (let i = 0; i < updates; i++) {
-      await integration.setReputation(
-        walletClient.account,
-        testAgentId,
-        80 + i,
-        'quality',
-        `batch-${i}`,
-        `Batch update ${i}`
-      );
-    }
-    
-    const duration = Date.now() - startTime;
-    console.log(`Batch updates completed in ${duration}ms (${duration / updates}ms per update)`);
-    
-    const reputation = await integration.getAgentReputation(testAgentId);
-    expect(reputation.count).toBeGreaterThan(updates);
+  // Performance Tests (nested to access shared test state)
+  describe('Performance', () => {
+    test('should handle batch reputation updates', async () => {
+      const startTime = Date.now();
+      const updates = 5;
+      
+      for (let i = 0; i < updates; i++) {
+        await integration.setReputation(
+          walletClient.account,
+          testAgentId,
+          80 + i,
+          'quality',
+          `batch-${i}`,
+          `Batch update ${i}`
+        );
+      }
+      
+      const duration = Date.now() - startTime;
+      console.log(`Batch updates completed in ${duration}ms (${duration / updates}ms per update)`);
+      
+      const reputation = await integration.getAgentReputation(testAgentId);
+      expect(reputation.count).toBeGreaterThan(updates);
+    });
   });
 });
 

@@ -3,7 +3,7 @@
  */
 
 import type { OrgState, Todo, CheckinSchedule, CheckinResponse, TeamMember } from '../types';
-import { expect, StorageUploadResponseSchema, OrgStateSchema, parseOrThrow } from '../../schemas';
+import { expect, StorageUploadResponseSchema, OrgStateSchema } from '../../schemas';
 
 export interface OrgStorageConfig {
   apiUrl: string;

@@ -350,7 +350,7 @@ export function findEquivalentAsset(
   targetChain: string
 ): string | undefined {
   for (const [, asset] of CROSS_CHAIN_ASSETS) {
-    for (const [chain, assetId] of asset.chains) {
+    for (const [, assetId] of asset.chains) {
       if (assetId === caip19) {
         return asset.chains.get(targetChain);
       }

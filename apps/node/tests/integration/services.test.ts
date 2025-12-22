@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, beforeAll } from 'bun:test';
-import { createPublicClient, http, parseEther, formatEther } from 'viem';
+import { createPublicClient, http, formatEther } from 'viem';
 import { createNodeClient, jejuLocalnet } from '../../src/lib/contracts';
 import { createNodeServices } from '../../src/lib/services';
 

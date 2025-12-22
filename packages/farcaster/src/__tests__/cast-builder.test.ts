@@ -199,7 +199,7 @@ describe('splitTextForThread', () => {
     const chunks = splitTextForThread(text);
 
     // Reconstruct (removing continuation markers)
-    let reconstructed = chunks
+    const reconstructed = chunks
       .map((c) => c.replace(/^\.\.\./g, '').replace(/\.\.\.$/g, ''))
       .join('');
 
