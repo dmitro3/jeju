@@ -1424,9 +1424,22 @@ export const HyperliquidOrderResultSchema = z.object({
 export const DWSNodeStatsSchema = z.object({
   inference: z
     .object({
-      activeNodes: z.number().nullable(),
+      totalNodes: z.number(),
+      activeNodes: z.number(),
+      totalCapacity: z.number().optional(),
+      currentLoad: z.number().optional(),
+      providers: z.array(z.string()).optional(),
+      models: z.array(z.string()).optional(),
     })
-    .nullable(),
+    .optional(),
+  training: z
+    .object({
+      totalNodes: z.number(),
+      activeNodes: z.number(),
+      totalRuns: z.number().optional(),
+      activeRuns: z.number().optional(),
+    })
+    .optional(),
 })
 
 /** DWS chat completion response */

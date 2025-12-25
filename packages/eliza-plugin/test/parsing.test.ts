@@ -655,8 +655,8 @@ describe('Amount parsing property tests', () => {
     for (const amount of testAmounts) {
       const result = parseSwapParams(`swap ${amount} ETH for USDC`)
       expect(result.amountIn).toBe(parseEther(amount))
-      // Verify round-trip
-      if (!result.amountIn) throw new Error('amountIn is undefined')
+      // Verify round-trip (check for undefined, not falsy, since 0n is valid)
+      if (result.amountIn === undefined) throw new Error('amountIn is undefined')
       expect(formatEther(result.amountIn)).toBe(amount)
     }
   })

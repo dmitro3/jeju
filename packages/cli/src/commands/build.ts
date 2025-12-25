@@ -178,9 +178,7 @@ async function buildApp(rootDir: string, appName: string): Promise<void> {
     const mainEntry = result.outputs.find(
       (o) => o.kind === 'entry-point' && o.path.includes('client'),
     )
-    const mainFileName = mainEntry
-      ? mainEntry.path.split('/').pop()
-      : 'client.js'
+    const mainFileName = mainEntry?.path.split('/').pop() ?? 'client.js'
 
     // Copy CSS if exists
     const cssPath = join(appDir, 'src/globals.css')
