@@ -378,6 +378,7 @@ export class OracleArbStrategy extends EventEmitter {
             deadline,
           ],
           account,
+          chain: null,
           gas: opportunity.gasEstimate,
         })
       }

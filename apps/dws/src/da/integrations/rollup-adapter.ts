@@ -818,3 +818,4 @@ export function createArbitrumOrbitDAAdapter(
 ): ArbitrumOrbitDAAdapter {
   return new ArbitrumOrbitDAAdapter(config)
 }
+
