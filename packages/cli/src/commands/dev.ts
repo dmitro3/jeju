@@ -1,5 +1,3 @@
-/** Start development environment */
-
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -147,13 +145,9 @@ async function startDev(options: {
     return
   }
 
-  // Indexer is started by the orchestrator, no need to start again
-
-  // Discover apps (including vendor apps like Babylon)
   const apps = discoverApps(rootDir, true)
   const appsToStart = filterApps(apps, options)
 
-  // Deploy apps on-chain through DWS (like production)
   await deployAppsOnchain(rootDir, l2RpcUrl, appsToStart)
 
   printReady(l2RpcUrl, runningServices, servicesOrchestrator, appsToStart)
