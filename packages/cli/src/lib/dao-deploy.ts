@@ -331,7 +331,6 @@ export async function deployDAO(options: DAODeployOptions): Promise<DAODeploymen
           }
         }
 
-        // Link to DAO
         if (!dryRun) {
           try {
             const linkHash = await walletClient.writeContract({
@@ -351,7 +350,6 @@ export async function deployDAO(options: DAODeployOptions): Promise<DAODeploymen
           }
         }
 
-        // Create funding project and set weight
         if (!dryRun) {
           try {
             const proposeHash = await walletClient.writeContract({
@@ -443,7 +441,6 @@ export async function deployDAO(options: DAODeployOptions): Promise<DAODeploymen
           }
         }
 
-        // Link to DAO
         if (!dryRun) {
           try {
             const linkHash = await walletClient.writeContract({
@@ -463,7 +460,6 @@ export async function deployDAO(options: DAODeployOptions): Promise<DAODeploymen
           }
         }
 
-        // Create funding project and set weight
         if (!dryRun) {
           try {
             const proposeHash = await walletClient.writeContract({
