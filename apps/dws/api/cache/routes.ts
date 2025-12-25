@@ -997,11 +997,36 @@ export async function createCacheService() {
   await initializeCacheProvisioning()
 
   const app = new Elysia()
+    // Root-level endpoints for Babylon compatibility
+    .get('/health', async () => {
+      const engine = getSharedEngine()
+      const stats = engine.getStats()
+      return {
+        status: 'healthy',
+        uptime: stats.uptime,
+        timestamp: Date.now(),
+      }
+    })
+    // Stats endpoint in Babylon-compatible format
+    .get('/stats', async () => {
+      const sharedStats = getSharedEngine().getStats()
+      return {
+        stats: {
+          totalKeys: sharedStats.totalKeys,
+          usedMemoryMb: Math.round(sharedStats.usedMemoryBytes / (1024 * 1024)),
+          hits: sharedStats.hits,
+          misses: sharedStats.misses,
+          hitRate: sharedStats.hitRate,
+        },
+      }
+    })
     .use(createCacheRoutes())
     .get('/', () => ({
       service: 'Jeju Cache Service',
       version: '1.0.0',
       endpoints: [
+        '/health',
+        '/stats',
         '/cache/health',
         '/cache/stats',
         '/cache/get',

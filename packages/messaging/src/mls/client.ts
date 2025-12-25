@@ -8,10 +8,17 @@
  */
 
 import { bytesToHex, hexToBytes, randomBytes } from '@jejunetwork/shared'
-import { x25519 } from '@noble/curves/ed25519'
+import { ed25519, x25519 } from '@noble/curves/ed25519'
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
-import type { Address, Hex } from 'viem'
+import {
+  type Address,
+  createPublicClient,
+  type Hex,
+  http,
+  type PublicClient,
+} from 'viem'
+import { KEY_REGISTRY_ABI } from '../sdk/abis'
 import { JejuGroup } from './group'
 import type {
   DeviceInfo,
@@ -495,21 +502,37 @@ export class JejuMLSClient {
       throw new Error('Keys not derived')
     }
 
-    // In production, this would call the KeyRegistry contract
-    // For now, just log (actual contract interaction would go here)
-    console.log(
-      `[MLS Client] Registering public key in KeyRegistry for ${this.config.address}`,
-    )
-
     // If walletClient is provided, register on-chain
     if (this.config.walletClient && this.config.keyRegistryAddress) {
-      console.log(
-        `[MLS Client] Would register key at ${this.config.keyRegistryAddress}`,
-      )
-      // Contract call would go here
-    }
+      const identityKey = `0x${bytesToHex(this.keyMaterial.identityPublicKey)}` as Hex
+      const preKey = `0x${bytesToHex(this.keyMaterial.preKeyPublic)}` as Hex
 
-    console.log(`[MLS Client] Registered public key in KeyRegistry`)
+      // Sign the pre-key with identity key for verification
+      const preKeySignaturePayload = new TextEncoder().encode(
+        `jeju-mls-prekey:${this.config.address}:${preKey}`,
+      )
+      const preKeySignature = ed25519.sign(
+        preKeySignaturePayload,
+        this.keyMaterial.identityKey,
+      )
+
+      await this.config.walletClient.writeContract({
+        chain: null,
+        account: this.config.walletClient.account,
+        address: this.config.keyRegistryAddress,
+        abi: KEY_REGISTRY_ABI,
+        functionName: 'registerKeyBundle',
+        args: [identityKey, preKey, `0x${bytesToHex(preKeySignature)}`],
+      })
+
+      console.log(
+        `[MLS Client] Registered public key in KeyRegistry for ${this.config.address}`,
+      )
+    } else {
+      console.log(
+        `[MLS Client] No walletClient configured, skipping on-chain registration`,
+      )
+    }
   }
 
   /**

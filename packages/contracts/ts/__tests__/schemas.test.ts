@@ -184,7 +184,6 @@ describe('schemas.ts - Zod Schema Validation', () => {
         serviceRegistry: VALID_ADDRESS_2,
         creditManager: VALID_ADDRESS,
         usdc: VALID_ADDRESS_2,
-        elizaOS: VALID_ADDRESS,
       }
 
       const result = IdentitySystemDeploymentSchema.parse(data)
@@ -281,7 +280,6 @@ describe('schemas.ts - Zod Schema Validation', () => {
         marketplace: VALID_ADDRESS,
         erc20Factory: VALID_ADDRESS_2,
         usdc: VALID_ADDRESS,
-        elizaOS: VALID_ADDRESS_2,
         tokenLaunchpad: VALID_ADDRESS,
       }
 
