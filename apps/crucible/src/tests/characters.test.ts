@@ -22,6 +22,7 @@ describe('Character Definitions', () => {
     it('should list all available characters', () => {
       const ids = listCharacters()
 
+      // Core team
       expect(ids).toContain('project-manager')
       expect(ids).toContain('community-manager')
       expect(ids).toContain('devrel')
@@ -29,7 +30,16 @@ describe('Character Definitions', () => {
       expect(ids).toContain('social-media-manager')
       expect(ids).toContain('red-team')
       expect(ids).toContain('blue-team')
-      expect(ids.length).toBe(7)
+      // Red team specialists
+      expect(ids).toContain('scammer')
+      expect(ids).toContain('security-researcher')
+      expect(ids).toContain('contracts-expert')
+      expect(ids).toContain('fuzz-tester')
+      // Blue team specialists
+      expect(ids).toContain('moderator')
+      expect(ids).toContain('network-guardian')
+      expect(ids).toContain('contracts-auditor')
+      expect(ids.length).toBe(14)
     })
 
     it('should get character by ID', () => {
@@ -45,7 +55,7 @@ describe('Character Definitions', () => {
     })
 
     it('should have all characters in registry', () => {
-      expect(Object.keys(characters).length).toBe(7)
+      expect(Object.keys(characters).length).toBe(14)
     })
   })
 

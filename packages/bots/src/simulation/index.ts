@@ -138,3 +138,20 @@ export {
   type ReportConfig,
   TerminalReport,
 } from './visualizer'
+
+// Scientific Benchmarking
+export {
+  ScientificBenchmark,
+  Statistics,
+} from './scientific-benchmark'
+
+// Critical Review & Audit
+export {
+  LARP_AUDIT,
+  printAuditReport,
+  VALIDATED_BRIDGE_COSTS,
+  VALIDATED_GAS_COSTS,
+  VALIDATED_GAS_PRICES,
+  VALIDATED_MARKET_IMPACT,
+  VALIDATED_MEV_PARAMS,
+} from './critical-review'
