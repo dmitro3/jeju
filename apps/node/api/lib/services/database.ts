@@ -14,6 +14,7 @@ import {
   type DatabaseInfo,
   type ExecResult,
   getCQL,
+  type QueryParam,
   type QueryResult,
   type RentalInfo,
 } from '@jejunetwork/db'
@@ -249,7 +250,7 @@ export class DatabaseService {
     }
 
     // Get database info to verify it exists
-    const info = await this.cqlClient.getDatabaseInfo(databaseId)
+    const info = await this.cqlClient.getDatabase(databaseId)
     if (!info) {
       throw new Error(`Database ${databaseId} not found`)
     }
@@ -276,7 +277,7 @@ export class DatabaseService {
    */
   async executeQuery<T>(
     sql: string,
-    params: unknown[],
+    params: QueryParam[],
     databaseId: string,
   ): Promise<QueryResult<T>> {
     if (!this.cqlClient) {
@@ -302,7 +303,7 @@ export class DatabaseService {
    */
   async executeWrite(
     sql: string,
-    params: unknown[],
+    params: QueryParam[],
     databaseId: string,
   ): Promise<ExecResult> {
     if (!this.cqlClient) {
@@ -321,7 +322,7 @@ export class DatabaseService {
     }
 
     // Get current database state
-    const info = await this.cqlClient.getDatabaseInfo(databaseId)
+    const info = await this.cqlClient.getDatabase(databaseId)
     if (!info) {
       throw new Error(`Database ${databaseId} not found`)
     }
@@ -398,7 +399,7 @@ export class DatabaseService {
 
     const databases: DatabaseInfo[] = []
     for (const dbId of this.config.hostedDatabases) {
-      const info = await this.cqlClient.getDatabaseInfo(dbId)
+      const info = await this.cqlClient.getDatabase(dbId)
       if (info) {
         databases.push(info)
       }
@@ -410,10 +411,8 @@ export class DatabaseService {
    * Get rental information for databases this node serves
    */
   async listRentals(): Promise<RentalInfo[]> {
-    if (!this.cqlClient) {
-      return []
-    }
-    return this.cqlClient.listRentals()
+    // TODO: Implement when CQL client supports rental listing
+    return []
   }
 
   /**

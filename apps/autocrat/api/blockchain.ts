@@ -723,7 +723,15 @@ export class AutocratBlockchain {
     )
   }
 
-  async submitProposal(): Promise<`0x${string}`> {
+  async submitProposal(_params: {
+    daoId: string
+    proposalType: number
+    qualityScore: number
+    contentHash: string
+    targetContract?: `0x${string}`
+    callData?: `0x${string}`
+    value?: bigint
+  }): Promise<`0x${string}`> {
     // This method requires a wallet client which is not available in this read-only blockchain class
     // Use DAOService.submitProposal() instead for write operations
     throw new Error(

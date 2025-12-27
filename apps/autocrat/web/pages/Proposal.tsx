@@ -77,15 +77,30 @@ const PROPOSAL_TYPE_CONFIG: Record<
 const STATUS_CONFIG: Record<ProposalStatus, { label: string; color: string }> =
   {
     draft: { label: 'Draft', color: 'text-slate-400 bg-slate-500/20' },
-    pending_quality: { label: 'Pending Quality', color: 'text-yellow-400 bg-yellow-500/20' },
+    pending_quality: {
+      label: 'Pending Quality',
+      color: 'text-yellow-400 bg-yellow-500/20',
+    },
     submitted: { label: 'Submitted', color: 'text-blue-400 bg-blue-500/20' },
-    board_review: { label: 'Board Review', color: 'text-purple-400 bg-purple-500/20' },
+    board_review: {
+      label: 'Board Review',
+      color: 'text-purple-400 bg-purple-500/20',
+    },
     research: { label: 'Research', color: 'text-indigo-400 bg-indigo-500/20' },
-    board_final: { label: 'Final Review', color: 'text-cyan-400 bg-cyan-500/20' },
-    ceo_queue: { label: 'CEO Queue', color: 'text-orange-400 bg-orange-500/20' },
+    board_final: {
+      label: 'Final Review',
+      color: 'text-cyan-400 bg-cyan-500/20',
+    },
+    ceo_queue: {
+      label: 'CEO Queue',
+      color: 'text-orange-400 bg-orange-500/20',
+    },
     approved: { label: 'Approved', color: 'text-green-400 bg-green-500/20' },
     executing: { label: 'Executing', color: 'text-teal-400 bg-teal-500/20' },
-    completed: { label: 'Completed', color: 'text-emerald-400 bg-emerald-500/20' },
+    completed: {
+      label: 'Completed',
+      color: 'text-emerald-400 bg-emerald-500/20',
+    },
     rejected: { label: 'Rejected', color: 'text-red-400 bg-red-500/20' },
     vetoed: { label: 'Vetoed', color: 'text-rose-400 bg-rose-500/20' },
   }
@@ -215,9 +230,6 @@ function ProposalView({
 
   const approveCount = proposal.boardVotes.filter(
     (v) => v.vote === 'approve',
-  ).length
-  const _rejectCount = proposal.boardVotes.filter(
-    (v) => v.vote === 'reject',
   ).length
   const totalVotes = proposal.boardVotes.length
   const approvalPercent =
@@ -413,7 +425,7 @@ function ProposalView({
             </div>
 
             {/* Actions */}
-            {proposal.status === 'active' && (
+            {proposal.status === 'submitted' && (
               <button
                 type="button"
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl font-medium transition-colors"
@@ -778,7 +790,7 @@ function CreateProposalForm({
               <div className="space-y-2">
                 {stepsToReproduce.map((step, index) => (
                   <div
-                    key={`step-${step.slice(0, 10)}-${index}`}
+                    key={`step-${step.slice(0, 30).replace(/\s+/g, '-')}-${index}`}
                     className="flex gap-2 items-start"
                   >
                     <span className="w-6 h-6 rounded-full bg-slate-700 flex items-center justify-center text-xs text-slate-400 mt-2 shrink-0">

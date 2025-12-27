@@ -5,6 +5,7 @@
     "rootDir": ".",
     "noEmit": true,
     "jsx": "react-jsx",
+    "skipLibCheck": true,
     "types": ["bun", "react", "react-dom"]
   },
   "include": ["api/**/*", "web/**/*", "lib/**/*", "src/**/*"],

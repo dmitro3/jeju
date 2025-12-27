@@ -455,13 +455,13 @@ export class ComputeAMMClient {
   async getProvider(address: Address): Promise<Provider> {
     const provider = await this.contract.read.providers([address])
     return {
-      addr: provider.addr,
-      stake: provider.stake,
-      active: provider.active,
-      reputation: provider.reputation,
-      totalCapacity: provider.totalCapacity,
-      allocatedCapacity: provider.allocatedCapacity,
-      revenue: provider.revenue,
+      addr: provider[0],
+      stake: provider[1],
+      active: provider[2],
+      reputation: provider[3],
+      totalCapacity: provider[4],
+      allocatedCapacity: provider[5],
+      revenue: provider[6],
     }
   }
 
@@ -471,19 +471,19 @@ export class ComputeAMMClient {
   async getOrder(orderId: `0x${string}`): Promise<Order> {
     const order = await this.contract.read.orders([orderId])
     return {
-      orderId: order.orderId,
-      user: order.user,
-      resourceType: order.resourceType as ResourceType,
-      region: order.region as Region,
-      orderType: order.orderType as OrderType,
-      quantity: order.quantity,
-      maxPrice: order.maxPrice,
-      filledQuantity: order.filledQuantity,
-      filledPrice: order.filledPrice,
-      paymentToken: order.paymentToken,
-      duration: order.duration,
-      expiresAt: order.expiresAt,
-      status: order.status as OrderStatus,
+      orderId: order[0],
+      user: order[1],
+      resourceType: order[2] as ResourceType,
+      region: order[3] as Region,
+      orderType: order[4] as OrderType,
+      quantity: order[5],
+      maxPrice: order[6],
+      filledQuantity: order[7],
+      filledPrice: order[8],
+      paymentToken: order[9],
+      duration: order[10],
+      expiresAt: order[11],
+      status: order[12] as OrderStatus,
     }
   }
 
@@ -493,15 +493,15 @@ export class ComputeAMMClient {
   async getReservation(reservationId: `0x${string}`): Promise<Reservation> {
     const res = await this.contract.read.reservations([reservationId])
     return {
-      reservationId: res.reservationId,
-      user: res.user,
-      resourceType: res.resourceType as ResourceType,
-      region: res.region as Region,
-      quantity: res.quantity,
-      pricePerUnit: res.pricePerUnit,
-      startTime: res.startTime,
-      endTime: res.endTime,
-      active: res.active,
+      reservationId: res[0],
+      user: res[1],
+      resourceType: res[2] as ResourceType,
+      region: res[3] as Region,
+      quantity: res[4],
+      pricePerUnit: res[5],
+      startTime: res[6],
+      endTime: res[7],
+      active: res[8],
     }
   }
 
@@ -509,21 +509,24 @@ export class ComputeAMMClient {
    * Get all orders for a user
    */
   async getUserOrders(user: Address): Promise<`0x${string}`[]> {
-    return this.contract.read.getUserOrders([user])
+    const orders = await this.contract.read.getUserOrders([user])
+    return [...orders]
   }
 
   /**
    * Get all reservations for a user
    */
   async getUserReservations(user: Address): Promise<`0x${string}`[]> {
-    return this.contract.read.getUserReservations([user])
+    const reservations = await this.contract.read.getUserReservations([user])
+    return [...reservations]
   }
 
   /**
    * Get all pool IDs
    */
   async getAllPools(): Promise<`0x${string}`[]> {
-    return this.contract.read.getAllPools()
+    const pools = await this.contract.read.getAllPools()
+    return [...pools]
   }
 
   /**
@@ -566,6 +569,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'registerProvider',
@@ -586,6 +590,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'addCapacity',
@@ -608,6 +613,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'placeSpotOrder',
@@ -637,6 +643,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'placeLimitOrder',
@@ -666,6 +673,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'createReservation',
@@ -688,6 +696,7 @@ export class ComputeAMMClient {
     const [account] = await walletClient.getAddresses()
 
     return walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: COMPUTE_AMM_ABI,
       functionName: 'cancelOrder',

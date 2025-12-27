@@ -182,6 +182,7 @@
         "@aws-sdk/client-bedrock-runtime": "^3.954.0",
         "@elysiajs/cors": "^1.4.0",
         "@elysiajs/eden": "^1.4.5",
+        "@jejunetwork/api": "workspace:*",
         "@jejunetwork/auth": "workspace:*",
         "@jejunetwork/config": "workspace:*",
         "@jejunetwork/contracts": "workspace:*",

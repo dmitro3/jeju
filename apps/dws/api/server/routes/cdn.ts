@@ -52,6 +52,20 @@ import type { ContentCategory } from '../../storage/types'
 // Get config from packages/config (config-first approach)
 const cdnConfig = getCDNConfig()
 
+// Ensure required config sections are present (these have defaults in schema)
+function getRequiredConfig<T>(value: T | undefined, name: string): T {
+  if (value === undefined) {
+    throw new Error(`CDN ${name} config is required`)
+  }
+  return value
+}
+
+const edgeConfig = getRequiredConfig(cdnConfig.edge, 'edge')
+const cacheConfig = getRequiredConfig(edgeConfig.cache, 'cache')
+const p2pConfig = getRequiredConfig(edgeConfig.p2p, 'p2p')
+const coordConfig = getRequiredConfig(edgeConfig.coordination, 'coordination')
+const stakingConfig = getRequiredConfig(cdnConfig.staking, 'staking')
+
 let jnsGateway: JNSGateway | null = null
 let localCDNInitialized = false
 let hybridCDN: HybridCDN | null = null
@@ -79,10 +93,10 @@ function getJNSGateway(): JNSGateway | null {
     jnsRegistryAddress: jnsContracts.jnsRegistry as Address,
     jnsResolverAddress: jnsContracts.jnsResolver as Address,
     ipfsGateway:
-      cdnConfig.edge.ipfsGateway ??
+      edgeConfig.ipfsGateway ??
       getServiceUrl('storage', 'ipfsGateway') ??
       'https://ipfs.io',
-    arweaveGateway: cdnConfig.edge.arweaveGateway,
+    arweaveGateway: edgeConfig.arweaveGateway,
     domain: 'jejunetwork.org',
   }
 
@@ -92,9 +106,9 @@ function getJNSGateway(): JNSGateway | null {
 
 // Initialize edge cache from config
 const cache: EdgeCache = getEdgeCache({
-  maxSizeBytes: cdnConfig.edge.cache.maxSizeBytes,
-  maxEntries: cdnConfig.edge.cache.maxEntries,
-  defaultTTL: cdnConfig.edge.cache.defaultTTL,
+  maxSizeBytes: cacheConfig.maxSizeBytes,
+  maxEntries: cacheConfig.maxEntries,
+  defaultTTL: cacheConfig.defaultTTL,
 })
 const fetcher = getOriginFetcher()
 
@@ -114,13 +128,10 @@ async function ensureLocalCDNInitialized(): Promise<void> {
 async function ensureHybridCDNInitialized(): Promise<HybridCDN> {
   if (hybridCDN) return hybridCDN
 
-  const p2pConfig = cdnConfig.edge.p2p
-  const coordConfig = cdnConfig.edge.coordination
-
   // Initialize coordinator if not already done
   if (!coordinatorInitialized && p2pConfig.enabled) {
     // Map CDN region to P2P region
-    const cdnRegion = cdnConfig.edge.region as CDNRegionType
+    const cdnRegion = edgeConfig.region as CDNRegionType
     const p2pRegion = CDN_TO_P2P_REGION[cdnRegion] ?? 'global'
 
     // Map P2P region to CDNRegion enum
@@ -139,7 +150,7 @@ async function ensureHybridCDNInitialized(): Promise<HybridCDN> {
       nodeId: coordConfig.nodeId ?? `cdn-node-${Date.now()}`,
       region: (p2pToEnum[p2pRegion] ??
         CDNRegion.GLOBAL) as (typeof CDNRegion)[keyof typeof CDNRegion],
-      endpoint: coordConfig.endpoint ?? cdnConfig.edge.endpoint,
+      endpoint: coordConfig.endpoint ?? edgeConfig.endpoint,
       bootstrapPeers: coordConfig.bootstrapPeers,
     })
 
@@ -707,7 +718,6 @@ export function createCDNRouter() {
 
       .get('/staking/config', () => {
         const cdnContracts = getCDNContracts()
-        const stakingConfig = cdnConfig.staking
 
         return {
           contracts: {
@@ -722,8 +732,8 @@ export function createCDNRouter() {
             minSettlementAmount: stakingConfig.minSettlementAmount.toString(),
           },
           p2p: {
-            trackers: cdnConfig.edge.p2p.trackers,
-            bootstrapPeers: cdnConfig.edge.coordination.bootstrapPeers,
+            trackers: p2pConfig.trackers,
+            bootstrapPeers: coordConfig.bootstrapPeers,
           },
         }
       })
@@ -872,7 +882,6 @@ export function createCDNRouter() {
 
       .get('/billing/config', () => {
         const cdnContracts = getCDNContracts()
-        const stakingConfig = cdnConfig.staking
 
         return {
           contracts: {
@@ -915,7 +924,7 @@ export function createCDNRouter() {
             payoutCurrency: 'ETH or JEJU (configurable)',
           },
           requirements: {
-            minStake: cdnConfig.staking.minStake.toString(),
+            minStake: stakingConfig.minStake.toString(),
             uptimeTarget: '99.5%',
             slashingConditions: [
               'Extended downtime (>4 hours)',

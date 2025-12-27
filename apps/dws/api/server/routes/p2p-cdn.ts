@@ -8,7 +8,7 @@
 import { Elysia, t } from 'elysia'
 import { getWebTorrentBackend } from '../../storage/webtorrent-backend'
 
-export function createP2PCDNRouter(): Elysia {
+export function createP2PCDNRouter() {
   return (
     new Elysia({ prefix: '/p2p' })
       // =========================================================================

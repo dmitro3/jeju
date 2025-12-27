@@ -130,26 +130,24 @@ export function createNodeServices(
 
   // Config-first approach: Use CDN config for edge coordinator defaults
   const cdnConfig = getCDNConfig()
+  const edgeDefaults = cdnConfig.edge
+  const coordination = edgeDefaults?.coordination
 
   const fullEdgeConfig: EdgeCoordinatorConfig = {
-    nodeId:
-      edgeConfig?.nodeId ??
-      cdnConfig.edge.coordination.nodeId ??
-      crypto.randomUUID(),
+    nodeId: edgeConfig?.nodeId ?? coordination?.nodeId ?? crypto.randomUUID(),
     operator: operatorAddress,
     privateKey:
       edgeConfig?.privateKey ??
       process.env.PRIVATE_KEY ??
       getDefaultPrivateKey(),
-    listenPort: edgeConfig?.listenPort ?? cdnConfig.edge.port,
+    listenPort: edgeConfig?.listenPort ?? edgeDefaults?.port ?? 8080,
     gossipInterval:
-      edgeConfig?.gossipInterval ?? cdnConfig.edge.coordination.metricsInterval,
-    gossipFanout:
-      edgeConfig?.gossipFanout ?? cdnConfig.edge.coordination.meshSize,
+      edgeConfig?.gossipInterval ?? coordination?.metricsInterval ?? 30000,
+    gossipFanout: edgeConfig?.gossipFanout ?? coordination?.meshSize ?? 8,
     maxPeers: edgeConfig?.maxPeers ?? 50,
     bootstrapNodes:
-      edgeConfig?.bootstrapNodes ?? cdnConfig.edge.coordination.bootstrapPeers,
-    region: edgeConfig?.region ?? cdnConfig.edge.region,
+      edgeConfig?.bootstrapNodes ?? coordination?.bootstrapPeers ?? [],
+    region: edgeConfig?.region ?? edgeDefaults?.region ?? 'us-east-1',
     staleThresholdMs: edgeConfig?.staleThresholdMs ?? 300000,
     requireOnChainRegistration: edgeConfig?.requireOnChainRegistration ?? false,
     maxMessageSizeBytes: edgeConfig?.maxMessageSizeBytes ?? 1024 * 1024,
@@ -159,8 +157,8 @@ export function createNodeServices(
 
   // Initialize torrent service with config values
   const torrentService = getHybridTorrentService({
-    trackers: cdnConfig.edge.p2p.trackers,
-    maxCacheBytes: cdnConfig.edge.cache.maxSizeBytes,
+    trackers: edgeDefaults?.p2p?.trackers ?? [],
+    maxCacheBytes: edgeDefaults?.cache?.maxSizeBytes ?? 1024 * 1024 * 1024,
   })
 
   return {

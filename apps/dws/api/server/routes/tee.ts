@@ -19,6 +19,7 @@ const RPC_URL = process.env.RPC_URL || 'http://localhost:8545'
 const VERIFIER_PRIVATE_KEY = process.env.TEE_VERIFIER_PRIVATE_KEY as
   | `0x${string}`
   | undefined
+const DSTACK_ENDPOINT = process.env.DSTACK_ATTESTATION_ENDPOINT || ''
 
 // DStack client adapter - uses DStack integration from vendor/babylon
 // In production, this connects to the dstack attestation service
@@ -107,7 +108,7 @@ const activeNonces: Map<
   }
 > = new Map()
 
-export function createTEERouter(): Elysia {
+export function createTEERouter() {
   return (
     new Elysia({ prefix: '/tee' })
       // =========================================================================

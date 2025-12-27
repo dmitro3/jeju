@@ -396,6 +396,43 @@ export const CONTENT_REGISTRY_ABI = [
   },
 ] as const
 
+export const DATABASE_PROVIDER_ABI = [
+  {
+    type: 'function',
+    name: 'registerProvider',
+    inputs: [
+      { name: 'endpoint', type: 'string' },
+      { name: 'capacity', type: 'uint256' },
+      { name: 'pricePerGBMonth', type: 'uint256' },
+    ],
+    outputs: [],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'getProvider',
+    inputs: [{ name: 'provider', type: 'address' }],
+    outputs: [
+      { name: 'endpoint', type: 'string' },
+      { name: 'capacity', type: 'uint256' },
+      { name: 'used', type: 'uint256' },
+      { name: 'pricePerGBMonth', type: 'uint256' },
+      { name: 'stake', type: 'uint256' },
+      { name: 'hostedDatabases', type: 'uint256' },
+      { name: 'totalQueriesServed', type: 'uint256' },
+      { name: 'isActive', type: 'bool' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'claimRewards',
+    inputs: [],
+    outputs: [{ name: 'amount', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+] as const
+
 export const CDN_REGISTRY_ABI = [
   {
     type: 'function',

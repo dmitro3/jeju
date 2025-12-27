@@ -158,7 +158,16 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
       if (!exists) throw new Error('DAO not found')
 
       if (body.ceoPersona) {
-        await service.setCEOPersona(params.daoId, body.ceoPersona)
+        await service.setCEOPersona(params.daoId, {
+          name: body.ceoPersona.name,
+          pfpCid: body.ceoPersona.pfpCid ?? '',
+          description: body.ceoPersona.description,
+          personality: body.ceoPersona.personality,
+          traits: body.ceoPersona.traits ?? [],
+          voiceStyle: 'professional',
+          communicationTone: 'professional' as const,
+          specialties: [],
+        })
       }
       if (body.ceoModel) {
         await service.setCEOModel(params.daoId, body.ceoModel)
@@ -257,7 +266,7 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
       )
       const members = await service.getCouncilMembers(params.daoId)
       const newMember = members.find(
-        (m) => m.memberAddress.toLowerCase() === body.address.toLowerCase(),
+        (m) => m.member.toLowerCase() === body.address.toLowerCase(),
       )
       return { ...newMember, txHash }
     },
@@ -302,7 +311,16 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
       // If updating CEO (agentId = 0 or role = CEO), update persona
       if (params.agentId === '0' || body.role === 'CEO') {
         if (body.persona) {
-          await service.setCEOPersona(params.daoId, body.persona)
+          await service.setCEOPersona(params.daoId, {
+            name: body.persona.name,
+            pfpCid: body.persona.pfpCid ?? '',
+            description: body.persona.description,
+            personality: body.persona.personality,
+            traits: body.persona.traits ?? [],
+            voiceStyle: 'professional',
+            communicationTone: 'professional' as const,
+            specialties: [],
+          })
         }
         if (body.model) {
           await service.setCEOModel(params.daoId, body.model)
@@ -361,7 +379,7 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
 
       const txHash = await service.removeCouncilMember(
         params.daoId,
-        member.memberAddress as Address,
+        member.member,
       )
       return { success: true, txHash }
     },
@@ -380,7 +398,9 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
       type ProposalItem = { status: string; type: string }
       let filtered = proposals as ProposalItem[]
       if (query.status && query.status !== 'all') {
-        filtered = filtered.filter((p: ProposalItem) => p.status === query.status)
+        filtered = filtered.filter(
+          (p: ProposalItem) => p.status === query.status,
+        )
       }
       if (query.type && query.type !== 'all') {
         filtered = filtered.filter((p: ProposalItem) => p.type === query.type)
@@ -404,11 +424,11 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
   .get(
     '/:daoId/proposals/:proposalId',
     async ({ params }) => {
-      const proposal = await blockchain.getProposal(params.proposalId)
-      if (!proposal || proposal.daoId !== params.daoId) {
+      const result = await blockchain.getProposal(params.proposalId)
+      if (!result) {
         throw new Error('Proposal not found')
       }
-      return proposal
+      return result
     },
     {
       params: t.Object({ daoId: t.String(), proposalId: t.String() }),
