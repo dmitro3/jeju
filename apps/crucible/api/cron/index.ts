@@ -22,17 +22,17 @@ async function getDbPersistence(): Promise<TrainingDbPersistence | null> {
   if (dbPersistence) return dbPersistence
 
   // Try to get database client from environment
-  const dbEndpoint = process.env.CQL_ENDPOINT
+  const dbEndpoint = process.env.EQLITE_ENDPOINT
   if (!dbEndpoint) {
     log.warn(
-      'CQL_ENDPOINT not set - trajectory batches will not be persisted to database',
+      'EQLITE_ENDPOINT not set - trajectory batches will not be persisted to database',
     )
     return null
   }
 
   // Import dynamically to avoid circular deps
-  const { CQLClient } = await import('@jejunetwork/db')
-  const client = new CQLClient({ blockProducerEndpoint: dbEndpoint })
+  const { EQLiteClient } = await import('@jejunetwork/db')
+  const client = new EQLiteClient({ blockProducerEndpoint: dbEndpoint })
   dbPersistence = new TrainingDbPersistence(client)
   return dbPersistence
 }

@@ -219,8 +219,8 @@ export interface CacheConfig {
 export interface CacheServiceConfig extends CacheConfig {
   /** Listen port */
   port: number
-  /** CovenantSQL database ID */
-  cqlDatabaseId: string
+  /** EQLite database ID */
+  eqliteDatabaseId: string
   /** Node discovery via ERC-8004 */
   identityRegistryAddress: Address
   /** RPC URL */

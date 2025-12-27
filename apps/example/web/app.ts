@@ -345,7 +345,7 @@ function renderHeader(): string {
             📝 Example
           </h1>
           <p class="text-gray-600 dark:text-gray-400 mt-1">
-            Powered by Jeju Network • CQL • IPFS • KMS
+            Powered by Jeju Network • EQLite • IPFS • KMS
           </p>
         </div>
         ${

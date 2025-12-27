@@ -364,7 +364,7 @@ async function cmdSetup(): Promise<void> {
   config.services.proxy = await promptYesNo('    Proxy (share bandwidth)', true)
   config.services.storage = await promptYesNo('    Storage (share disk)', false)
   config.services.database = await promptYesNo(
-    '    Database (CQL miner/storage)',
+    '    Database (EQLite miner/storage)',
     false,
   )
 
@@ -593,9 +593,9 @@ async function startDatabaseService(
   databaseService: ReturnType<typeof createNodeServices>['database'],
   config: CliAppConfig,
 ) {
-  // Get CQL endpoints from config (respects env var overrides)
-  const blockProducerEndpoint = getCQLUrl(config.network)
-  const minerEndpoint = getCQLMinerUrl(config.network)
+  // Get EQLite endpoints from config (respects env var overrides)
+  const blockProducerEndpoint = getEQLiteUrl(config.network)
+  const minerEndpoint = getEQLiteMinerUrl(config.network)
 
   if (!config.privateKey) {
     log('warn', 'Database service requires private key - skipping')
@@ -618,7 +618,7 @@ async function startDatabaseService(
     })
 
     await databaseService.start()
-    log('success', `Database (CQL) service started - BP: ${blockProducerEndpoint}`)
+    log('success', `Database (EQLite) service started - BP: ${blockProducerEndpoint}`)
 
     // Periodically log stats
     setInterval(() => {
@@ -626,7 +626,7 @@ async function startDatabaseService(
       if (stats.queriesPerSecond > 0) {
         log(
           'debug',
-          `CQL: ${stats.queriesPerSecond.toFixed(2)} qps, ${stats.avgQueryLatencyMs.toFixed(0)}ms avg latency`,
+          `EQLite: ${stats.queriesPerSecond.toFixed(2)} qps, ${stats.avgQueryLatencyMs.toFixed(0)}ms avg latency`,
         )
       }
     }, 60000)

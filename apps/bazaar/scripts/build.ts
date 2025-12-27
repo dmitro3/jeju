@@ -236,7 +236,7 @@ async function createDeploymentBundle(): Promise<void> {
       frontend: { type: 'static', path: 'static', spa: true, fallback: 'index.html' },
       worker: { type: 'elysia', path: 'worker', entrypoint: 'worker.js', adapter: 'cloudflare', routes: ['/api/*', '/health', '/.well-known/*'] },
     },
-    dws: { regions: ['global'], tee: { preferred: true, required: false }, database: { type: 'covenantsql', migrations: 'migrations/' } },
+    dws: { regions: ['global'], tee: { preferred: true, required: false }, database: { type: 'eqlite', migrations: 'migrations/' } },
     compatibilityDate: '2025-06-01',
   }
 
