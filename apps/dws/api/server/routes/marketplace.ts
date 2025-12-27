@@ -30,8 +30,8 @@ function getAMMClient(): ComputeAMMClient {
   return ammClient
 }
 
-// Validation schemas
-const _ResourceTypeSchema = t.Union([
+// Validation schemas (exported for use by other modules)
+export const ResourceTypeSchema = t.Union([
   t.Literal(0), // CPU
   t.Literal(1), // MEMORY
   t.Literal(2), // GPU_H100
@@ -42,7 +42,7 @@ const _ResourceTypeSchema = t.Union([
   t.Literal(7), // INFERENCE
 ])
 
-const _RegionSchema = t.Union([
+export const RegionSchema = t.Union([
   t.Literal(0), // GLOBAL
   t.Literal(1), // NA_EAST
   t.Literal(2), // NA_WEST
@@ -52,7 +52,7 @@ const _RegionSchema = t.Union([
   t.Literal(6), // APAC_SOUTH
 ])
 
-export function createMarketplaceRouter(): Elysia {
+export function createMarketplaceRouter() {
   return (
     new Elysia({ prefix: '/marketplace' })
       // =========================================================================

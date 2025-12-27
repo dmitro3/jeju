@@ -385,6 +385,7 @@ export class AttestationVerifierService {
     const [account] = await walletClient.getAddresses()
 
     const txHash = await walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: TDX_ATTESTATION_VERIFIER_ABI,
       functionName: 'recordTDXVerificationResult',
@@ -429,6 +430,7 @@ export class AttestationVerifierService {
     const [account] = await this.config.walletClient.getAddresses()
 
     return this.config.walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: TDX_ATTESTATION_VERIFIER_ABI,
       functionName: 'addTrustedMrEnclave',
@@ -446,6 +448,7 @@ export class AttestationVerifierService {
     const [account] = await this.config.walletClient.getAddresses()
 
     return this.config.walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: TDX_ATTESTATION_VERIFIER_ABI,
       functionName: 'addTrustedMrSigner',
@@ -463,6 +466,7 @@ export class AttestationVerifierService {
     const [account] = await this.config.walletClient.getAddresses()
 
     return this.config.walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: TDX_ATTESTATION_VERIFIER_ABI,
       functionName: 'removeTrustedMrEnclave',
@@ -480,6 +484,7 @@ export class AttestationVerifierService {
     const [account] = await this.config.walletClient.getAddresses()
 
     return this.config.walletClient.writeContract({
+      chain: null,
       address: this.config.contractAddress,
       abi: TDX_ATTESTATION_VERIFIER_ABI,
       functionName: 'removeTrustedMrSigner',

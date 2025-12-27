@@ -201,7 +201,7 @@ export class CDNCacheIntegration {
       cacheCapacity: 512 * 1024 * 1024, // 512MB default
       cacheHitRate: cacheStats.hitRate,
       requestsPerSecond: 0, // Would need to track this
-      bandwidthUsed: cacheStats.bytesServed,
+      bandwidthUsed: cacheStats.sizeBytes,
       bandwidthCapacity: 1000 * 1024 * 1024, // 1Gbps default
       p99Latency: 0, // Would need to track this
       cpuUsage: 0, // Would need to measure this

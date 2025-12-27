@@ -234,11 +234,12 @@ export class HybridTorrentService {
 
   constructor(config: Partial<HybridTorrentConfig>) {
     // Config-first approach: Use @jejunetwork/config values, allow runtime overrides
-    const p2pConfig = cdnConfig.edge.p2p
+    const p2pConfig = cdnConfig.edge?.p2p
+    const cacheConfig = cdnConfig.edge?.cache
 
     this.config = TorrentConfigSchema.parse({
       // Trackers from config
-      trackers: config.trackers ?? p2pConfig.trackers,
+      trackers: config.trackers ?? p2pConfig?.trackers ?? [],
       // RPC and contracts from config
       rpcUrl: config.rpcUrl ?? getRpcUrl(),
       contentRegistryAddress:
@@ -246,7 +247,8 @@ export class HybridTorrentService {
       // Oracle URL - from getDWSUrl base + /oracle/seeding endpoint
       seedingOracleUrl: config.seedingOracleUrl,
       // Cache settings from config
-      maxCacheBytes: config.maxCacheBytes ?? cdnConfig.edge.cache.maxSizeBytes,
+      maxCacheBytes:
+        config.maxCacheBytes ?? cacheConfig?.maxSizeBytes ?? 1024 * 1024 * 1024,
       // Runtime overrides
       ...config,
     })

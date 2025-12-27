@@ -427,6 +427,13 @@ export class JNSResolver {
     }
 
     // Query CDN registry for active nodes
+    type CDNNode = {
+      nodeId: `0x${string}`
+      provider: Address
+      endpoint: string
+      status: number
+      stake: bigint
+    }
     const nodes = await this.publicClient
       .readContract({
         address: cdnRegistryAddress,
@@ -434,21 +441,21 @@ export class JNSResolver {
         functionName: 'getActiveNodes',
         args: [0], // Global region
       })
-      .catch(() => [])
+      .catch((): CDNNode[] => [])
 
-    if (Array.isArray(nodes) && nodes.length > 0) {
+    if (nodes.length > 0) {
       this.edgeNodes = nodes.map((node) => {
         // Parse endpoint to extract IP
-        const endpoint = String(node.endpoint || '')
+        const endpoint = String(node.endpoint)
         const ipMatch = endpoint.match(/(\d+\.\d+\.\d+\.\d+)/)
 
         return {
           nodeId: String(node.nodeId),
-          provider: node.provider as Address,
+          provider: node.provider,
           endpoint,
           ipv4: ipMatch?.[1] ?? this.config.edgeNodeIPs.ipv4[0],
-          region: Number(node.status || 0),
-          healthy: Number(node.status || 0) === 1,
+          region: Number(node.status),
+          healthy: Number(node.status) === 1,
         }
       })
     }

@@ -394,7 +394,10 @@ function AgentForm({
             </span>
             <div className="space-y-2">
               {agent.values.map((value, index) => (
-                <div key={`agent-value-${value}`} className="flex gap-2">
+                <div
+                  key={`agent-value-${value || `empty-${index}`}`}
+                  className="flex gap-2"
+                >
                   <input
                     type="text"
                     value={value}
@@ -804,7 +807,7 @@ export default function CreateDAOPage() {
             <div className="space-y-4">
               {board.map((agent, index) => (
                 <AgentForm
-                  key={`board-${agent.persona.name}-${index}`}
+                  key={`board-${agent.role}-${agent.persona.name || index}`}
                   agent={agent}
                   onChange={(a) => updateBoardMember(index, a)}
                   onRemove={
@@ -1032,7 +1035,7 @@ export default function CreateDAOPage() {
                 <div className="space-y-2">
                   {board.map((member, index) => (
                     <div
-                      key={`preview-${member.persona.name}-${index}`}
+                      key={`preview-${member.role}-${member.persona.name || index}`}
                       className="flex items-center gap-3"
                     >
                       <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center">

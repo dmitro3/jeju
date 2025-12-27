@@ -211,7 +211,7 @@ export class DoHServer {
   /**
    * Resolve a .jns domain
    */
-  private async resolveJNS(
+  async resolveJNS(
     query: DNSMessage,
     name: string,
     queryType: number,
@@ -280,7 +280,7 @@ export class DoHServer {
   /**
    * Forward query to upstream DNS
    */
-  private async resolveUpstream(query: DNSMessage): Promise<DNSMessage> {
+  async resolveUpstream(query: DNSMessage): Promise<DNSMessage> {
     if (!this.upstreamForwarder) {
       return createSERVFAILResponse(query)
     }

@@ -12,10 +12,18 @@
  */
 
 import { testWithSynpress } from '@synthetixio/synpress'
+import type { Page } from '@playwright/test'
 import { MetaMask, metaMaskFixtures } from '@synthetixio/synpress/playwright'
-import { createPublicClient, http } from 'viem'
 import { createWalletSetup } from '../shared/synpress.config.base'
 import { PASSWORD } from '../shared/utils'
+
+// Synpress fixture types
+interface SynpressFixtures {
+  context: { newPage(): Promise<Page> }
+  page: Page
+  metamaskPage: Page
+  extensionId: string
+}
 
 const basicSetup = createWalletSetup()
 const test = testWithSynpress(metaMaskFixtures(basicSetup))
@@ -30,12 +38,7 @@ const chain = {
   name: 'Network Local',
   nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
   rpcUrls: { default: { http: [RPC_URL] } },
-}
-
-const _publicClient = createPublicClient({
-  chain,
-  transport: http(RPC_URL),
-})
+} as const
 
 test.describe('JNS Gateway Tests', () => {
   test('should serve gateway health check', async ({ page }) => {
@@ -95,12 +98,8 @@ test.describe('Wake Page Tests', () => {
     console.log('✅ Gateway page loads correctly')
   })
 
-  test('should allow funding via wallet when wake page is shown', async ({
-    context,
-    page,
-    metamaskPage,
-    extensionId,
-  }) => {
+  test('should allow funding via wallet when wake page is shown', async (fixtures) => {
+    const { context, page, metamaskPage, extensionId } = fixtures as SynpressFixtures
     // This test requires:
     // 1. An unfunded app to show the wake page (set WAKE_PAGE_TEST_APP env var)
     // 2. A connected wallet with funds

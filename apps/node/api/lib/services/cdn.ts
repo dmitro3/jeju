@@ -1,4 +1,4 @@
-import { CDN_REGIONS, getCDNConfig, getCDNContracts } from '@jejunetwork/config'
+import { CDN_REGIONS, getCDNConfig } from '@jejunetwork/config'
 import type { CDNRegion } from '@jejunetwork/types'
 import { expectAddress, expectHex, toBigInt } from '@jejunetwork/types'
 import type { Address, Hex } from 'viem'
@@ -8,7 +8,6 @@ import { getChain, type NodeClient } from '../contracts'
 
 // Get config-first CDN settings
 const cdnConfig = getCDNConfig()
-const _cdnContracts = getCDNContracts()
 
 /** Type for CDN edge node as returned by getEdgeNode contract call */
 interface CDNEdgeNodeResult {
@@ -333,11 +332,18 @@ export class CDNService {
 
     const privateKey = await this.getPrivateKey()
 
+    if (!cdnConfig.edge) {
+      throw new Error('CDN edge configuration not available')
+    }
+
     // Config-first with optional runtime overrides
-    const port = config.port ?? cdnConfig.edge.port
+    const edgeConfig = cdnConfig.edge
+    const port = config.port ?? edgeConfig.port
     const cacheSizeMB =
       config.maxCacheSizeMB ??
-      Math.floor(cdnConfig.edge.cache.maxSizeBytes / (1024 * 1024))
+      Math.floor(
+        (edgeConfig.cache?.maxSizeBytes ?? 1024 * 1024 * 1024) / (1024 * 1024),
+      )
 
     // Start edge node as subprocess
     // Uses minimal env - config values come from @jejunetwork/config inside the subprocess
