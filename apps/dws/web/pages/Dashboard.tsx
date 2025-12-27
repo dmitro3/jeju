@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { useAccount } from 'wagmi'
 import {
+  useCacheStats,
   useContainers,
   useHealth,
   useJobs,
@@ -37,6 +38,7 @@ export default function Dashboard({ viewMode }: DashboardProps) {
   const { data: workersData, isLoading: workersLoading } = useWorkers()
   const { data: jobsData, isLoading: jobsLoading } = useJobs()
   const { data: account, isLoading: accountLoading } = useUserAccount()
+  const { data: cacheStats } = useCacheStats()
 
   // Show loading state while initial data loads (only for consumer mode)
   const isDataLoading =
@@ -134,6 +136,7 @@ export default function Dashboard({ viewMode }: DashboardProps) {
         activeWorkers={activeWorkers}
         runningJobs={runningJobs}
         account={account}
+        cacheStats={cacheStats}
       />
     </div>
   )
@@ -146,6 +149,7 @@ interface ConsumerDashboardProps {
   activeWorkers: number
   runningJobs: number
   account: ReturnType<typeof useUserAccount>['data']
+  cacheStats: ReturnType<typeof useCacheStats>['data']
 }
 
 function ConsumerDashboard({
@@ -155,6 +159,7 @@ function ConsumerDashboard({
   activeWorkers,
   runningJobs,
   account,
+  cacheStats,
 }: ConsumerDashboardProps) {
   return (
     <>
@@ -362,6 +367,46 @@ function ConsumerDashboard({
                 </span>
                 <span style={{ fontFamily: 'var(--font-mono)' }}>
                   {health.backends.available.length}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="skeleton" style={{ height: '120px' }} />
+          )}
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">
+              <Database size={18} /> Cache Stats
+            </h3>
+          </div>
+          {cacheStats ? (
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total Keys</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  {cacheStats.shared.totalKeys.toLocaleString()}
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Memory Used</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                  {(cacheStats.shared.usedMemoryBytes / (1024 * 1024)).toFixed(2)} MB
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Hit Rate</span>
+                <span
+                  className={`badge ${cacheStats.shared.hitRate > 0.8 ? 'badge-success' : cacheStats.shared.hitRate > 0.5 ? 'badge-warning' : 'badge-neutral'}`}
+                >
+                  {(cacheStats.shared.hitRate * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Cache Nodes</span>
+                <span style={{ fontFamily: 'var(--font-mono)' }}>
+                  {cacheStats.global.totalNodes}
                 </span>
               </div>
             </div>

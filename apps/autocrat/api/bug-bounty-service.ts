@@ -2,7 +2,7 @@
  * Bug Bounty Service - Decentralized Security Vulnerability Management
  *
  * Fully integrated with:
- * - CovenantSQL for persistent state
+ * - EQLite for persistent state
  * - SecurityBountyRegistry smart contract for on-chain operations
  * - DWS compute for sandbox validation
  * - dstack TEE for secure execution (simulator in local dev)
@@ -15,7 +15,7 @@ import {
   getRpcUrl,
   getSecurityBountyRegistryAddress,
 } from '@jejunetwork/config'
-import { type CQLClient, getCQL, type QueryParam } from '@jejunetwork/db'
+import { type EQLiteClient, getEQLite, type QueryParam } from '@jejunetwork/db'
 import { type CacheClient, getCacheClient } from '@jejunetwork/shared'
 import { expectDefined, expectValid } from '@jejunetwork/types'
 import {
@@ -61,7 +61,7 @@ import {
   VulnerabilityTypeSchema,
 } from '../lib'
 
-const CQL_DATABASE_ID = process.env.CQL_DATABASE_ID ?? 'autocrat'
+const EQLITE_DATABASE_ID = process.env.EQLITE_DATABASE_ID ?? 'autocrat'
 const OPERATOR_KEY = process.env.OPERATOR_PRIVATE_KEY
 
 // Config handles env overrides
@@ -84,29 +84,29 @@ function getChain() {
       return localhost
   }
 }
-let cqlClient: CQLClient | null = null
+let eqliteClient: EQLiteClient | null = null
 let cacheClient: CacheClient | null = null
 let initialized = false
 
-async function getCQLClient(): Promise<CQLClient> {
-  if (!cqlClient) {
-    cqlClient = getCQL({
-      databaseId: CQL_DATABASE_ID,
+async function getEQLiteClient(): Promise<EQLiteClient> {
+  if (!eqliteClient) {
+    eqliteClient = getEQLite({
+      databaseId: EQLITE_DATABASE_ID,
       timeout: 30000,
       debug: process.env.NODE_ENV !== 'production',
     })
 
-    const healthy = await cqlClient.isHealthy()
+    const healthy = await eqliteClient.isHealthy()
     if (!healthy) {
       throw new Error(
-        `Bug Bounty requires CovenantSQL (network: ${getCurrentNetwork()}).\n` +
-          'Ensure CQL is running: docker compose up -d cql',
+        `Bug Bounty requires EQLite (network: ${getCurrentNetwork()}).\n` +
+          'Ensure EQLite is running: docker compose up -d eqlite',
       )
     }
 
     await ensureTablesExist()
   }
-  return cqlClient
+  return eqliteClient
 }
 
 function getCache(): CacheClient {
@@ -117,9 +117,9 @@ function getCache(): CacheClient {
 }
 
 async function ensureTablesExist(): Promise<void> {
-  if (!cqlClient) return
+  if (!eqliteClient) return
 
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `
     CREATE TABLE IF NOT EXISTS bounty_submissions (
       submission_id TEXT PRIMARY KEY,
@@ -154,10 +154,10 @@ async function ensureTablesExist(): Promise<void> {
     )
   `,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `
     CREATE TABLE IF NOT EXISTS bounty_guardian_votes (
       id TEXT PRIMARY KEY,
@@ -172,10 +172,10 @@ async function ensureTablesExist(): Promise<void> {
     )
   `,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `
     CREATE TABLE IF NOT EXISTS bounty_researcher_stats (
       researcher TEXT PRIMARY KEY,
@@ -188,10 +188,10 @@ async function ensureTablesExist(): Promise<void> {
     )
   `,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `
     CREATE TABLE IF NOT EXISTS bounty_rate_limits (
       researcher TEXT PRIMARY KEY,
@@ -200,29 +200,29 @@ async function ensureTablesExist(): Promise<void> {
     )
   `,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Indexes
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `CREATE INDEX IF NOT EXISTS idx_submissions_status ON bounty_submissions(status)`,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `CREATE INDEX IF NOT EXISTS idx_submissions_researcher ON bounty_submissions(researcher)`,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `CREATE INDEX IF NOT EXISTS idx_submissions_severity ON bounty_submissions(severity)`,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
-  await cqlClient.exec(
+  await eqliteClient.exec(
     `CREATE INDEX IF NOT EXISTS idx_votes_submission ON bounty_guardian_votes(submission_id)`,
     [],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 }
 const SECURITY_BOUNTY_REGISTRY_ABI = [
@@ -281,14 +281,14 @@ const RATE_LIMIT_WINDOW = 3600 * 1000 // 1 hour
 const MAX_SUBMISSIONS_PER_WINDOW = 5
 
 async function checkRateLimit(researcher: Address): Promise<void> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const now = Date.now()
   const key = researcher.toLowerCase()
 
   const result = await client.query<{ count: number; window_start: number }>(
     'SELECT count, window_start FROM bounty_rate_limits WHERE researcher = ?',
     [key],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   if (
@@ -299,7 +299,7 @@ async function checkRateLimit(researcher: Address): Promise<void> {
       `INSERT INTO bounty_rate_limits (researcher, count, window_start) VALUES (?, 1, ?)
        ON CONFLICT(researcher) DO UPDATE SET count = 1, window_start = ?`,
       [key, now, now],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
     return
   }
@@ -314,7 +314,7 @@ async function checkRateLimit(researcher: Address): Promise<void> {
   await client.exec(
     'UPDATE bounty_rate_limits SET count = count + 1 WHERE researcher = ?',
     [key],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 }
 function computeVulnerabilityHash(draft: BountySubmissionDraft): string {
@@ -331,11 +331,11 @@ function computeVulnerabilityHash(draft: BountySubmissionDraft): string {
 }
 
 async function checkDuplicate(hash: string): Promise<string | null> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const result = await client.query<{ submission_id: string }>(
     'SELECT submission_id FROM bounty_submissions WHERE vuln_hash = ?',
     [hash],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
   return result.rows[0].submission_id ?? null
 }
@@ -558,8 +558,8 @@ export async function submitBounty(
     guardianRejections: 0,
   }
 
-  // Store in CQL
-  const client = await getCQLClient()
+  // Store in EQLite
+  const client = await getEQLiteClient()
   await client.exec(
     `INSERT INTO bounty_submissions (
       submission_id, researcher, researcher_agent_id, severity, vuln_type,
@@ -589,7 +589,7 @@ export async function submitBounty(
       submission.submittedAt,
       vulnHash,
     ],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Submit to smart contract - fail if contract is required
@@ -640,11 +640,11 @@ export async function getSubmission(
     return validated as BountySubmission
   }
 
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const result = await client.query<Record<string, unknown>>(
     'SELECT * FROM bounty_submissions WHERE submission_id = ?',
     [submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   if (result.rows.length === 0) return null
@@ -663,7 +663,7 @@ export async function listSubmissions(
   researcher?: Address,
   limit = 50,
 ): Promise<BountySubmission[]> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
 
   let query = 'SELECT * FROM bounty_submissions'
   const params: QueryParam[] = []
@@ -689,7 +689,7 @@ export async function listSubmissions(
   const result = await client.query<Record<string, unknown>>(
     query,
     params,
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
   return result.rows.map(rowToSubmission)
 }
@@ -704,11 +704,11 @@ export async function triggerValidation(submissionId: string): Promise<void> {
   }
 
   // Update status
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   await client.exec(
     'UPDATE bounty_submissions SET status = ? WHERE submission_id = ?',
     [BountySubmissionStatus.VALIDATING, submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Invalidate cache
@@ -739,7 +739,7 @@ export async function triggerValidation(submissionId: string): Promise<void> {
         'No PoC provided - manual review required',
         submissionId,
       ],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   }
 }
@@ -749,7 +749,7 @@ export async function completeValidation(
   result: ValidationResult,
   notes: string,
 ): Promise<BountySubmission> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const now = Math.floor(Date.now() / 1000)
 
   let newStatus: BountySubmissionStatus
@@ -769,7 +769,7 @@ export async function completeValidation(
      SET status = ?, validation_result = ?, validation_notes = ?, validated_at = ?
      WHERE submission_id = ?`,
     [newStatus, result, notes, now, submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Update on-chain
@@ -803,7 +803,7 @@ export async function submitGuardianVote(
   suggestedReward: bigint,
   feedback: string,
 ): Promise<void> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const now = Math.floor(Date.now() / 1000)
   const voteId = keccak256(
     stringToHex(`${submissionId}-${guardian}-${now}`),
@@ -829,7 +829,7 @@ export async function submitGuardianVote(
       feedback,
       now,
     ],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Update submission counts
@@ -837,13 +837,13 @@ export async function submitGuardianVote(
     await client.exec(
       'UPDATE bounty_submissions SET guardian_approvals = guardian_approvals + 1 WHERE submission_id = ?',
       [submissionId],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   } else {
     await client.exec(
       'UPDATE bounty_submissions SET guardian_rejections = guardian_rejections + 1 WHERE submission_id = ?',
       [submissionId],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   }
 
@@ -873,7 +873,7 @@ export async function submitGuardianVote(
       await client.exec(
         'UPDATE bounty_submissions SET status = ? WHERE submission_id = ?',
         [BountySubmissionStatus.CEO_REVIEW, submissionId],
-        CQL_DATABASE_ID,
+        EQLITE_DATABASE_ID,
       )
       await getCache().delete(`submission:${submissionId}`)
     }
@@ -883,11 +883,11 @@ export async function submitGuardianVote(
 export async function getGuardianVotes(
   submissionId: string,
 ): Promise<BountyGuardianVote[]> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const result = await client.query<Record<string, unknown>>(
     'SELECT * FROM bounty_guardian_votes WHERE submission_id = ? ORDER BY voted_at ASC',
     [submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   return result.rows.map((row) => ({
@@ -907,7 +907,7 @@ export async function ceoDecision(
   rewardAmount: bigint,
   reasoning: string,
 ): Promise<BountySubmission> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const now = Math.floor(Date.now() / 1000)
 
   const newStatus = approved
@@ -919,7 +919,7 @@ export async function ceoDecision(
      SET status = ?, reward_amount = ?, validation_notes = COALESCE(validation_notes, '') || '\nCEO: ' || ?, resolved_at = ?
      WHERE submission_id = ?`,
     [newStatus, rewardAmount.toString(), reasoning, now, submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   // Update on-chain
@@ -967,7 +967,7 @@ export async function payReward(
     throw new Error('Reward amount must be positive')
   }
 
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
 
   // Execute on-chain payout
   const contractAddr = getContractAddressOrThrow()
@@ -987,7 +987,7 @@ export async function payReward(
   await client.exec(
     'UPDATE bounty_submissions SET status = ? WHERE submission_id = ?',
     [BountySubmissionStatus.PAID, submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   await getCache().delete(`submission:${submissionId}`)
@@ -1003,13 +1003,13 @@ export async function recordFix(
     throw new Error('Invalid commit hash format')
   }
 
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const disclosureDate = Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60 // 7 days grace
 
   await client.exec(
     'UPDATE bounty_submissions SET fix_commit_hash = ?, disclosure_date = ? WHERE submission_id = ?',
     [commitHash, disclosureDate, submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   await getCache().delete(`submission:${submissionId}`)
@@ -1033,12 +1033,12 @@ export async function researcherDisclose(
     throw new Error('Not the researcher')
   }
 
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
 
   await client.exec(
     'UPDATE bounty_submissions SET researcher_disclosed = 1 WHERE submission_id = ?',
     [submissionId],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   await getCache().delete(`submission:${submissionId}`)
@@ -1054,13 +1054,13 @@ async function updateResearcherStats(
   action: 'submitted' | 'approved' | 'rejected',
   reward?: bigint,
 ): Promise<void> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const key = researcher.toLowerCase()
 
   const existing = await client.query<Record<string, unknown>>(
     'SELECT * FROM bounty_researcher_stats WHERE researcher = ?',
     [key],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   if (existing.rows.length === 0) {
@@ -1068,7 +1068,7 @@ async function updateResearcherStats(
       `INSERT INTO bounty_researcher_stats (researcher, total_submissions, approved_submissions, rejected_submissions, total_earned)
        VALUES (?, 1, 0, 0, '0')`,
       [key],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   }
 
@@ -1076,7 +1076,7 @@ async function updateResearcherStats(
     await client.exec(
       'UPDATE bounty_researcher_stats SET total_submissions = total_submissions + 1 WHERE researcher = ?',
       [key],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   } else if (action === 'approved') {
     await client.exec(
@@ -1085,13 +1085,13 @@ async function updateResearcherStats(
            total_earned = CAST((CAST(total_earned AS INTEGER) + ?) AS TEXT)
        WHERE researcher = ?`,
       [reward?.toString() ?? '0', key],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   } else if (action === 'rejected') {
     await client.exec(
       'UPDATE bounty_researcher_stats SET rejected_submissions = rejected_submissions + 1 WHERE researcher = ?',
       [key],
-      CQL_DATABASE_ID,
+      EQLITE_DATABASE_ID,
     )
   }
 }
@@ -1099,11 +1099,11 @@ async function updateResearcherStats(
 export async function getResearcherStats(
   researcher: Address,
 ): Promise<ResearcherStats> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const result = await client.query<Record<string, unknown>>(
     'SELECT * FROM bounty_researcher_stats WHERE researcher = ?',
     [researcher.toLowerCase()],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   if (result.rows.length === 0) {
@@ -1143,13 +1143,13 @@ export interface ResearcherLeaderboardEntry {
 export async function getResearcherLeaderboard(
   limit = 10,
 ): Promise<ResearcherLeaderboardEntry[]> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
   const result = await client.query<Record<string, unknown>>(
     `SELECT * FROM bounty_researcher_stats
      ORDER BY total_earned DESC, approved_submissions DESC
      LIMIT ?`,
     [limit],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   return result.rows.map((row) => {
@@ -1173,9 +1173,9 @@ interface PoolStatsRow {
 }
 
 export async function getBountyPoolStats(): Promise<BountyPoolStats> {
-  const client = await getCQLClient()
+  const client = await getEQLiteClient()
 
-  // Query aggregates from CQL
+  // Query aggregates from EQLite
   const submissions = await client.query<PoolStatsRow>(
     `SELECT
        SUM(CASE WHEN status = ? THEN CAST(reward_amount AS INTEGER) ELSE 0 END) as pending_payouts,
@@ -1189,7 +1189,7 @@ export async function getBountyPoolStats(): Promise<BountyPoolStats> {
       BountySubmissionStatus.REJECTED,
       BountySubmissionStatus.WITHDRAWN,
     ],
-    CQL_DATABASE_ID,
+    EQLITE_DATABASE_ID,
   )
 
   const row = submissions.rows[0] ?? {
@@ -1294,6 +1294,6 @@ export function getBugBountyService(): BugBountyService {
 }
 export async function initializeBugBounty(): Promise<void> {
   if (initialized) return
-  await getCQLClient()
+  await getEQLiteClient()
   initialized = true
 }

@@ -12,7 +12,7 @@
 import { existsSync, watch } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { CORE_PORTS, getCoreAppUrl, getCQLBlockProducerUrl, getIndexerGraphqlUrl, getRpcUrl } from '@jejunetwork/config'
+import { CORE_PORTS, getCoreAppUrl, getEQLiteBlockProducerUrl, getIndexerGraphqlUrl, getRpcUrl } from '@jejunetwork/config'
 import { createBazaarApp } from '../api/worker'
 
 const FRONTEND_PORT = CORE_PORTS.BAZAAR.get()
@@ -117,9 +117,9 @@ async function startApiServer(): Promise<void> {
     DWS_URL,
     GATEWAY_URL: getCoreAppUrl('NODE_EXPLORER_API'),
     INDEXER_URL: getIndexerGraphqlUrl(),
-    COVENANTSQL_NODES: getCQLBlockProducerUrl(),
-    COVENANTSQL_DATABASE_ID: process.env.COVENANTSQL_DATABASE_ID || 'dev-bazaar',
-    COVENANTSQL_PRIVATE_KEY: process.env.COVENANTSQL_PRIVATE_KEY || '',
+    EQLITE_NODES: getEQLiteBlockProducerUrl(),
+    EQLITE_DATABASE_ID: process.env.EQLITE_DATABASE_ID || 'dev-bazaar',
+    EQLITE_PRIVATE_KEY: process.env.EQLITE_PRIVATE_KEY || '',
   })
 
   app.listen(API_PORT, () => console.log(`[Bazaar] API: http://localhost:${API_PORT}`))

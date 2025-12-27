@@ -11,12 +11,12 @@ import { cors } from '@elysiajs/cors'
 import {
   CORE_PORTS,
   getCoreAppUrl,
-  getCQLBlockProducerUrl,
+  getEQLiteBlockProducerUrl,
   getCurrentNetwork,
   getIndexerGraphqlUrl,
   getL2RpcUrl,
 } from '@jejunetwork/config'
-import { type CQLClient, createTable, getCQL } from '@jejunetwork/db'
+import { type EQLiteClient, createTable, getEQLite } from '@jejunetwork/db'
 import { expect as expectExists, expectValid } from '@jejunetwork/types'
 import { Elysia } from 'elysia'
 import {
@@ -54,9 +54,9 @@ export interface BazaarEnv {
   INDEXER_URL: string
 
   // Database config
-  COVENANTSQL_NODES: string
-  COVENANTSQL_DATABASE_ID: string
-  COVENANTSQL_PRIVATE_KEY: string
+  EQLITE_NODES: string
+  EQLITE_DATABASE_ID: string
+  EQLITE_PRIVATE_KEY: string
 
   // KV bindings (optional)
   BAZAAR_CACHE?: KVNamespace
@@ -77,16 +77,16 @@ interface KVNamespace {
 
 // Database Layer
 
-let dbClient: CQLClient | null = null
+let dbClient: EQLiteClient | null = null
 
-function getDatabase(env: BazaarEnv): CQLClient {
+function getDatabase(env: BazaarEnv): EQLiteClient {
   if (dbClient) return dbClient
 
   const blockProducerEndpoint =
-    env.COVENANTSQL_NODES.split(',')[0] || getCQLBlockProducerUrl()
-  const databaseId = env.COVENANTSQL_DATABASE_ID
+    env.EQLITE_NODES.split(',')[0] || getEQLiteBlockProducerUrl()
+  const databaseId = env.EQLITE_DATABASE_ID
 
-  dbClient = getCQL({
+  dbClient = getEQLite({
     blockProducerEndpoint,
     databaseId,
     debug: env.NETWORK === 'localnet',
@@ -97,7 +97,7 @@ function getDatabase(env: BazaarEnv): CQLClient {
 
 // Database Schemas
 
-async function initializeDatabase(db: CQLClient): Promise<void> {
+async function initializeDatabase(db: EQLiteClient): Promise<void> {
   // Market cache table
   const cacheTable = createTable('market_cache', [
     { name: 'key', type: 'TEXT', primaryKey: true, notNull: true },
@@ -450,9 +450,9 @@ if (isMainModule) {
     DWS_URL: getCoreAppUrl('DWS_API'),
     GATEWAY_URL: getCoreAppUrl('NODE_EXPLORER_API'),
     INDEXER_URL: getIndexerGraphqlUrl(),
-    COVENANTSQL_NODES: getCQLBlockProducerUrl(),
-    COVENANTSQL_DATABASE_ID: process.env.COVENANTSQL_DATABASE_ID || '',
-    COVENANTSQL_PRIVATE_KEY: process.env.COVENANTSQL_PRIVATE_KEY || '',
+    EQLITE_NODES: getEQLiteBlockProducerUrl(),
+    EQLITE_DATABASE_ID: process.env.EQLITE_DATABASE_ID || '',
+    EQLITE_PRIVATE_KEY: process.env.EQLITE_PRIVATE_KEY || '',
   })
 
   app.listen(PORT, () => {

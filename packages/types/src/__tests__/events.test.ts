@@ -385,3 +385,4 @@ describe('EventEmitter interface', () => {
   })
 })
 
+

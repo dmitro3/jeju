@@ -10,7 +10,7 @@ import {
   checkChainAvailable,
   describeWithInfra,
   getChainConfig,
-} from '@jeju/tests/shared/live-infrastructure'
+} from '@jejunetwork/tests/shared/live-infrastructure'
 import { createPublicClient, http } from 'viem'
 import { RegistryClient } from '../blockchain/registry-client'
 

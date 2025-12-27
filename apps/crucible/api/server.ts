@@ -326,7 +326,7 @@ const config: CrucibleConfig = {
       storageApi: servicesConfig.storage.api,
       ipfsGateway: servicesConfig.storage.ipfsGateway,
       indexerGraphql: servicesConfig.indexer.graphql,
-      cqlEndpoint: process.env.CQL_ENDPOINT ?? servicesConfig.cql.blockProducer,
+      eqliteEndpoint: process.env.EQLITE_ENDPOINT ?? servicesConfig.eqlite.blockProducer,
       dexCacheUrl: process.env.DEX_CACHE_URL,
     }
   })(),

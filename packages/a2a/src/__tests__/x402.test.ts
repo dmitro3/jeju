@@ -17,7 +17,7 @@ import {
   describeWithInfra,
   getLiveRedisClient,
   hasInfra,
-} from '@jeju/tests/shared/live-infrastructure'
+} from '@jejunetwork/tests/shared/live-infrastructure'
 import { type RedisClient, X402Manager } from '../payments/x402'
 
 // Check if Redis is available
