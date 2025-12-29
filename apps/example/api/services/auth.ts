@@ -129,8 +129,9 @@ export function getOAuth3Service(): OAuth3Service {
     const chainId =
       network === 'localnet' ? 420691 : network === 'testnet' ? 420690 : 8453
     const appId =
-      (typeof process !== 'undefined' ? process.env.OAUTH3_APP_ID : undefined) ??
-      'example.oauth3.jeju'
+      (typeof process !== 'undefined'
+        ? process.env.OAUTH3_APP_ID
+        : undefined) ?? 'example.oauth3.jeju'
     const frontendPort = process.env.FRONTEND_PORT ?? '4501'
     const host = getLocalhostHost()
     const redirectUri =
@@ -147,7 +148,9 @@ export function getOAuth3Service(): OAuth3Service {
       (typeof process !== 'undefined'
         ? process.env.OAUTH3_TEE_AGENT_URL
         : undefined) ??
-      (networkType === 'localnet' ? `http://${host}:8004` : getOAuth3Url(networkType))
+      (networkType === 'localnet'
+        ? `http://${host}:8004`
+        : getOAuth3Url(networkType))
 
     oauth3Service = new OAuth3ServiceImpl({
       appId,

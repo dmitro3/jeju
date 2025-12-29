@@ -163,7 +163,7 @@ function createLocalFallbackAccount(privateKey: Hex): KMSAccount {
 //                     WALLET CLIENT FACTORY
 // ════════════════════════════════════════════════════════════════════════════
 
-export async function createKMSWalletClient<TTransport extends Transport>(
+export async function createKMSWalletClient<_TTransport extends Transport>(
   configOrAddress: AutocratKMSConfig | { address: Address },
   chain?: Chain,
   rpcUrl?: string,
@@ -231,5 +231,3 @@ export function getOperatorConfig(): AutocratKMSConfig | null {
     forceProduction: isProductionEnv(),
   }
 }
-
-

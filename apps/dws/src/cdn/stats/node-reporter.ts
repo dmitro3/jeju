@@ -232,7 +232,9 @@ export class NodeStatsReporter {
         ((typeof process !== 'undefined'
           ? process.env.CDN_STATS_CONTRACT
           : undefined) as Address | undefined) ??
-        tryGetContract('cdn', 'stats', getCurrentNetwork()) as Address | undefined,
+        (tryGetContract('cdn', 'stats', getCurrentNetwork()) as
+          | Address
+          | undefined),
       reportIntervalMs: config.reportIntervalMs ?? 3600000, // 1 hour
       metricsPort: config.metricsPort,
     }

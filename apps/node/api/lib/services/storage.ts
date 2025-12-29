@@ -73,10 +73,10 @@ export function validateSeedingStats(data: unknown): SeedingStats {
 }
 
 export class StorageService {
-  private client: NodeClient
+  private client: SecureNodeClient
   private torrent: HybridTorrentService | null = null
 
-  constructor(client: NodeClient) {
+  constructor(client: SecureNodeClient) {
     this.client = client
   }
 
@@ -194,6 +194,6 @@ export class StorageService {
   }
 }
 
-export function createStorageService(client: NodeClient): StorageService {
+export function createStorageService(client: SecureNodeClient): StorageService {
   return new StorageService(client)
 }

@@ -15,9 +15,9 @@ import { resolve } from 'node:path'
 import {
   CORE_PORTS,
   getChainId,
+  getIndexerGraphqlUrl,
   getIpfsApiUrl,
   getIpfsGatewayUrlEnv,
-  getIndexerGraphqlUrl,
   getLocalhostHost,
   getRpcUrl,
   getWsUrl,
@@ -162,7 +162,8 @@ async function buildFrontend(): Promise<boolean> {
         getIpfsGatewayUrlEnv() ?? `http://${getLocalhostHost()}:4180`,
       ),
       'import.meta.env.PUBLIC_INDEXER_URL': JSON.stringify(
-        getIndexerGraphqlUrl() ?? `http://${getLocalhostHost()}:${CORE_PORTS.INDEXER_GRAPHQL.get()}/graphql`,
+        getIndexerGraphqlUrl() ??
+          `http://${getLocalhostHost()}:${CORE_PORTS.INDEXER_GRAPHQL.get()}/graphql`,
       ),
       'import.meta.env.MODE': JSON.stringify('development'),
       'import.meta.env.DEV': JSON.stringify(true),
@@ -220,14 +221,17 @@ async function startServer(): Promise<void> {
         path.startsWith('/a2a') ||
         path.startsWith('/mcp')
       ) {
-        return fetch(`http://${getLocalhostHost()}:${API_PORT}${path}${url.search}`, {
-          method: req.method,
-          headers: req.headers,
-          body:
-            req.method !== 'GET' && req.method !== 'HEAD'
-              ? req.body
-              : undefined,
-        }).catch(() => new Response('Backend unavailable', { status: 503 }))
+        return fetch(
+          `http://${getLocalhostHost()}:${API_PORT}${path}${url.search}`,
+          {
+            method: req.method,
+            headers: req.headers,
+            body:
+              req.method !== 'GET' && req.method !== 'HEAD'
+                ? req.body
+                : undefined,
+          },
+        ).catch(() => new Response('Backend unavailable', { status: 503 }))
       }
 
       // Serve built JS
@@ -283,7 +287,9 @@ async function startServer(): Promise<void> {
     },
   })
 
-  console.log(`[Factory] Frontend: http://${getLocalhostHost()}:${FRONTEND_PORT}`)
+  console.log(
+    `[Factory] Frontend: http://${getLocalhostHost()}:${FRONTEND_PORT}`,
+  )
 
   // Watch for changes
   watch('./web', { recursive: true }, async (_, file) => {

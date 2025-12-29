@@ -201,8 +201,13 @@ async function getWalletClient(): Promise<WalletClient | KMSWalletClient> {
   if (cachedWalletClient) return cachedWalletClient
 
   // Try KMS first for side-channel protection
-  const kmsKeyId = typeof process !== 'undefined' ? process.env.FAUCET_KMS_KEY_ID : undefined
-  const ownerAddress = (typeof process !== 'undefined' ? process.env.FAUCET_OWNER_ADDRESS : undefined) as Address | undefined
+  const kmsKeyId =
+    typeof process !== 'undefined' ? process.env.FAUCET_KMS_KEY_ID : undefined
+  const ownerAddress = (
+    typeof process !== 'undefined'
+      ? process.env.FAUCET_OWNER_ADDRESS
+      : undefined
+  ) as Address | undefined
 
   if (kmsKeyId && ownerAddress) {
     const kmsAvailable = await isKMSAvailable()

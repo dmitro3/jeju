@@ -17,7 +17,9 @@
 
 import { createHash } from 'node:crypto'
 import {
+  getCurrentNetwork,
   getDWSUrl,
+  getDwsApiUrl,
   getIpfsApiUrl,
   getLocalhostHost,
 } from '@jejunetwork/config'
@@ -179,14 +181,11 @@ function parseLFSPointer(
 void parseLFSPointer
 
 /**
- * Get IPFS client URL from environment
+ * Get IPFS client URL from config
  */
 function getIPFSUrl(): string {
-  return (
-    (typeof process !== 'undefined' ? process.env.IPFS_API_URL : undefined) ??
-    getIpfsApiUrl() ??
-    `http://${getLocalhostHost()}:5001`
-  )
+  const network = getCurrentNetwork()
+  return getIpfsApiUrl(network) ?? `http://${getLocalhostHost()}:5001`
 }
 
 /**
@@ -347,7 +346,7 @@ export function createHuggingFaceRouter() {
                   authenticated: true,
                   actions: {
                     download: {
-                      href: `${(typeof process !== 'undefined' ? process.env.DWS_URL : undefined) ?? (getDWSUrl() ?? `http://${getLocalhostHost()}:4030`)}/hf/lfs/${obj.oid}`,
+                      href: `${getDwsApiUrl()}/hf/lfs/${obj.oid}`,
                       expires_in: 3600,
                     },
                   },
@@ -367,7 +366,7 @@ export function createHuggingFaceRouter() {
                 authenticated: true,
                 actions: {
                   upload: {
-                    href: `${(typeof process !== 'undefined' ? process.env.DWS_URL : undefined) ?? (getDWSUrl() ?? `http://${getLocalhostHost()}:4030`)}/hf/lfs/${obj.oid}`,
+                    href: `${(typeof process !== 'undefined' ? process.env.DWS_URL : undefined) ?? getDWSUrl() ?? `http://${getLocalhostHost()}:4030`}/hf/lfs/${obj.oid}`,
                     expires_in: 3600,
                   },
                 },

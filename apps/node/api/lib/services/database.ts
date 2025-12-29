@@ -113,7 +113,7 @@ export function validateDatabaseStats(data: unknown): DatabaseStats {
  * EQLite Database Service for node operators
  */
 export class DatabaseService {
-  private nodeClient: NodeClient
+  private nodeClient: SecureNodeClient
   private eqliteClient: EQLiteClient | null = null
   private config: DatabaseServiceConfig | null = null
   private signer: KMSSigner | null = null
@@ -122,7 +122,7 @@ export class DatabaseService {
   private queryLatencies: number[] = []
   private startTime = 0
 
-  constructor(nodeClient: NodeClient) {
+  constructor(nodeClient: SecureNodeClient) {
     this.nodeClient = nodeClient
   }
 
@@ -489,6 +489,8 @@ function validateBackupInfo(data: unknown): BackupInfo {
   return BackupInfoSchema.parse(data)
 }
 
-export function createDatabaseService(nodeClient: NodeClient): DatabaseService {
+export function createDatabaseService(
+  nodeClient: SecureNodeClient,
+): DatabaseService {
   return new DatabaseService(nodeClient)
 }

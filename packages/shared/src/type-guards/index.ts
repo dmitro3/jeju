@@ -10,6 +10,7 @@
 // Import JSON types directly from @jejunetwork/types:
 // import type { JsonValue } from '@jejunetwork/types'
 import type { JsonValue } from '@jejunetwork/types'
+export type { JsonValue }
 
 // =============================================================================
 // Primitive Type Guards

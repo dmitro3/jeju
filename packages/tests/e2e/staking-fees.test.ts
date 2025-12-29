@@ -15,6 +15,7 @@
  */
 
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { getRpcUrl } from '@jejunetwork/config'
 import {
   type Address,
   createPublicClient,
@@ -28,7 +29,6 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { readContract, waitForTransactionReceipt } from 'viem/actions'
 import { inferChainFromRpcUrl } from '../../../packages/deployment/scripts/shared/chain-utils'
 import { TEST_ACCOUNTS } from '../shared/utils'
-import { getRpcUrl } from '@jejunetwork/config'
 
 // Test configuration
 const RPC_URL = getRpcUrl()

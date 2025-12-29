@@ -517,17 +517,28 @@ export class JNSGateway {
 // ============================================================================
 
 export async function startJNSGateway(): Promise<JNSGateway> {
+  const network = getCurrentNetwork()
   const config: JNSGatewayConfig = {
     port: parseInt(process.env.JNS_GATEWAY_PORT ?? '4022', 10),
-    rpcUrl: getRpcUrl(),
-    jnsRegistryAddress: ((typeof process !== 'undefined' ? process.env.JNS_REGISTRY_ADDRESS : undefined) ??
+    rpcUrl: getRpcUrl(network),
+    jnsRegistryAddress: ((typeof process !== 'undefined'
+      ? process.env.JNS_REGISTRY_ADDRESS
+      : undefined) ??
       tryGetContract('jns', 'registry', network) ??
       '0x0000000000000000000000000000000000000000') as Address,
-    jnsResolverAddress: ((typeof process !== 'undefined' ? process.env.JNS_RESOLVER_ADDRESS : undefined) ??
+    jnsResolverAddress: ((typeof process !== 'undefined'
+      ? process.env.JNS_RESOLVER_ADDRESS
+      : undefined) ??
       tryGetContract('jns', 'resolver', network) ??
       '0x0000000000000000000000000000000000000000') as Address,
-    ipfsGateway: (typeof process !== 'undefined' ? process.env.IPFS_GATEWAY_URL : undefined) ?? getIpfsGatewayUrl(network),
-    arweaveGateway: (typeof process !== 'undefined' ? process.env.ARWEAVE_GATEWAY_URL : undefined) ?? 'https://arweave.net',
+    ipfsGateway:
+      (typeof process !== 'undefined'
+        ? process.env.IPFS_GATEWAY_URL
+        : undefined) ?? getIpfsGatewayUrl(network),
+    arweaveGateway:
+      (typeof process !== 'undefined'
+        ? process.env.ARWEAVE_GATEWAY_URL
+        : undefined) ?? 'https://arweave.net',
     domain: process.env.JNS_DOMAIN ?? 'jejunetwork.org',
   }
 

@@ -20,7 +20,6 @@
  * 5. Access control via on-chain policies
  */
 
-
 import {
   checkHSMAvailability,
   getCurrentNetwork,

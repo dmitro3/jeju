@@ -14,9 +14,9 @@ import {
   Wifi,
 } from 'lucide-react'
 import { useState } from 'react'
+import type { ResidentialProxyNodeType } from '../../lib/schemas'
 import { formatBytes } from '../../lib/utils'
 import { useResidentialProxy } from '../hooks'
-import type { ResidentialProxyNodeType } from '../../lib/schemas'
 
 export function ResidentialProxyPanel() {
   const {
@@ -49,7 +49,8 @@ export function ResidentialProxyPanel() {
     try {
       await register(stakeInput)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to register node'
+      const message =
+        err instanceof Error ? err.message : 'Failed to register node'
       setActionError(message)
       console.error('[ResidentialProxy] Register failed:', err)
     } finally {
@@ -63,7 +64,8 @@ export function ResidentialProxyPanel() {
     try {
       await claimRewards()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to claim rewards'
+      const message =
+        err instanceof Error ? err.message : 'Failed to claim rewards'
       setActionError(message)
       console.error('[ResidentialProxy] Claim failed:', err)
     } finally {
@@ -77,7 +79,8 @@ export function ResidentialProxyPanel() {
     try {
       await updateSettings({ ...settings, node_type: nodeType })
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to update settings'
+      const message =
+        err instanceof Error ? err.message : 'Failed to update settings'
       setActionError(message)
       console.error('[ResidentialProxy] Settings update failed:', err)
     }
@@ -150,7 +153,12 @@ export function ResidentialProxyPanel() {
 
           <div className="space-y-3">
             <div>
-              <label htmlFor="stake-input" className="text-sm text-[#606070] mb-1 block">Stake Amount (ETH)</label>
+              <label
+                htmlFor="stake-input"
+                className="text-sm text-[#606070] mb-1 block"
+              >
+                Stake Amount (ETH)
+              </label>
               <input
                 id="stake-input"
                 type="number"
@@ -186,7 +194,9 @@ export function ResidentialProxyPanel() {
         <div className="card">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Radio className={`w-5 h-5 ${status.is_active ? 'text-[#00ff88]' : 'text-[#606070]'}`} />
+              <Radio
+                className={`w-5 h-5 ${status.is_active ? 'text-[#00ff88]' : 'text-[#606070]'}`}
+              />
               <span className="font-medium">Node Status</span>
             </div>
             <button
@@ -206,7 +216,11 @@ export function ResidentialProxyPanel() {
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex justify-between">
               <span className="text-[#606070]">Status</span>
-              <span className={status.is_active ? 'text-[#00ff88]' : 'text-[#606070]'}>
+              <span
+                className={
+                  status.is_active ? 'text-[#00ff88]' : 'text-[#606070]'
+                }
+              >
                 {status.is_active ? 'Active' : 'Inactive'}
               </span>
             </div>
@@ -216,7 +230,13 @@ export function ResidentialProxyPanel() {
             </div>
             <div className="flex justify-between">
               <span className="text-[#606070]">Coordinator</span>
-              <span className={status.coordinator_connected ? 'text-[#00ff88]' : 'text-red-500'}>
+              <span
+                className={
+                  status.coordinator_connected
+                    ? 'text-[#00ff88]'
+                    : 'text-red-500'
+                }
+              >
                 {status.coordinator_connected ? 'Connected' : 'Disconnected'}
               </span>
             </div>
@@ -323,32 +343,40 @@ export function ResidentialProxyPanel() {
           <h3 className="font-medium">Settings</h3>
 
           <div>
-            <label className="text-sm text-[#606070] mb-2 block">Node Type</label>
+            <span className="text-sm text-[#606070] mb-2 block">Node Type</span>
             <div className="grid grid-cols-3 gap-2">
-              {(['residential', 'datacenter', 'mobile'] as const).map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => handleNodeTypeChange(type)}
-                  className={`p-2 rounded-lg text-sm capitalize ${
-                    settings.node_type === type
-                      ? 'bg-[#00ff88]/20 border border-[#00ff88]/40 text-[#00ff88]'
-                      : 'bg-[#1a1a25] border border-[#2a2a35]'
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
+              {(['residential', 'datacenter', 'mobile'] as const).map(
+                (type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => handleNodeTypeChange(type)}
+                    className={`p-2 rounded-lg text-sm capitalize ${
+                      settings.node_type === type
+                        ? 'bg-[#00ff88]/20 border border-[#00ff88]/40 text-[#00ff88]'
+                        : 'bg-[#1a1a25] border border-[#2a2a35]'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ),
+              )}
             </div>
             <p className="text-xs text-[#606070] mt-1">
-              {settings.node_type === 'residential' && 'Higher rewards for home connections'}
-              {settings.node_type === 'datacenter' && 'Standard rewards for servers'}
-              {settings.node_type === 'mobile' && 'Highest rewards for mobile data'}
+              {settings.node_type === 'residential' &&
+                'Higher rewards for home connections'}
+              {settings.node_type === 'datacenter' &&
+                'Standard rewards for servers'}
+              {settings.node_type === 'mobile' &&
+                'Highest rewards for mobile data'}
             </p>
           </div>
 
           <div>
-            <label htmlFor="max-bandwidth-input" className="text-sm text-[#606070] mb-2 block">
+            <label
+              htmlFor="max-bandwidth-input"
+              className="text-sm text-[#606070] mb-2 block"
+            >
               Max Bandwidth ({settings.max_bandwidth_mbps} Mbps)
             </label>
             <input
@@ -358,14 +386,20 @@ export function ResidentialProxyPanel() {
               max="1000"
               value={settings.max_bandwidth_mbps}
               onChange={(e) =>
-                updateSettings({ ...settings, max_bandwidth_mbps: Number(e.target.value) })
+                updateSettings({
+                  ...settings,
+                  max_bandwidth_mbps: Number(e.target.value),
+                })
               }
               className="w-full"
             />
           </div>
 
           <div>
-            <label htmlFor="max-connections-input" className="text-sm text-[#606070] mb-2 block">
+            <label
+              htmlFor="max-connections-input"
+              className="text-sm text-[#606070] mb-2 block"
+            >
               Max Connections ({settings.max_concurrent_connections})
             </label>
             <input
@@ -375,7 +409,10 @@ export function ResidentialProxyPanel() {
               max="100"
               value={settings.max_concurrent_connections}
               onChange={(e) =>
-                updateSettings({ ...settings, max_concurrent_connections: Number(e.target.value) })
+                updateSettings({
+                  ...settings,
+                  max_concurrent_connections: Number(e.target.value),
+                })
               }
               className="w-full"
             />
@@ -392,9 +429,9 @@ export function ResidentialProxyPanel() {
               How Bandwidth Sharing Works
             </p>
             <p className="text-[#a0a0b0]">
-              Share your unused bandwidth to power the decentralized proxy network.
-              Earn JEJU tokens based on the bandwidth you contribute. Residential
-              IPs earn 1.5x rewards, mobile IPs earn 2x.
+              Share your unused bandwidth to power the decentralized proxy
+              network. Earn JEJU tokens based on the bandwidth you contribute.
+              Residential IPs earn 1.5x rewards, mobile IPs earn 2x.
             </p>
           </div>
         </div>

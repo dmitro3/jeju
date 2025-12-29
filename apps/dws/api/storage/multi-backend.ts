@@ -161,8 +161,13 @@ export class MultiBackendManager {
 
     // IPFS backend
     const network = getCurrentNetwork()
-    const ipfsApiUrl = (typeof process !== 'undefined' ? process.env.IPFS_API_URL : undefined) ?? getIpfsApiUrl(network)
-    const ipfsGatewayUrl = (typeof process !== 'undefined' ? process.env.IPFS_GATEWAY_URL : undefined) ?? getIpfsGatewayUrl(network)
+    const ipfsApiUrl =
+      (typeof process !== 'undefined' ? process.env.IPFS_API_URL : undefined) ??
+      getIpfsApiUrl(network)
+    const ipfsGatewayUrl =
+      (typeof process !== 'undefined'
+        ? process.env.IPFS_GATEWAY_URL
+        : undefined) ?? getIpfsGatewayUrl(network)
 
     if (ipfsApiUrl) {
       this.backends.set('ipfs', {

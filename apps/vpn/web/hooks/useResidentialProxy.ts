@@ -3,10 +3,10 @@ import { invoke } from '../../lib'
 import {
   type ResidentialProxySettings,
   ResidentialProxySettingsSchema,
-  type ResidentialProxyStatus,
-  ResidentialProxyStatusSchema,
   type ResidentialProxyStats,
   ResidentialProxyStatsSchema,
+  type ResidentialProxyStatus,
+  ResidentialProxyStatusSchema,
 } from '../../lib/schemas'
 
 const INITIAL_STATUS: ResidentialProxyStatus = {
@@ -48,7 +48,8 @@ const INITIAL_STATS: ResidentialProxyStats = {
 
 export function useResidentialProxy() {
   const [status, setStatus] = useState<ResidentialProxyStatus>(INITIAL_STATUS)
-  const [settings, setSettings] = useState<ResidentialProxySettings>(INITIAL_SETTINGS)
+  const [settings, setSettings] =
+    useState<ResidentialProxySettings>(INITIAL_SETTINGS)
   const [stats, setStats] = useState<ResidentialProxyStats>(INITIAL_STATS)
   const [error, setError] = useState<Error | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -66,9 +67,21 @@ export function useResidentialProxy() {
         setError(null)
 
         const [statusData, settingsData, statsData] = await Promise.all([
-          invoke('get_residential_proxy_status', {}, ResidentialProxyStatusSchema),
-          invoke('get_residential_proxy_settings', {}, ResidentialProxySettingsSchema),
-          invoke('get_residential_proxy_stats', {}, ResidentialProxyStatsSchema),
+          invoke(
+            'get_residential_proxy_status',
+            {},
+            ResidentialProxyStatusSchema,
+          ),
+          invoke(
+            'get_residential_proxy_settings',
+            {},
+            ResidentialProxySettingsSchema,
+          ),
+          invoke(
+            'get_residential_proxy_stats',
+            {},
+            ResidentialProxyStatsSchema,
+          ),
         ])
 
         if (mountedRef.current && thisFetchId === fetchIdRef.current) {
@@ -84,7 +97,10 @@ export function useResidentialProxy() {
             err instanceof Error ? err : new Error(String(err))
 
           setError(errorInstance)
-          console.error('[useResidentialProxy] Failed to fetch data:', errorInstance)
+          console.error(
+            '[useResidentialProxy] Failed to fetch data:',
+            errorInstance,
+          )
           setIsLoading(false)
           setHasInitialized(true)
         }
@@ -98,12 +114,15 @@ export function useResidentialProxy() {
       mountedRef.current = false
       clearInterval(interval)
     }
-  }, [hasInitialized])
+  }, [])
 
   const updateSettings = useCallback(
     async (newSettings: ResidentialProxySettings) => {
-      const validatedSettings = ResidentialProxySettingsSchema.parse(newSettings)
-      await invoke('set_residential_proxy_settings', { settings: validatedSettings })
+      const validatedSettings =
+        ResidentialProxySettingsSchema.parse(newSettings)
+      await invoke('set_residential_proxy_settings', {
+        settings: validatedSettings,
+      })
 
       if (mountedRef.current) {
         setSettings(validatedSettings)
