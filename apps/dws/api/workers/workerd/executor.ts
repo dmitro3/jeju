@@ -61,7 +61,8 @@ export class WorkerdExecutor implements IWorkerdExecutor {
       stderr: string
     }
 
-    const execUrl = this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
+    const execUrl =
+      this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
 
     async function fileExists(path: string): Promise<boolean> {
       const result = await fetch(execUrl, {
@@ -133,7 +134,8 @@ export class WorkerdExecutor implements IWorkerdExecutor {
     if (this.initialized) return
 
     // Create work directory via DWS exec API (workerd-compatible)
-    const execUrl = this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
+    const execUrl =
+      this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
     const mkdirResult = await fetch(execUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -179,7 +181,8 @@ export class WorkerdExecutor implements IWorkerdExecutor {
 
     // Download code from IPFS
     const codeDir = `${this.config.workDir}/${worker.id}`
-    const execUrl = this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
+    const execUrl =
+      this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
 
     // Create directory via DWS exec API
     const mkdirResult = await fetch(execUrl, {
@@ -250,7 +253,8 @@ export class WorkerdExecutor implements IWorkerdExecutor {
 
     // Generate workerd config
     const configContent = generateWorkerConfig(worker, port)
-    const execUrl = this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
+    const execUrl =
+      this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
 
     // Write config file via DWS exec API
     const writeConfigResult = await fetch(execUrl, {
@@ -597,7 +601,8 @@ export class WorkerdExecutor implements IWorkerdExecutor {
 
   private async extractTarball(data: Buffer, destDir: string): Promise<void> {
     const tarPath = `${destDir}/code.tar.gz`
-    const execUrl = this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
+    const execUrl =
+      this.config.execUrl ?? `http://${getLocalhostHost()}:4020/exec`
 
     // Write tarball via DWS exec API
     const writeResult = await fetch(execUrl, {

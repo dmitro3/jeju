@@ -8,10 +8,7 @@
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  getLocalhostHost,
-  getRpcUrl,
-} from '@jejunetwork/config'
+import { getRpcUrl } from '@jejunetwork/config'
 import {
   type Address,
   createPublicClient,

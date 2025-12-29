@@ -89,8 +89,14 @@ const BANDWIDTH_REWARDS_ABI = [
   },
 ] as const
 
-const NODE_TYPES = { unknown: 0, datacenter: 1, residential: 2, mobile: 3 } as const
+const NODE_TYPES = {
+  unknown: 0,
+  datacenter: 1,
+  residential: 2,
+  mobile: 3,
+} as const
 type NodeTypeKey = keyof typeof NODE_TYPES
+type TxHash = `0x${string}`
 
 interface NodeData {
   operator: Address
@@ -133,7 +139,8 @@ export class BandwidthContractService {
   constructor(contractAddress: Address, rpcUrl: string, chainId: number) {
     this.contractAddress = contractAddress
     this.rpcUrl = rpcUrl
-    this.chain = chainId === 1 ? mainnet : chainId === 10 ? optimism : optimismSepolia
+    this.chain =
+      chainId === 1 ? mainnet : chainId === 10 ? optimism : optimismSepolia
     this.publicClient = createPublicClient({
       chain: this.chain,
       transport: http(rpcUrl),
@@ -184,7 +191,7 @@ export class BandwidthContractService {
     nodeType: string,
     region: string,
     stakeAmount: string,
-  ): Promise<`0x${string}`> {
+  ): Promise<TxHash> {
     const walletClient = createWalletClient({
       account,
       chain: this.chain,
@@ -200,7 +207,7 @@ export class BandwidthContractService {
     })
   }
 
-  async claimRewards(account: PrivateKeyAccount): Promise<`0x${string}`> {
+  async claimRewards(account: PrivateKeyAccount): Promise<TxHash> {
     const walletClient = createWalletClient({
       account,
       chain: this.chain,
@@ -222,37 +229,77 @@ export class BandwidthContractService {
       functionName: 'getNode',
       args: [nodeAddress],
     })
-    return result as unknown as NodeData
+    return {
+      operator: result.operator,
+      stake: result.stake,
+      registeredAt: result.registeredAt,
+      agentId: result.agentId,
+      nodeType: result.nodeType,
+      region: result.region,
+      isActive: result.isActive,
+      isFrozen: result.isFrozen,
+      totalBytesShared: result.totalBytesShared,
+      totalSessions: result.totalSessions,
+      totalEarnings: result.totalEarnings,
+      lastClaimTime: result.lastClaimTime,
+    }
   }
 
-  private async readPerformance(nodeAddress: Address): Promise<PerformanceData> {
-    const [uptimeScore, successRate, avgLatencyMs, avgBandwidthMbps, lastUpdated] =
-      await this.publicClient.readContract({
-        address: this.contractAddress,
-        abi: BANDWIDTH_REWARDS_ABI,
-        functionName: 'nodePerformance',
-        args: [nodeAddress],
-      })
-    return { uptimeScore, successRate, avgLatencyMs, avgBandwidthMbps, lastUpdated }
+  private async readPerformance(
+    nodeAddress: Address,
+  ): Promise<PerformanceData> {
+    const [
+      uptimeScore,
+      successRate,
+      avgLatencyMs,
+      avgBandwidthMbps,
+      lastUpdated,
+    ] = await this.publicClient.readContract({
+      address: this.contractAddress,
+      abi: BANDWIDTH_REWARDS_ABI,
+      functionName: 'nodePerformance',
+      args: [nodeAddress],
+    })
+    return {
+      uptimeScore,
+      successRate,
+      avgLatencyMs,
+      avgBandwidthMbps,
+      lastUpdated,
+    }
   }
 
-  private async readPendingReward(nodeAddress: Address): Promise<PendingRewardData> {
+  private async readPendingReward(
+    nodeAddress: Address,
+  ): Promise<PendingRewardData> {
     const result = await this.publicClient.readContract({
       address: this.contractAddress,
       abi: BANDWIDTH_REWARDS_ABI,
       functionName: 'getPendingReward',
       args: [nodeAddress],
     })
-    return result as unknown as PendingRewardData
+    return {
+      bytesContributed: result.bytesContributed,
+      sessionsHandled: result.sessionsHandled,
+      periodStart: result.periodStart,
+      periodEnd: result.periodEnd,
+      calculatedReward: result.calculatedReward,
+      claimed: result.claimed,
+    }
   }
 }
 
 export function createBandwidthContractService(): BandwidthContractService | null {
-  const contractAddress = process.env.BANDWIDTH_REWARDS_CONTRACT as Address | undefined
+  const contractAddress = process.env.BANDWIDTH_REWARDS_CONTRACT as
+    | Address
+    | undefined
   const rpcUrl = process.env.JEJU_RPC_URL ?? process.env.RPC_URL
   const chainId = parseInt(process.env.CHAIN_ID ?? '10', 10)
 
-  if (!contractAddress || contractAddress === '0x0000000000000000000000000000000000000000') {
+  if (
+    !contractAddress ||
+    contractAddress === '0x0000000000000000000000000000000000000000'
+  ) {
     console.warn('[BandwidthContract] No contract address configured')
     return null
   }

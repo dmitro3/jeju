@@ -15,22 +15,23 @@
 import { afterAll, beforeAll } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { Subprocess } from 'bun'
 import {
+  CORE_PORTS,
   getDwsApiUrl,
   getL2RpcUrl,
   getLocalhostHost,
 } from '@jejunetwork/config'
+import type { Subprocess } from 'bun'
 
 // Configuration
 const ANVIL_PORT = parseInt(process.env.ANVIL_PORT ?? '9545', 10)
-const DWS_PORT = parseInt(process.env.PORT ?? '4030', 10)
-const INFERENCE_PORT = parseInt(process.env.INFERENCE_PORT ?? '4031', 10)
+const DWS_PORT = CORE_PORTS.DWS_API.get()
+const INFERENCE_PORT = CORE_PORTS.DWS_INFERENCE.get()
 
 const RPC_URL = getL2RpcUrl()
 const DWS_URL = getDwsApiUrl()
 const INFERENCE_URL =
-  process.env.INFERENCE_URL ||
+  (typeof process !== 'undefined' ? process.env.INFERENCE_URL : undefined) ||
   `http://${getLocalhostHost()}:${INFERENCE_PORT}`
 
 // Process management
@@ -404,9 +405,14 @@ export function getTestEnv(): {
   inferenceUrl: string
 } {
   return {
-    dwsUrl: process.env.DWS_URL || DWS_URL,
+    dwsUrl:
+      (typeof process !== 'undefined' ? process.env.DWS_URL : undefined) ??
+      DWS_URL,
     rpcUrl: RPC_URL,
-    inferenceUrl: process.env.INFERENCE_URL || INFERENCE_URL,
+    inferenceUrl:
+      (typeof process !== 'undefined'
+        ? process.env.INFERENCE_URL
+        : undefined) ?? INFERENCE_URL,
   }
 }
 

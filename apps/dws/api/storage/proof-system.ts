@@ -13,12 +13,12 @@
  * reconstructed or held in memory.
  */
 
+import { createHash, randomBytes } from 'node:crypto'
 import {
   getCurrentNetwork,
   getRpcUrl,
   isProductionEnv,
 } from '@jejunetwork/config'
-import { createHash, randomBytes } from 'node:crypto'
 import type { Address } from 'viem'
 import {
   createWalletClient,
@@ -163,7 +163,9 @@ const DEFAULT_PROOF_CONFIG: StorageProofConfig = {
     getRpcUrl(getCurrentNetwork()),
   // KMS key ID is a secret - keep as env var
   kmsKeyId:
-    typeof process !== 'undefined' ? process.env.STORAGE_PROOF_KMS_KEY_ID : undefined,
+    typeof process !== 'undefined'
+      ? process.env.STORAGE_PROOF_KMS_KEY_ID
+      : undefined,
   ownerAddress:
     typeof process !== 'undefined'
       ? (process.env.STORAGE_PROOF_OWNER_ADDRESS as Address | undefined)

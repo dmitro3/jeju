@@ -316,8 +316,7 @@ export class X402Client {
   constructor(config: X402ClientConfig) {
     this.config = config
     const chainConfig = CHAIN_CONFIGS[config.chainId]
-    const rpcUrl =
-      config.rpcUrl ?? chainConfig.rpcUrl ?? getL2RpcUrl()
+    const rpcUrl = config.rpcUrl ?? chainConfig.rpcUrl ?? getL2RpcUrl()
 
     const chain: Chain = {
       id: config.chainId,

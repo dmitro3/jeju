@@ -80,11 +80,26 @@ export function loadContractAddresses(
 
   // Check environment overrides first
   const envOverrides: Record<string, string | undefined> = {
-    feedRegistry: typeof process !== 'undefined' ? process.env.FEED_REGISTRY_ADDRESS : undefined,
-    reportVerifier: typeof process !== 'undefined' ? process.env.REPORT_VERIFIER_ADDRESS : undefined,
-    committeeManager: typeof process !== 'undefined' ? process.env.COMMITTEE_MANAGER_ADDRESS : undefined,
-    feeRouter: typeof process !== 'undefined' ? process.env.FEE_ROUTER_ADDRESS : undefined,
-    networkConnector: typeof process !== 'undefined' ? process.env.NETWORK_CONNECTOR_ADDRESS : undefined,
+    feedRegistry:
+      typeof process !== 'undefined'
+        ? process.env.FEED_REGISTRY_ADDRESS
+        : undefined,
+    reportVerifier:
+      typeof process !== 'undefined'
+        ? process.env.REPORT_VERIFIER_ADDRESS
+        : undefined,
+    committeeManager:
+      typeof process !== 'undefined'
+        ? process.env.COMMITTEE_MANAGER_ADDRESS
+        : undefined,
+    feeRouter:
+      typeof process !== 'undefined'
+        ? process.env.FEE_ROUTER_ADDRESS
+        : undefined,
+    networkConnector:
+      typeof process !== 'undefined'
+        ? process.env.NETWORK_CONNECTOR_ADDRESS
+        : undefined,
   }
 
   for (const key of REQUIRED_ADDRESSES) {

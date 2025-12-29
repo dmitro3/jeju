@@ -170,10 +170,15 @@ export class PoCVerifier {
   async initializeSecureSigning(): Promise<void> {
     if (this.initialized) return
 
-    const kmsKeyId = typeof process !== 'undefined' ? process.env.POC_VERIFIER_KMS_KEY_ID : undefined
-    const ownerAddress = (typeof process !== 'undefined' ? process.env.POC_VERIFIER_OWNER_ADDRESS : undefined) as
-      | Address
-      | undefined
+    const kmsKeyId =
+      typeof process !== 'undefined'
+        ? process.env.POC_VERIFIER_KMS_KEY_ID
+        : undefined
+    const ownerAddress = (
+      typeof process !== 'undefined'
+        ? process.env.POC_VERIFIER_OWNER_ADDRESS
+        : undefined
+    ) as Address | undefined
     const isProduction = isProductionEnv()
 
     if (kmsKeyId && ownerAddress) {

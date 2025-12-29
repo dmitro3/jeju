@@ -163,7 +163,7 @@ function getMimeType(filePath: string): string {
 
 export class StaticAssetService {
   private config: StaticAssetConfig
-  private client: NodeClient | null
+  private client: SecureNodeClient | null
   private torrent: HybridTorrentService | null = null
   private running = false
   private server: http.Server | null = null
@@ -186,7 +186,7 @@ export class StaticAssetService {
   private manifestRefreshInterval: ReturnType<typeof setInterval> | null = null
 
   constructor(
-    client: NodeClient | null,
+    client: SecureNodeClient | null,
     config: Partial<StaticAssetConfig> = {},
   ) {
     this.client = client
@@ -438,7 +438,7 @@ export class StaticAssetService {
 // Factory
 
 export function createStaticAssetService(
-  client: NodeClient | null,
+  client: SecureNodeClient | null,
   config?: Partial<StaticAssetConfig>,
 ): StaticAssetService {
   return new StaticAssetService(client, config)

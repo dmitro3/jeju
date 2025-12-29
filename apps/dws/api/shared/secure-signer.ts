@@ -9,10 +9,7 @@
  * ```
  */
 
-import {
-  createKMSSigner,
-  type KMSSigner,
-} from '@jejunetwork/kms'
+import { createKMSSigner } from '@jejunetwork/kms'
 import type { Address, Hex } from 'viem'
 
 /**

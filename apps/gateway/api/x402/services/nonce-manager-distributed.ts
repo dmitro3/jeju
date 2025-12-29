@@ -1,7 +1,7 @@
 import {
+  getCurrentNetwork,
   getDWSCacheUrl,
   getLocalhostHost,
-  getCurrentNetwork,
 } from '@jejunetwork/config'
 import { readContract } from '@jejunetwork/contracts'
 import { validateOrNull, ZERO_ADDRESS } from '@jejunetwork/types'
@@ -21,7 +21,9 @@ const CacheGetResponseSchema = z.object({
 
 const network = getCurrentNetwork()
 const CACHE_URL =
-  (typeof process !== 'undefined' ? process.env.CACHE_SERVICE_URL : undefined) ??
+  (typeof process !== 'undefined'
+    ? process.env.CACHE_SERVICE_URL
+    : undefined) ??
   getDWSCacheUrl(network) ??
   `http://${getLocalhostHost()}:4015`
 const CACHE_NS = process.env.NONCE_CACHE_NAMESPACE ?? 'facilitator-nonces'

@@ -1,7 +1,7 @@
 /** REST API for VPN operations */
 
 import { Elysia } from 'elysia'
-import { type Address } from 'viem'
+import type { Address } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { verifyAuth } from './auth'
 import {
@@ -14,11 +14,12 @@ import {
   ProxyRequestSchema,
   type VPNNodeState,
 } from './schemas'
-import type { VPNServiceContext } from './types'
 import { createBandwidthContractService } from './services/bandwidth-contract'
+import type { VPNServiceContext } from './types'
 
 // Initialize contract service (null if not configured)
 const bandwidthContract = createBandwidthContractService()
+
 import {
   calculateContributionRatio,
   getOrCreateContribution,
@@ -425,7 +426,9 @@ export function createRESTRouter(ctx: VPNServiceContext) {
 
       // If contract is configured, fetch real data from blockchain
       if (bandwidthContract) {
-        const status = await bandwidthContract.getNodeStatus(auth.address as Address)
+        const status = await bandwidthContract.getNodeStatus(
+          auth.address as Address,
+        )
         return status
       }
 
@@ -504,8 +507,7 @@ export function createRESTRouter(ctx: VPNServiceContext) {
           settings.max_concurrent_connections ??
           existing?.max_concurrent_connections ??
           50,
-        allowed_ports:
-          settings.allowed_ports ??
+        allowed_ports: settings.allowed_ports ??
           existing?.allowed_ports ?? [80, 443, 8080, 8443],
         blocked_domains:
           settings.blocked_domains ?? existing?.blocked_domains ?? [],
@@ -577,7 +579,7 @@ export function createRESTRouter(ctx: VPNServiceContext) {
           throw new Error('Private key does not match authenticated address')
         }
 
-        const result = await bandwidthContract.registerNode(
+        const hash = await bandwidthContract.registerNode(
           account,
           node_type ?? 'residential',
           region ?? 'unknown',
@@ -585,10 +587,10 @@ export function createRESTRouter(ctx: VPNServiceContext) {
         )
 
         return {
-          success: result.success,
+          success: true,
           node_address: auth.address,
           stake_amount,
-          transaction_hash: result.hash,
+          transaction_hash: hash,
         }
       }
 
@@ -636,11 +638,11 @@ export function createRESTRouter(ctx: VPNServiceContext) {
           throw new Error('Private key does not match authenticated address')
         }
 
-        const result = await bandwidthContract.claimRewards(account)
+        const hash = await bandwidthContract.claimRewards(account)
 
         return {
-          success: result.success,
-          transaction_hash: result.hash,
+          success: true,
+          transaction_hash: hash,
         }
       }
 

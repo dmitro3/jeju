@@ -14,6 +14,7 @@ import {
   getRpcUrl,
   tryGetContract,
 } from '@jejunetwork/config'
+import type { Address } from 'viem'
 import type { EdgeNodeConfig } from '../types'
 import { EdgeNodeServer } from './server'
 

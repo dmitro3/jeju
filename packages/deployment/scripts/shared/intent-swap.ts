@@ -8,11 +8,9 @@
  * - No locked pools, better prices via competition
  */
 
+import { getChainId } from '@jejunetwork/config'
 // Import IntentStatus from @jejunetwork/types (OIF standard)
 import type { IntentStatus } from '@jejunetwork/types'
-import {
-  getChainId,
-} from '@jejunetwork/config'
 import {
   type Address,
   encodeAbiParameters,

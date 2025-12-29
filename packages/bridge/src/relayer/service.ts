@@ -1315,13 +1315,19 @@ if (import.meta.main) {
       },
     ],
     solanaConfig: {
-      rpcUrl: requireEnv('SOLANA_RPC_URL', getSolanaRpcUrl() || `http://${getLocalhostHost()}:8899`),
+      rpcUrl: requireEnv(
+        'SOLANA_RPC_URL',
+        getSolanaRpcUrl() || `http://${getLocalhostHost()}:8899`,
+      ),
       bridgeProgramId: requireEnv('BRIDGE_PROGRAM_ID'),
       evmLightClientProgramId: requireEnv('EVM_LIGHT_CLIENT_PROGRAM_ID'),
       keypairPath: requireEnv('SOLANA_KEYPAIR', '~/.config/solana/id.json'),
     },
     proverEndpoint: requireEnv('PROVER_ENDPOINT', getBridgeProverUrl()),
-    teeEndpoint: requireEnv('TEE_ENDPOINT', `http://${getLocalhostHost()}:8080`),
+    teeEndpoint: requireEnv(
+      'TEE_ENDPOINT',
+      `http://${getLocalhostHost()}:8080`,
+    ),
     batchSize: 10,
     batchTimeoutMs: 30000,
     retryAttempts: 3,

@@ -37,10 +37,7 @@ interface SolanaSlotResponse {
   result: number
 }
 
-import {
-  getLocalhostHost,
-  getSolanaRpcUrl,
-} from '@jejunetwork/config'
+import { getLocalhostHost, getSolanaRpcUrl } from '@jejunetwork/config'
 
 const SOLANA_RPC = getSolanaRpcUrl() ?? `http://${getLocalhostHost()}:8899`
 

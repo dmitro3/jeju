@@ -23,7 +23,6 @@
  * ```
  */
 
-import { getLocalhostHost } from '@jejunetwork/config'
 import { type EQLiteClient, getEQLite } from '@jejunetwork/db'
 import pino from 'pino'
 

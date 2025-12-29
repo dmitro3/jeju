@@ -1,5 +1,5 @@
-import { z } from 'zod'
 import type { Address } from 'viem'
+import { z } from 'zod'
 import { AddressSchema } from './validation'
 
 export enum RelayChainType {
@@ -107,7 +107,9 @@ export const PendingBandwidthRewardSchema = z.object({
   calculatedReward: z.string(),
   claimed: z.boolean(),
 })
-export type PendingBandwidthReward = z.infer<typeof PendingBandwidthRewardSchema>
+export type PendingBandwidthReward = z.infer<
+  typeof PendingBandwidthRewardSchema
+>
 
 export const BandwidthConfigSchema = z.object({
   enabled: z.boolean(),
@@ -169,14 +171,34 @@ export const AggregatedQoSSchema = z.object({
 export type AggregatedQoS = z.infer<typeof AggregatedQoSSchema>
 
 export interface RPCRegistryEvents {
-  NodeRegistered: { node: Address; region: string; stake: bigint; agentId: bigint }
+  NodeRegistered: {
+    node: Address
+    region: string
+    stake: bigint
+    agentId: bigint
+  }
   ChainEndpointAdded: { node: Address; chainId: bigint; endpoint: string }
-  UsageReported: { node: Address; requests: bigint; computeUnits: bigint; errors: bigint }
-  PerformanceUpdated: { node: Address; uptime: bigint; successRate: bigint; latency: bigint }
+  UsageReported: {
+    node: Address
+    requests: bigint
+    computeUnits: bigint
+    errors: bigint
+  }
+  PerformanceUpdated: {
+    node: Address
+    uptime: bigint
+    successRate: bigint
+    latency: bigint
+  }
 }
 
 export interface BandwidthRewardsEvents {
-  NodeRegistered: { node: Address; nodeType: number; region: string; stake: bigint }
+  NodeRegistered: {
+    node: Address
+    nodeType: number
+    region: string
+    stake: bigint
+  }
   BandwidthReported: { node: Address; bytes: bigint; sessions: bigint }
   RewardsClaimed: { node: Address; amount: bigint; bytes: bigint }
 }

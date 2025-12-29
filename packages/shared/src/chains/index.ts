@@ -6,10 +6,10 @@
  */
 
 import {
-  getBranding,
-  getLocalhostHost,
-  getL2RpcUrl,
   type BrandingConfig,
+  getBranding,
+  getL2RpcUrl,
+  getLocalhostHost,
 } from '@jejunetwork/config'
 import type { Chain } from 'viem'
 
@@ -41,7 +41,10 @@ export function getLocalnetChain(): Chain {
       default: { http: [getL2RpcUrl()] },
     },
     blockExplorers: {
-      default: { name: 'Local Explorer', url: `http://${getLocalhostHost()}:4000` },
+      default: {
+        name: 'Local Explorer',
+        url: `http://${getLocalhostHost()}:4000`,
+      },
     },
   }
 }

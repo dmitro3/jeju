@@ -43,19 +43,20 @@ import {
 import { z } from 'zod'
 
 // Infrastructure configuration from environment
+// Fields have defaults so they are always defined (not optional)
 const InfraConfigSchema = z.object({
-  eqliteEndpoint: z.string().optional(),
-  redisUrl: z.string().optional(),
-  l1RpcUrl: z.string().optional(),
-  l2RpcUrl: z.string().optional(),
-  solanaRpcUrl: z.string().optional(),
-  ipfsApiUrl: z.string().optional(),
-  gatewayUrl: z.string().optional(),
-  indexerUrl: z.string().optional(),
-  oracleUrl: z.string().optional(),
-  computeUrl: z.string().optional(),
-  messagingUrl: z.string().optional(),
-  teeAgentUrl: z.string().optional(),
+  eqliteEndpoint: z.string(),
+  redisUrl: z.string(),
+  l1RpcUrl: z.string(),
+  l2RpcUrl: z.string(),
+  solanaRpcUrl: z.string(),
+  ipfsApiUrl: z.string(),
+  gatewayUrl: z.string(),
+  indexerUrl: z.string(),
+  oracleUrl: z.string(),
+  computeUrl: z.string(),
+  messagingUrl: z.string(),
+  teeAgentUrl: z.string(),
 })
 
 type InfraConfig = z.infer<typeof InfraConfigSchema>
@@ -64,28 +65,70 @@ export function getInfraConfig(): InfraConfig {
   const host = getLocalhostHost()
   return InfraConfigSchema.parse({
     eqliteEndpoint:
-      process.env.EQLITE_ENDPOINT ??
-      process.env.EQLITE_BLOCK_PRODUCER_ENDPOINT ??
-      getEQLiteBlockProducerUrl(),
-    redisUrl: process.env.REDIS_URL ?? `redis://${host}:6379`,
-    l1RpcUrl: process.env.L1_RPC_URL ?? getL1RpcUrl(),
-    l2RpcUrl: process.env.L2_RPC_URL ?? process.env.JEJU_RPC_URL ?? getRpcUrl(),
+      (typeof process !== 'undefined'
+        ? process.env.EQLITE_ENDPOINT
+        : undefined) ??
+      (typeof process !== 'undefined'
+        ? process.env.EQLITE_BLOCK_PRODUCER_ENDPOINT
+        : undefined) ??
+      getEQLiteBlockProducerUrl() ??
+      `http://${host}:4401`,
+    redisUrl:
+      (typeof process !== 'undefined' ? process.env.REDIS_URL : undefined) ??
+      `redis://${host}:6379`,
+    l1RpcUrl:
+      (typeof process !== 'undefined' ? process.env.L1_RPC_URL : undefined) ??
+      getL1RpcUrl() ??
+      `http://${host}:6545`,
+    l2RpcUrl:
+      (typeof process !== 'undefined' ? process.env.L2_RPC_URL : undefined) ??
+      (typeof process !== 'undefined' ? process.env.JEJU_RPC_URL : undefined) ??
+      getRpcUrl() ??
+      `http://${host}:6546`,
     solanaRpcUrl:
-      process.env.SOLANA_RPC_URL ?? getSolanaRpcUrl() ?? `http://${host}:8899`,
-    ipfsApiUrl: process.env.IPFS_API_URL ?? getIpfsApiUrl(),
-    gatewayUrl: process.env.GATEWAY_URL ?? `http://${host}:8787`,
+      (typeof process !== 'undefined'
+        ? process.env.SOLANA_RPC_URL
+        : undefined) ??
+      getSolanaRpcUrl() ??
+      `http://${host}:8899`,
+    ipfsApiUrl:
+      (typeof process !== 'undefined' ? process.env.IPFS_API_URL : undefined) ??
+      getIpfsApiUrl() ??
+      `http://${host}:5001`,
+    gatewayUrl:
+      (typeof process !== 'undefined' ? process.env.GATEWAY_URL : undefined) ??
+      getServiceUrl('gateway', 'api') ??
+      `http://${host}:8787`,
     indexerUrl:
-      process.env.INDEXER_GRAPHQL_URL ?? getIndexerGraphqlUrl(),
-    oracleUrl: process.env.ORACLE_URL ?? getOracleUrl(),
+      (typeof process !== 'undefined'
+        ? process.env.INDEXER_GRAPHQL_URL
+        : undefined) ??
+      getIndexerGraphqlUrl() ??
+      `http://${host}:4350/graphql`,
+    oracleUrl:
+      (typeof process !== 'undefined' ? process.env.ORACLE_URL : undefined) ??
+      getOracleUrl() ??
+      `http://${host}:4301`,
     computeUrl:
-      process.env.COMPUTE_URL ??
-      process.env.COMPUTE_BRIDGE_URL ??
-      getServiceUrl('compute'),
-    messagingUrl: process.env.MESSAGING_URL ?? `http://${host}:4201`,
+      (typeof process !== 'undefined' ? process.env.COMPUTE_URL : undefined) ??
+      (typeof process !== 'undefined'
+        ? process.env.COMPUTE_BRIDGE_URL
+        : undefined) ??
+      getServiceUrl('compute', 'marketplace') ??
+      `http://${host}:4500`,
+    messagingUrl:
+      (typeof process !== 'undefined'
+        ? process.env.MESSAGING_URL
+        : undefined) ?? `http://${host}:4201`,
     teeAgentUrl:
-      process.env.TEE_AGENT_URL ??
-      process.env.OAUTH3_TEE_URL ??
-      getOAuth3Url(),
+      (typeof process !== 'undefined'
+        ? process.env.TEE_AGENT_URL
+        : undefined) ??
+      (typeof process !== 'undefined'
+        ? process.env.OAUTH3_TEE_URL
+        : undefined) ??
+      getOAuth3Url() ??
+      `http://${host}:4001`,
   })
 }
 

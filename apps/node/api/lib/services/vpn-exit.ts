@@ -1464,7 +1464,7 @@ class NoiseIKpsk2 {
 // VPN Exit Service
 
 export class VPNExitService {
-  private client: NodeClient
+  private client: SecureNodeClient
   private config: VPNExitConfig
   private running = false
   private clients = new Map<string, VPNClient>()
@@ -1496,7 +1496,7 @@ export class VPNExitService {
   private dosState: DoSState
   private dosResetInterval: ReturnType<typeof setInterval> | null = null
 
-  constructor(client: NodeClient, config: Partial<VPNExitConfig>) {
+  constructor(client: SecureNodeClient, config: Partial<VPNExitConfig>) {
     this.client = client
 
     const parsedConfig = VPNExitConfigSchema.parse({
@@ -2551,7 +2551,7 @@ export class VPNExitService {
 // Factory
 
 export function createVPNExitService(
-  client: NodeClient,
+  client: SecureNodeClient,
   config?: Partial<VPNExitConfig>,
 ): VPNExitService {
   return new VPNExitService(client, config ?? {})

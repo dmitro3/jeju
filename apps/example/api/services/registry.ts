@@ -132,7 +132,9 @@ class RegistryServiceImpl implements RegistryService {
       description: 'A template for decentralized applications on Jeju Network',
       owner: MOCK_DEPLOYER_ADDRESS,
       council: MOCK_COUNCIL_ADDRESS,
-      redirectUris: [`http://${getLocalhostHost()}:${frontendPort}/oauth3/callback`],
+      redirectUris: [
+        `http://${getLocalhostHost()}:${frontendPort}/oauth3/callback`,
+      ],
       allowedProviders: [
         AuthProvider.WALLET,
         AuthProvider.GITHUB,
@@ -192,7 +194,7 @@ class RegistryServiceImpl implements RegistryService {
     const teeAgentUrl =
       (typeof process !== 'undefined'
         ? process.env.OAUTH3_TEE_AGENT_URL
-        : undefined) ||
+        : undefined) ??
       (network === 'localnet' ? `http://${host}:8004` : getOAuth3Url(network))
     const mockAttestation: TEEAttestation = {
       quote: MOCK_HEX_ZERO,
