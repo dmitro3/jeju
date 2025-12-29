@@ -387,5 +387,7 @@ export {
   type DecodedMessage as XMTPDecodedMessage,
   type Conversation as XMTPConversation,
   type Conversations as XMTPConversations,
+  type Identifier as XMTPIdentifier,
+  type IdentifierKind,
   ApiUrls as XMTPApiUrls,
 } from '@xmtp/node-sdk'

@@ -10,6 +10,7 @@ import {
   lookupFidByAddress,
   XMTPClient,
   type XMTPSigner,
+  type IdentifierKind,
 } from '@jejunetwork/messaging'
 import { createKMSSigner, type KMSSigner } from '@jejunetwork/kms'
 import { createLogger } from '@jejunetwork/shared'
@@ -160,7 +161,7 @@ function createXMTPKMSSigner(kmsSigner: KMSSigner, address: Address): XMTPSigner
     type: 'EOA',
     getIdentifier: () => ({
       identifier: address.toLowerCase(),
-      identifierKind: 'Ethereum' as const,
+      identifierKind: 0 as IdentifierKind, // Ethereum
     }),
     signMessage: async (message: string): Promise<Uint8Array> => {
       const result = await kmsSigner.signMessage(message)
@@ -540,7 +541,7 @@ class WalletMessagingService {
     if (params.recipientAddress && this.xmtpClient) {
       const dm = await this.xmtpClient.conversations.newDmWithIdentifier({
         identifier: params.recipientAddress.toLowerCase(),
-        identifierKind: 'Ethereum',
+        identifierKind: 0 as IdentifierKind, // Ethereum
       })
 
       const messageId = await dm.send(params.text)
