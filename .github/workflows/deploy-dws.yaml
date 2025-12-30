@@ -1,0 +1,331 @@
+name: Deploy DWS Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - testnet
+          - mainnet
+      component:
+        description: 'Component to deploy'
+        required: true
+        type: choice
+        options:
+          - all
+          - dws
+          - sqlit
+          - registry
+          - jns-dns
+          - sequencer
+          - contracts
+      dry_run:
+        description: 'Dry run (no actual deployment)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  KUBECONFIG_SECRET: ${{ secrets.KUBECONFIG }}
+  AWS_REGION: us-east-1
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      values_file: ${{ steps.set-values.outputs.values_file }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set values file
+        id: set-values
+        run: |
+          if [ "${{ inputs.environment }}" = "mainnet" ]; then
+            echo "values_file=values-decentralized.yaml" >> $GITHUB_OUTPUT
+          else
+            echo "values_file=values-testnet.yaml" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Helm lint
+        run: |
+          helm lint packages/deployment/kubernetes/helm/dws --values packages/deployment/kubernetes/helm/dws/${{ steps.set-values.outputs.values_file }}
+          helm lint packages/deployment/kubernetes/helm/sqlit
+          helm lint packages/deployment/kubernetes/helm/dws-registry
+          helm lint packages/deployment/kubernetes/helm/jns-dns
+          helm lint packages/deployment/kubernetes/helm/sequencer
+
+  deploy-contracts:
+    name: Deploy Smart Contracts
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.component == 'all' || inputs.component == 'contracts'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Build contracts
+        working-directory: packages/contracts
+        run: forge build
+
+      - name: Deploy DWS Infrastructure contracts
+        if: inputs.dry_run != true
+        working-directory: packages/contracts
+        env:
+          PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: |
+          if [ "${{ inputs.environment }}" = "mainnet" ]; then
+            forge script script/DeployDWSInfra.s.sol:DeployDWSInfra \
+              --rpc-url jeju \
+              --broadcast \
+              --verify
+          else
+            forge script script/DeployDWSInfra.s.sol:DeployDWSInfra \
+              --rpc-url jeju_testnet \
+              --broadcast
+          fi
+
+      - name: Deploy Governance contracts
+        if: inputs.dry_run != true
+        working-directory: packages/contracts
+        env:
+          PRIVATE_KEY: ${{ secrets.DEPLOYER_PRIVATE_KEY }}
+        run: |
+          if [ "${{ inputs.environment }}" = "mainnet" ]; then
+            forge script script/DeployGovernance.s.sol:DeployGovernance \
+              --rpc-url jeju \
+              --broadcast \
+              --verify
+          else
+            forge script script/DeployGovernance.s.sol:DeployGovernance \
+              --rpc-url jeju_testnet \
+              --broadcast
+          fi
+
+      - name: Upload deployment artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contract-deployments
+          path: packages/contracts/deployments/
+
+  deploy-dws:
+    name: Deploy DWS
+    runs-on: ubuntu-latest
+    needs: [validate, deploy-contracts]
+    if: (inputs.component == 'all' || inputs.component == 'dws') && always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy DWS
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'dws' || 'dws-testnet' }}"
+          VALUES_FILE="${{ needs.validate.outputs.values_file }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            helm upgrade --install dws packages/deployment/kubernetes/helm/dws \
+              --namespace $NAMESPACE \
+              --values packages/deployment/kubernetes/helm/dws/$VALUES_FILE \
+              --dry-run
+          else
+            helm upgrade --install dws packages/deployment/kubernetes/helm/dws \
+              --namespace $NAMESPACE \
+              --values packages/deployment/kubernetes/helm/dws/$VALUES_FILE \
+              --create-namespace \
+              --wait \
+              --timeout 10m
+          fi
+
+  deploy-sqlit:
+    name: Deploy SQLit
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.component == 'all' || inputs.component == 'sqlit'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy SQLit
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'dws' || 'dws-testnet' }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            helm upgrade --install sqlit packages/deployment/kubernetes/helm/sqlit \
+              --namespace $NAMESPACE \
+              --dry-run
+          else
+            helm upgrade --install sqlit packages/deployment/kubernetes/helm/sqlit \
+              --namespace $NAMESPACE \
+              --create-namespace \
+              --wait \
+              --timeout 10m
+          fi
+
+  deploy-registry:
+    name: Deploy Container Registry
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.component == 'all' || inputs.component == 'registry'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy Container Registry
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'dws' || 'dws-testnet' }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            helm upgrade --install registry packages/deployment/kubernetes/helm/dws-registry \
+              --namespace $NAMESPACE \
+              --dry-run
+          else
+            helm upgrade --install registry packages/deployment/kubernetes/helm/dws-registry \
+              --namespace $NAMESPACE \
+              --create-namespace \
+              --wait \
+              --timeout 10m
+          fi
+
+  deploy-jns-dns:
+    name: Deploy JNS DNS
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.component == 'all' || inputs.component == 'jns-dns'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy JNS DNS
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'dws' || 'dws-testnet' }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            helm upgrade --install jns-dns packages/deployment/kubernetes/helm/jns-dns \
+              --namespace $NAMESPACE \
+              --dry-run
+          else
+            helm upgrade --install jns-dns packages/deployment/kubernetes/helm/jns-dns \
+              --namespace $NAMESPACE \
+              --create-namespace \
+              --wait \
+              --timeout 10m
+          fi
+
+  deploy-sequencer:
+    name: Deploy Multi-Sequencer
+    runs-on: ubuntu-latest
+    needs: validate
+    if: inputs.component == 'all' || inputs.component == 'sequencer'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Deploy Sequencer
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'execution' || 'execution-testnet' }}"
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            helm upgrade --install sequencer packages/deployment/kubernetes/helm/sequencer \
+              --namespace $NAMESPACE \
+              --dry-run
+          else
+            helm upgrade --install sequencer packages/deployment/kubernetes/helm/sequencer \
+              --namespace $NAMESPACE \
+              --create-namespace \
+              --wait \
+              --timeout 15m
+          fi
+
+  health-check:
+    name: Post-Deployment Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-dws, deploy-sqlit, deploy-registry, deploy-jns-dns, deploy-sequencer]
+    if: always() && inputs.dry_run != true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Run health checks
+        run: |
+          NAMESPACE="${{ inputs.environment == 'mainnet' && 'dws' || 'dws-testnet' }}"
+
+          echo "Checking pod status..."
+          kubectl get pods -n $NAMESPACE
+
+          echo "Checking DWS health..."
+          kubectl exec -n $NAMESPACE deploy/dws -- curl -s http://localhost:4030/health || true
+
+          echo "Checking SQLit health..."
+          kubectl exec -n $NAMESPACE deploy/sqlit -- curl -s http://localhost:5000/health || true
+
+          echo "Checking JNS DNS health..."
+          kubectl exec -n $NAMESPACE deploy/jns-dns -- curl -s http://localhost:8053/health || true
+
+      - name: Notify on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "DWS Deployment Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":x: DWS deployment to *${{ inputs.environment }}* failed\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
