@@ -76,6 +76,10 @@ ingress:
       paths:
         - path: /
           pathType: Prefix
+    - host: indexer.testnet.jejunetwork.org
+      paths:
+        - path: /
+          pathType: Prefix
 
 resources:
   limits:

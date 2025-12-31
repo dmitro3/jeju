@@ -156,7 +156,7 @@
     "bazaar": "https://bazaar.testnet.jejunetwork.org",
     "storage": {
       "api": "https://storage.testnet.jejunetwork.org",
-      "ipfsGateway": "https://ipfs.testnet.jejunetwork.org"
+      "ipfsGateway": "https://cloudflare-ipfs.com"
     },
     "compute": {
       "marketplace": "https://compute.testnet.jejunetwork.org",
