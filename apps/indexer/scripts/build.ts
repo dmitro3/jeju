@@ -79,10 +79,16 @@ async function build() {
   )
   const mainFileName = mainEntry ? mainEntry.path.split('/').pop() : 'main.js'
 
+  // Copy CSS file to dist
+  const cssSource = resolve(APP_DIR, 'web/styles/index.css')
+  const cssDest = join(outdir, 'web/index.css')
+  const cssContent = readFileSync(cssSource, 'utf-8')
+  writeFileSync(cssDest, cssContent)
+
   const indexHtml = readFileSync(resolve(APP_DIR, 'index.html'), 'utf-8')
   const updatedHtml = indexHtml
-    .replace('/web/main.tsx', `/dist/web/${mainFileName}`)
-    .replace('/web/styles/index.css', '/dist/web/index.css')
+    .replace('/web/main.tsx', `/web/${mainFileName}`)
+    .replace('/web/styles/index.css', '/web/index.css')
 
   writeFileSync(join(outdir, 'index.html'), updatedHtml)
 

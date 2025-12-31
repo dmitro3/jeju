@@ -31,6 +31,7 @@ export interface DeployedApp {
   name: string
   jnsName: string
   frontendCid: string | null // IPFS CID for frontend (null = use local CDN)
+  staticFiles: Record<string, string> | null // Map of path -> CID for individual files
   backendWorkerId: string | null // DWS worker ID for backend
   backendEndpoint: string | null // Direct backend URL (for containers/services)
   apiPaths: string[] // Paths to route to backend (default: /api, /health, etc.)
@@ -244,75 +245,114 @@ export function getDeployedApps(): DeployedApp[] {
 }
 
 /**
- * Serve frontend from IPFS gateway
+ * Serve frontend from DWS storage (using individual file CIDs)
  *
- * The frontend CID represents a directory. We use the IPFS gateway
- * to fetch files within that directory.
+ * For decentralized frontends, we store individual files with their own CIDs
+ * and use a staticFiles map to look up the CID for each path.
  */
-async function serveFrontendFromIPFS(
-  cid: string,
+async function serveFrontendFromStorage(
+  app: DeployedApp,
   pathname: string,
-  spa: boolean,
 ): Promise<Response> {
   // Determine the file path to fetch
   let path = pathname
   if (path === '/' || path === '') {
-    path = '/index.html'
+    path = 'index.html'
+  } else {
+    // Remove leading slash for map lookup
+    path = path.replace(/^\//, '')
   }
 
   // For SPA, non-asset routes serve index.html (client-side routing)
-  if (spa && !isAssetPath(path)) {
-    path = '/index.html'
+  if (app.spa && !isAssetPath(`/${path}`)) {
+    path = 'index.html'
   }
 
-  // Use IPFS gateway to fetch from directory CID
-  const gateway = getIpfsGatewayUrl(NETWORK)
-  const url = `${gateway}/ipfs/${cid}${path}`
+  // Try to find CID for this path in staticFiles map
+  let fileCid: string | null = null
+  if (app.staticFiles) {
+    fileCid = app.staticFiles[path] ?? null
+    // Also try with dist/ prefix for legacy paths like /dist/web/main.js
+    if (!fileCid && path.startsWith('dist/')) {
+      const withoutDist = path.replace(/^dist\//, '')
+      fileCid = app.staticFiles[withoutDist] ?? null
+    }
+    // Try web/ prefix for /dist/web/* paths
+    if (!fileCid && path.startsWith('dist/web/')) {
+      const withoutDistWeb = path.replace(/^dist\/web\//, 'web/')
+      fileCid = app.staticFiles[withoutDistWeb] ?? null
+    }
+  }
 
-  console.log(`[AppRouter] Fetching from IPFS: ${url}`)
+  // Fallback to frontendCid as directory (legacy behavior)
+  if (!fileCid && app.frontendCid) {
+    // Try using IPFS gateway with directory CID
+    const gateway = getIpfsGatewayUrl(NETWORK)
+    const url = `${gateway}/ipfs/${app.frontendCid}/${path}`
+    console.log(`[AppRouter] Trying IPFS directory: ${url}`)
+    
+    const response = await fetch(url, {
+      headers: { Accept: '*/*' },
+      signal: AbortSignal.timeout(5000),
+    }).catch(() => null)
+    
+    if (response?.ok) {
+      const contentType = getContentType(path)
+      return new Response(response.body, {
+        headers: {
+          'Content-Type': contentType,
+          'X-DWS-Source': 'ipfs-gateway',
+          'X-DWS-CID': app.frontendCid,
+        },
+      })
+    }
+    
+    // If IPFS gateway fails, use frontendCid directly as the index.html CID
+    if (path === 'index.html') {
+      fileCid = app.frontendCid
+    }
+  }
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: '*/*',
-    },
+  if (!fileCid) {
+    console.log(`[AppRouter] No CID found for path: ${path}`)
+    return new Response('Not Found', { status: 404 })
+  }
+
+  // Fetch from DWS storage using the file's CID
+  const host = getLocalhostHost()
+  const storageUrl = NETWORK === 'localnet' 
+    ? `http://${host}:4030/storage/download/${fileCid}`
+    : `https://dws.${NETWORK === 'testnet' ? 'testnet.' : ''}jejunetwork.org/storage/download/${fileCid}`
+  
+  console.log(`[AppRouter] Fetching from storage: ${storageUrl}`)
+
+  const response = await fetch(storageUrl, {
+    signal: AbortSignal.timeout(10000),
+  }).catch((err: Error) => {
+    console.error(`[AppRouter] Storage fetch failed: ${err.message}`)
+    return null
   })
 
-  if (!response.ok) {
-    // For SPA, try index.html on 404 (fallback for client-side routes)
-    if (spa && response.status === 404 && path !== '/index.html') {
-      const indexUrl = `${gateway}/ipfs/${cid}/index.html`
-      const indexResponse = await fetch(indexUrl)
-      if (indexResponse.ok) {
-        return new Response(indexResponse.body, {
-          status: 200,
-          headers: {
-            'Content-Type': 'text/html; charset=utf-8',
-            'X-DWS-Source': 'ipfs',
-            'X-DWS-CID': cid,
-          },
-        })
-      }
-    }
-    console.log(`[AppRouter] IPFS fetch failed: ${response.status} for ${url}`)
+  if (!response?.ok) {
+    console.log(`[AppRouter] Storage fetch failed: ${response?.status ?? 'timeout'} for ${fileCid}`)
     return new Response('Not Found', { status: 404 })
   }
 
   // Determine content type based on file extension
   const contentType = getContentType(path)
 
-  // Clone response with DWS headers
-  const headers = new Headers(response.headers)
-  headers.set('X-DWS-Source', 'ipfs')
-  headers.set('X-DWS-CID', cid)
-  if (!headers.get('Content-Type')) {
-    headers.set('Content-Type', contentType)
-  }
-
   return new Response(response.body, {
-    status: response.status,
-    headers,
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': path.includes('.') && !path.endsWith('.html') 
+        ? 'public, max-age=31536000, immutable' 
+        : 'public, max-age=300',
+      'X-DWS-Source': 'storage',
+      'X-DWS-CID': fileCid,
+    },
   })
 }
+
 
 /**
  * Get content type from file path
@@ -488,6 +528,7 @@ export function createAppRouter() {
               name: localApp.name,
               jnsName: localApp.jnsName,
               frontendCid: localApp.cid ?? null,
+              staticFiles: null,
               backendWorkerId: null,
               backendEndpoint: `http://${getLocalhostHost()}:${localApp.port}`,
               apiPaths: DEFAULT_API_PATHS,
@@ -519,10 +560,9 @@ export function createAppRouter() {
 
         console.log(`[AppRouter] Serving frontend for ${appName}${pathname}`)
 
-        // Route to frontend
-        if (app.frontendCid) {
-          // Serve from IPFS
-          return serveFrontendFromIPFS(app.frontendCid, pathname, app.spa)
+        // Route to frontend using DWS storage (handles both staticFiles map and frontendCid)
+        if (app.frontendCid || app.staticFiles) {
+          return serveFrontendFromStorage(app, pathname)
         }
 
         // Serve from local CDN (devnet)
@@ -605,6 +645,7 @@ export async function initializeAppRouter(): Promise<void> {
           name: row.name,
           jnsName: row.jns_name,
           frontendCid: row.frontend_cid,
+          staticFiles: null,
           backendWorkerId: row.backend_worker_id,
           backendEndpoint: row.backend_endpoint,
           apiPaths: JSON.parse(row.api_paths),
@@ -639,6 +680,7 @@ export async function initializeAppRouter(): Promise<void> {
         name: app.name,
         jnsName: app.jnsName,
         frontendCid: app.cid ?? null,
+        staticFiles: null,
         backendWorkerId: null,
         backendEndpoint: `http://${getLocalhostHost()}:${app.port}`,
         apiPaths: DEFAULT_API_PATHS,
@@ -678,6 +720,7 @@ export async function initializeAppRouter(): Promise<void> {
           name: appName,
           jnsName: `${appName}.jeju`,
           frontendCid,
+          staticFiles: null,
           backendWorkerId,
           backendEndpoint: null,
           apiPaths: DEFAULT_API_PATHS,

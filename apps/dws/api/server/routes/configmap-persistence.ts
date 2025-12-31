@@ -25,6 +25,7 @@ interface DeployedAppConfig {
   name: string
   jnsName: string
   frontendCid: string | null
+  staticFiles: Record<string, string> | null
   backendWorkerId: string | null
   backendEndpoint: string | null
   apiPaths: string[]

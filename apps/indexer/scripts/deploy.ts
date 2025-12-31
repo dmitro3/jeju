@@ -174,11 +174,18 @@ async function registerApp(
     throw new Error('index.html not found in uploaded files')
   }
 
+  // Convert Map to Record for JSON serialization
+  const staticFilesRecord: Record<string, string> = {}
+  for (const [path, cid] of staticFiles) {
+    staticFilesRecord[path] = cid
+  }
+
   // App registration data for DWS app router
   const appConfig = {
     name: 'indexer',
     jnsName: 'indexer.jeju',
-    frontendCid: rootCid, // Using root CID for the whole directory
+    frontendCid: indexCid, // CID for index.html (used as fallback)
+    staticFiles: staticFilesRecord, // Map of all file paths to CIDs
     backendWorkerId: null, // No DWS worker - using K8s backend
     backendEndpoint: config.backendEndpoint,
     apiPaths: ['/api', '/health', '/a2a', '/mcp', '/graphql'], // Include /graphql for the GraphQL API
@@ -187,7 +194,8 @@ async function registerApp(
   }
 
   console.log('[Indexer] Registering app with DWS...')
-  console.log(`   Frontend CID: ${rootCid}`)
+  console.log(`   Frontend CID: ${indexCid}`)
+  console.log(`   Static files: ${staticFiles.size}`)
   console.log(`   Backend: ${config.backendEndpoint}`)
   console.log(`   API paths: ${appConfig.apiPaths.join(', ')}`)
 
