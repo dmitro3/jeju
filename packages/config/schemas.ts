@@ -115,6 +115,7 @@ export type ContractCategory =
   | 'governance'
   | 'oif'
   | 'eil'
+  | 'federation'
   | 'security'
   | 'agents'
   | 'amm'
@@ -153,6 +154,7 @@ const NetworkContractsSchema = z.object({
   governance: ContractCategorySchema,
   oif: ContractCategorySchema,
   eil: ContractCategorySchema,
+  federation: ContractCategorySchema.optional(),
   security: ContractCategorySchema,
   agents: ContractCategorySchema.optional(),
   amm: ContractCategorySchema.optional(),

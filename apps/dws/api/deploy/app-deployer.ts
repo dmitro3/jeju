@@ -834,10 +834,6 @@ export function createAppDeployerRouter() {
 
     // Next.js app deployment endpoint
     .post('/nextjs', async ({ request, set }) => {
-      const ownerHeader = request.headers.get('x-jeju-address')
-      const owner = (ownerHeader ??
-        '0x0000000000000000000000000000000000000000') as Address
-
       const formData = await request.formData()
       const workerTar = formData.get('worker') as File | null
       const configStr = formData.get('config') as string | null
@@ -866,7 +862,8 @@ export function createAppDeployerRouter() {
 
       // Upload worker bundle to storage
       const workerBuffer = Buffer.from(await workerTar.arrayBuffer())
-      const workerHash = `wrk_${deploymentId}`
+      // Use worker buffer size as part of the hash for tracking
+      const workerHash = `wrk_${deploymentId}_${workerBuffer.length}`
 
       // In production, this would:
       // 1. Upload worker bundle to IPFS

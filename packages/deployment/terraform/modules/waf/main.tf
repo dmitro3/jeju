@@ -39,6 +39,67 @@ resource "aws_wafv2_web_acl" "rpc" {
     allow {}
   }
 
+  # Rule 0: Allow DWS API endpoints without strict inspection
+  # These endpoints handle worker deployment and require large JSON bodies
+  rule {
+    name     = "AllowDWSEndpoints"
+    priority = 0
+
+    action {
+      allow {}
+    }
+
+    statement {
+      or_statement {
+        statement {
+          byte_match_statement {
+            search_string = "/workerd"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+            positional_constraint = "STARTS_WITH"
+          }
+        }
+        statement {
+          byte_match_statement {
+            search_string = "/compute"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+            positional_constraint = "STARTS_WITH"
+          }
+        }
+        statement {
+          byte_match_statement {
+            search_string = "/storage"
+            field_to_match {
+              uri_path {}
+            }
+            text_transformation {
+              priority = 0
+              type     = "LOWERCASE"
+            }
+            positional_constraint = "STARTS_WITH"
+          }
+        }
+      }
+    }
+
+    visibility_config {
+      cloudwatch_metrics_enabled = true
+      metric_name                = "${local.name_prefix}-dws-allow"
+      sampled_requests_enabled   = true
+    }
+  }
+
   # Rule 1: Rate limiting per IP
   rule {
     name     = "RateLimitPerIP"

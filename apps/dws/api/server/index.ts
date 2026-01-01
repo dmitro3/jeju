@@ -305,23 +305,12 @@ const app = new Elysia()
   })
   .use(
     cors({
-      // Reflect requesting origin to support credentials
-      // When credentials: 'include' is used, Access-Control-Allow-Origin cannot be '*'
-      origin: (request) => {
-        const origin = request.headers.get('origin')
-        // Allow any *.jejunetwork.org origin and localhost for dev
-        if (origin) {
-          if (
-            origin.endsWith('.jejunetwork.org') ||
-            origin.includes('localhost') ||
-            origin.includes('127.0.0.1')
-          ) {
-            return origin
-          }
-        }
-        // Fallback for non-credentialed requests
-        return '*'
-      },
+      // Allow *.jejunetwork.org origins and localhost for dev
+      origin: [
+        /\.jejunetwork\.org$/,
+        /localhost/,
+        /127\.0\.0\.1/,
+      ],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'],
       allowedHeaders: [

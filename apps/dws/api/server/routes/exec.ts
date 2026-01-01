@@ -64,14 +64,13 @@ async function executeCommand(
 
   // Handle stdin if provided
   if (stdin && proc.stdin) {
-    const writer = proc.stdin.getWriter()
     // If stdin looks like base64, try to decode it
     const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(stdin) && stdin.length > 50
     const data = isBase64
       ? Buffer.from(stdin, 'base64')
       : new TextEncoder().encode(stdin)
-    await writer.write(data)
-    await writer.close()
+    proc.stdin.write(data)
+    proc.stdin.end()
   }
 
   // For background processes, return immediately

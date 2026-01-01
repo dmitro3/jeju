@@ -415,7 +415,7 @@ export function createDNSRouter() {
             return { error: 'x-jeju-address header required for JNS registration' }
           }
 
-          const { name, target, type, contentCid, metadata } = body
+          const { name, target, type, contentCid, metadata: _metadata } = body
 
           // For now, we register in the app router's deployed apps
           // In production, this would be an on-chain transaction to the JNS registry

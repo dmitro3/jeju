@@ -17,12 +17,65 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { $ } from 'bun'
 import { getCurrentNetwork, getDWSUrl } from '@jejunetwork/config'
+import { privateKeyToAccount } from 'viem/accounts'
+import { type Address, type Hex, hashMessage } from 'viem'
+
+// Get deployer account from environment
+function getDeployerAccount() {
+  const privateKey = process.env.PRIVATE_KEY || process.env.DEPLOYER_PRIVATE_KEY
+  if (privateKey) {
+    return privateKeyToAccount(privateKey as `0x${string}`)
+  }
+  return null
+}
+
+// Get deployer address from environment
+function getDeployerAddress(): Address {
+  const account = getDeployerAccount()
+  if (account) {
+    return account.address
+  }
+  // Fallback to zero address for read-only operations
+  return '0x0000000000000000000000000000000000000000' as Address
+}
+
+// Create authenticated headers for DWS requests
+async function createAuthHeaders(): Promise<Record<string, string>> {
+  const account = getDeployerAccount()
+  if (!account) {
+    return {
+      'Content-Type': 'application/json',
+      'x-jeju-address': '0x0000000000000000000000000000000000000000',
+    }
+  }
+  
+  // Create a timestamped message for signature
+  const timestamp = Math.floor(Date.now() / 1000)
+  const nonce = crypto.randomUUID()
+  const message = `DWS Deploy Request\nTimestamp: ${timestamp}\nNonce: ${nonce}`
+  
+  // Sign the message
+  const signature = await account.signMessage({ message })
+  
+  return {
+    'Content-Type': 'application/json',
+    'x-jeju-address': account.address,
+    'x-jeju-timestamp': timestamp.toString(),
+    'x-jeju-nonce': nonce,
+    'x-jeju-signature': signature,
+  }
+}
 
 interface AppManifest {
   name: string
   displayName?: string
   version: string
   type?: string
+  ports?: {
+    main?: number
+    frontend?: number
+    api?: number
+  }
   jns?: {
     name: string
   }
@@ -46,6 +99,7 @@ interface AppManifest {
       enabled: boolean
       runtime: string
       entrypoint: string
+      teeRequired?: boolean
     }
   }
 }
@@ -55,6 +109,7 @@ interface DeploymentResult {
   success: boolean
   frontendCid?: string
   backendWorkerId?: string
+  backendEndpoint?: string
   error?: string
 }
 
@@ -187,12 +242,146 @@ async function uploadToIPFS(appDir: string, manifest: AppManifest, dwsUrl: strin
   }
 }
 
+interface WorkerDeployResult {
+  workerId: string
+  endpoint: string
+}
+
+/**
+ * Deploy backend as DWS worker (decentralized compute)
+ * 
+ * This is the CORRECT way to deploy backends - via DWS compute registry.
+ * Workers run on node operators who have registered with the compute marketplace.
+ * 
+ * Flow:
+ * 1. Bundle the worker code
+ * 2. Upload bundle to IPFS
+ * 3. Register worker with DWS compute registry
+ * 4. Return the endpoint where worker is accessible
+ */
+async function deployDWSWorker(
+  manifest: AppManifest,
+  dwsUrl: string
+): Promise<WorkerDeployResult | null> {
+  const workerConfig = manifest.dws?.backend
+  if (!workerConfig?.enabled) return null
+
+  const appDir = join(process.cwd(), 'apps', manifest.name)
+  const entrypoint = workerConfig.entrypoint || 'api/server.ts'
+  const runtime = workerConfig.runtime || 'bun'
+
+  try {
+    // Step 1: Bundle the worker
+    console.log(`   Building worker bundle from ${entrypoint}...`)
+    const bundleDir = join(appDir, '.dws-bundle')
+    const bundlePath = join(bundleDir, 'worker.js')
+    
+    // Use Bun to bundle
+    const bundleProc = Bun.spawn([
+      'bun', 'build', 
+      join(appDir, entrypoint),
+      '--outfile', bundlePath,
+      '--target', runtime === 'workerd' ? 'browser' : 'bun',
+      '--minify',
+    ], {
+      cwd: appDir,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    
+    const bundleExit = await bundleProc.exited
+    if (bundleExit !== 0) {
+      const stderr = await new Response(bundleProc.stderr).text()
+      console.error(`   Bundle failed: ${stderr}`)
+      return null
+    }
+
+    // Step 2: Upload bundle to IPFS
+    console.log(`   Uploading worker bundle to IPFS...`)
+    const bundleContent = readFileSync(bundlePath)
+    const formData = new FormData()
+    formData.append('file', new Blob([bundleContent]), 'worker.js')
+    formData.append('tier', 'compute')
+    formData.append('category', 'worker')
+
+    const uploadResponse = await fetch(`${dwsUrl}/storage/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!uploadResponse.ok) {
+      console.error(`   Failed to upload worker: ${uploadResponse.status}`)
+      return null
+    }
+
+    const uploadResult = await uploadResponse.json() as { cid: string }
+    const bundleCid = uploadResult.cid
+    console.log(`   Worker bundle CID: ${bundleCid}`)
+
+    // Step 3: Register with DWS workerd service
+    // Uses the actual /workerd API endpoint as defined in apps/dws/api/server/routes/workerd.ts
+    console.log(`   Registering worker with DWS workerd...`)
+    
+    // Read the bundle to get the code
+    const bundleCode = readFileSync(bundlePath)
+    const base64Code = bundleCode.toString('base64')
+    
+    const workerData = {
+      name: `${manifest.name}-worker`,
+      code: base64Code, // Base64 encoded worker code
+      codeCid: bundleCid, // Also provide CID for reference
+      memoryMb: 256,
+      timeoutMs: 30000,
+      cpuTimeMs: 5000,
+      compatibilityDate: '2024-01-01',
+      bindings: [
+        { name: 'APP_NAME', type: 'text' as const, value: manifest.name },
+        { name: 'APP_VERSION', type: 'text' as const, value: manifest.version },
+      ],
+    }
+
+    // Create authenticated headers
+    const authHeaders = await createAuthHeaders()
+    
+    const registerResponse = await fetch(`${dwsUrl}/workerd`, {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify(workerData),
+    })
+
+    if (!registerResponse.ok) {
+      const text = await registerResponse.text()
+      console.error(`   Failed to register worker: ${registerResponse.status} ${text}`)
+      return null
+    }
+
+    const registerResult = await registerResponse.json() as { 
+      workerId: string
+      name: string
+      codeCid: string
+      status: string
+    }
+
+    // Construct the worker endpoint URL
+    const endpoint = `${dwsUrl}/workerd/${registerResult.workerId}/http`
+
+    return {
+      workerId: registerResult.workerId,
+      endpoint,
+    }
+  } catch (error) {
+    console.error(`   Worker deployment error: ${error instanceof Error ? error.message : String(error)}`)
+    return null
+  }
+}
+
 async function registerWithAppRouter(
   manifest: AppManifest,
   dwsUrl: string,
   frontendCid: string | null,
   staticFiles: Record<string, string> | null,
   backendEndpoint: string | null,
+  backendWorkerId: string | null = null,
 ): Promise<boolean> {
   const jnsName = manifest.jns?.name || manifest.decentralization?.frontend?.jnsName || `${manifest.name}.jeju`
   
@@ -205,7 +394,7 @@ async function registerWithAppRouter(
     jnsName,
     frontendCid,
     staticFiles,
-    backendWorkerId: null,
+    backendWorkerId, // Now properly tracks the DWS worker ID
     backendEndpoint,
     apiPaths,
     spa: manifest.decentralization?.frontend?.spa ?? true,
@@ -272,14 +461,22 @@ async function deployApp(appName: string, network: string): Promise<DeploymentRe
     }
   }
 
-  // Step 3: Determine backend endpoint
-  // For now, route to the existing K8s service if it exists
-  // In the future, deploy as DWS worker
+  // Step 3: Deploy backend as DWS worker (NOT K8s)
+  // This is the correct decentralized approach - workers run on DWS compute nodes
   let backendEndpoint: string | null = null
+  let backendWorkerId: string | null = null
+  
   if (manifest.dws?.backend?.enabled) {
-    // Check if there's a K8s service for this app
-    backendEndpoint = `http://${appName}.${appName}.svc.cluster.local:${manifest.ports?.main || 4000}`
-    console.log(`[${manifest.name}] Backend endpoint: ${backendEndpoint}`)
+    console.log(`[${manifest.name}] Deploying backend as DWS worker...`)
+    
+    const workerResult = await deployDWSWorker(manifest, dwsUrl)
+    if (workerResult) {
+      backendWorkerId = workerResult.workerId
+      backendEndpoint = workerResult.endpoint
+      console.log(`[${manifest.name}] ✅ Backend deployed as DWS worker: ${backendWorkerId}`)
+    } else {
+      console.log(`[${manifest.name}] ⚠️ Backend worker deployment failed, will use frontend-only mode`)
+    }
   }
 
   // Step 4: Register with app router
@@ -289,6 +486,7 @@ async function deployApp(appName: string, network: string): Promise<DeploymentRe
     uploadResult?.manifestCid ?? null,
     uploadResult?.staticFiles ?? null,
     backendEndpoint,
+    backendWorkerId,
   )
   if (!registered) {
     return { app: appName, success: false, error: 'App router registration failed' }
@@ -298,6 +496,8 @@ async function deployApp(appName: string, network: string): Promise<DeploymentRe
     app: appName,
     success: true,
     frontendCid: uploadResult?.manifestCid,
+    backendWorkerId: backendWorkerId ?? undefined,
+    backendEndpoint: backendEndpoint ?? undefined,
   }
 }
 
@@ -369,7 +569,10 @@ async function main() {
 
   console.log(`✅ Successful: ${successful.length}`)
   for (const result of successful) {
-    console.log(`   - ${result.app}${result.frontendCid ? ` (CID: ${result.frontendCid.slice(0, 20)}...)` : ''}`)
+    const parts = [result.app]
+    if (result.frontendCid) parts.push(`Frontend: ${result.frontendCid.slice(0, 16)}...`)
+    if (result.backendWorkerId) parts.push(`Worker: ${result.backendWorkerId.slice(0, 16)}...`)
+    console.log(`   - ${parts.join(' | ')}`)
   }
 
   if (failed.length > 0) {

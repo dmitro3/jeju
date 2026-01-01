@@ -17,7 +17,7 @@
       "weth": "0x4200000000000000000000000000000000000006"
     },
     "registry": {
-      "identity": "0x9A9f2CCfdE556A7E9Ff0848998Aa4a0CFD8863AE",
+      "identity": "0xC9a43158891282A2B1475592D5719c001986Aaec",
       "reputation": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
       "validation": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
       "token": "0x322813Fd9A801c5507c9de605d63CEA4f2CE6c44",
@@ -67,11 +67,17 @@
       "staking": "0x0000000000000000000000000000000000000000"
     },
     "dws": {
-      "jnsRegistry": "0x9d4454B023096f34B160D6B654540c56A1F81688",
-      "jnsResolver": "0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00",
-      "storageManager": "0x46b142DD1E924FAb83eCc3c08e4D46E82f005e0E",
-      "workerRegistry": "0xC9a43158891282A2B1475592D5719c001986Aaec",
-      "cdnRegistry": "0x1c85638e118b37167e9298c2268758e058DdfDA0"
+      "jnsRegistry": "0xcbEAF3BDe82155F56486Fb5a1072cb8baAf547cc",
+      "jnsResolver": "0x1429859428C0aBc9C2C47C8Ee9FBaf82cFA0F20f",
+      "storageManager": "0x21dF544947ba3E8b3c32561399E88B52Dc8b2823",
+      "workerRegistry": "0x2E2Ed0Cfd3AD2f1d34481277b3204d807Ca2F8c2",
+      "cdnRegistry": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
+      "repoRegistry": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
+      "packageRegistry": "0x51A1ceB83B83F1985a81C295d1fF28Afef186E02",
+      "managedDatabaseRegistry": "",
+      "cacheManager": "",
+      "containerRegistry": "",
+      "cronOrchestrator": ""
     },
     "payments": {
       "creditManager": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
@@ -97,6 +103,11 @@
       "workerRegistry": "",
       "cronTriggerRegistry": "0x0dcd1bf9a1b36ce34237eeafef220932846bcd82"
     },
+    "sequencer": {
+      "registry": "",
+      "thresholdBatchSubmitter": "",
+      "forcedInclusion": ""
+    },
     "governance": {
       "governor": "",
       "timelock": "",
@@ -114,6 +125,12 @@
       "l1StakeManager": "",
       "crossChainPaymaster": "0xa7Cd0542a8F4CCa6Dd021C3A0Af0E423Ad7DFfB7",
       "liquidityPaymaster": ""
+    },
+    "federation": {
+      "registryHub": "",
+      "networkRegistry": "",
+      "federationBridge": "",
+      "federationGovernance": ""
     },
     "liquidity": {
       "riskSleeve": "",
@@ -234,6 +251,11 @@
       "workerRegistry": "",
       "cronTriggerRegistry": ""
     },
+    "sequencer": {
+      "registry": "",
+      "thresholdBatchSubmitter": "",
+      "forcedInclusion": ""
+    },
     "governance": {
       "governor": "",
       "timelock": "",
@@ -251,6 +273,12 @@
       "l1StakeManager": "0xBf871db95b89Fde7D13b4FAA8b8E47aB5F00C29C",
       "crossChainPaymaster": "",
       "liquidityPaymaster": ""
+    },
+    "federation": {
+      "registryHub": "",
+      "networkRegistry": "",
+      "federationBridge": "",
+      "federationGovernance": ""
     },
     "liquidity": {
       "riskSleeve": "",
@@ -363,6 +391,11 @@
       "workerRegistry": "",
       "cronTriggerRegistry": ""
     },
+    "sequencer": {
+      "registry": "",
+      "thresholdBatchSubmitter": "",
+      "forcedInclusion": ""
+    },
     "governance": {
       "governor": "",
       "timelock": "",
@@ -380,6 +413,12 @@
       "l1StakeManager": "",
       "crossChainPaymaster": "",
       "liquidityPaymaster": ""
+    },
+    "federation": {
+      "registryHub": "",
+      "networkRegistry": "",
+      "federationBridge": "",
+      "federationGovernance": ""
     },
     "liquidity": {
       "riskSleeve": "",
