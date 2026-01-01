@@ -42,3 +42,4 @@ perf.data
 
 # python
 __pycache__
+/dist/

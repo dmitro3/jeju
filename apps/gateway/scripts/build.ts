@@ -182,6 +182,47 @@ async function build() {
   }
   console.log('[Gateway] API servers built')
 
+  // Build worker for workerd deployment
+  console.log('[Gateway] Building worker for DWS deployment...')
+  mkdirSync(join(outdir, 'worker'), { recursive: true })
+  const workerResult = await Bun.build({
+    entrypoints: [resolve(APP_DIR, 'api/worker.ts')],
+    outdir: join(outdir, 'worker'),
+    target: 'bun',
+    minify: true,
+    sourcemap: 'external',
+    external: [
+      'bun:sqlite',
+      'child_process',
+      'node:child_process',
+      'node:fs',
+      'node:path',
+      'node:crypto',
+    ],
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+  })
+
+  if (!workerResult.success) {
+    console.error('[Gateway] Worker build failed:')
+    for (const log of workerResult.logs) console.error(log)
+    throw new Error('Worker build failed')
+  }
+
+  // Write worker metadata
+  const metadata = {
+    name: 'gateway-api',
+    version: '1.0.0',
+    entrypoint: 'worker.js',
+    compatibilityDate: '2024-01-01',
+    buildTime: new Date().toISOString(),
+    runtime: 'workerd',
+  }
+  writeFileSync(
+    join(outdir, 'worker', 'metadata.json'),
+    JSON.stringify(metadata, null, 2),
+  )
+  console.log('[Gateway] Worker built successfully')
+
   // Find the main entry file with hash
   const mainEntry = frontendResult.outputs.find(
     (o) => o.kind === 'entry-point' && o.path.includes('main'),

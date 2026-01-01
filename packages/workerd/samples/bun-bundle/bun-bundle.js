@@ -1,103 +1,3 @@
-// Copyright (c) 2024 Jeju Network
-// Build script for bundling Bun compatibility TypeScript into JavaScript
-// This creates a standalone bundle that can be used in workerd workers
-
-import { build, type BuildConfig } from 'esbuild'
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs'
-import path from 'path'
-
-const __dirname = path.dirname(new URL(import.meta.url).pathname)
-const outDir = path.join(__dirname, '../../dist/bun')
-
-// Ensure output directory exists
-if (!existsSync(outDir)) {
-  mkdirSync(outDir, { recursive: true })
-}
-
-// Common build options
-const commonOptions: BuildConfig = {
-  bundle: true,
-  format: 'esm' as const,
-  target: 'esnext',
-  platform: 'browser',
-  minify: false,
-  sourcemap: false,
-  treeShaking: true,
-}
-
-// Build each module separately
-async function buildModules() {
-  console.log('Building Bun compatibility modules...')
-  
-  // Build main bun module
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'bun.ts')],
-    outfile: path.join(outDir, 'bun.js'),
-    external: ['bun-internal:*'],
-  })
-  console.log('  - bun.js')
-  
-  // Build sqlite module
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'sqlite.ts')],
-    outfile: path.join(outDir, 'sqlite.js'),
-    external: ['bun-internal:*', 'bun:bun'],
-  })
-  console.log('  - sqlite.js')
-  
-  // Build test module (stubs)
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'test.ts')],
-    outfile: path.join(outDir, 'test.js'),
-    external: ['bun-internal:*'],
-  })
-  console.log('  - test.js')
-  
-  // Build ffi module (stubs)
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'ffi.ts')],
-    outfile: path.join(outDir, 'ffi.js'),
-    external: ['bun-internal:*'],
-  })
-  console.log('  - ffi.js')
-  
-  // Build internal modules
-  const internalDir = path.join(outDir, 'internal')
-  if (!existsSync(internalDir)) {
-    mkdirSync(internalDir, { recursive: true })
-  }
-  
-  // Build internal/errors
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'internal/errors.ts')],
-    outfile: path.join(internalDir, 'errors.js'),
-  })
-  console.log('  - internal/errors.js')
-  
-  // Build internal/types
-  await build({
-    ...commonOptions,
-    entryPoints: [path.join(__dirname, 'internal/types.ts')],
-    outfile: path.join(internalDir, 'types.js'),
-  })
-  console.log('  - internal/types.js')
-  
-  console.log('\nBuild complete.')
-  console.log(`Output directory: ${outDir}`)
-}
-
-// Create a combined bundle for worker injection
-async function buildCombinedBundle() {
-  console.log('\nBuilding combined bundle for worker injection...')
-  
-  // Build a self-contained bundle that defines the Bun global
-  // NOTE: This must match bun.ts implementations exactly to avoid LARP
-  const bundleCode = `
 // Auto-generated Bun compatibility bundle for workerd
 // This provides Bun APIs in workerd environments
 // IMPORTANT: Implementations must match src/bun/bun.ts exactly
@@ -117,7 +17,7 @@ class BunError extends Error {
 
 class ERR_FS_FILE_NOT_FOUND extends BunError {
   constructor(path) {
-    super(\`ENOENT: no such file or directory, open '\${path}'\`, 'ENOENT')
+    super(`ENOENT: no such file or directory, open '${path}'`, 'ENOENT')
     this.name = 'ERR_FS_FILE_NOT_FOUND'
   }
 }
@@ -125,8 +25,8 @@ class ERR_FS_FILE_NOT_FOUND extends BunError {
 class ERR_WORKERD_UNAVAILABLE extends BunError {
   constructor(feature, reason) {
     const msg = reason
-      ? \`\${feature} is not available in workerd: \${reason}\`
-      : \`\${feature} is not available in workerd\`
+      ? `${feature} is not available in workerd: ${reason}`
+      : `${feature} is not available in workerd`
     super(msg, 'ERR_WORKERD_UNAVAILABLE')
     this.name = 'ERR_WORKERD_UNAVAILABLE'
   }
@@ -204,7 +104,7 @@ class BunFileImpl {
     const data = virtualFS.get(this.#path)
     if (!data) return new BunFileImpl(this.#path, { type: type ?? this.#type })
     const sliced = data.slice(start, end)
-    const slicePath = \`\${this.#path}#slice(\${start},\${end})\`
+    const slicePath = `${this.#path}#slice(${start},${end})`
     virtualFS.set(slicePath, sliced)
     return new BunFileImpl(slicePath, { type: type ?? this.#type })
   }
@@ -369,7 +269,7 @@ function inspectValue(value, depth, seen) {
   const type = typeof value
   if (type === 'string') return JSON.stringify(value)
   if (type === 'number' || type === 'boolean' || type === 'bigint') return String(value)
-  if (type === 'function') return \`[Function: \${value.name || 'anonymous'}]\`
+  if (type === 'function') return `[Function: ${value.name || 'anonymous'}]`
   if (type === 'symbol') return value.toString()
   
   if (seen.has(value)) return '[Circular]'
@@ -379,19 +279,19 @@ function inspectValue(value, depth, seen) {
     seen.add(value)
     const items = value.map((item) => inspectValue(item, depth - 1, seen))
     seen.delete(value)
-    return \`[ \${items.join(', ')} ]\`
+    return `[ ${items.join(', ')} ]`
   }
   
   if (value instanceof Date) return value.toISOString()
   if (value instanceof RegExp) return value.toString()
-  if (value instanceof Error) return \`\${value.name}: \${value.message}\`
+  if (value instanceof Error) return `${value.name}: ${value.message}`
   
   if (type === 'object') {
     if (depth < 0) return '[Object]'
     seen.add(value)
-    const entries = Object.entries(value).map(([k, v]) => \`\${k}: \${inspectValue(v, depth - 1, seen)}\`)
+    const entries = Object.entries(value).map(([k, v]) => `${k}: ${inspectValue(v, depth - 1, seen)}`)
     seen.delete(value)
-    return \`{ \${entries.join(', ')} }\`
+    return `{ ${entries.join(', ')} }`
   }
   
   return String(value)
@@ -498,18 +398,18 @@ const password = {
     )
     
     const toHex = (arr) => Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('')
-    return \`\$workerd\$\${algorithm}\$\${cost}\$\${toHex(salt)}\$\${toHex(new Uint8Array(derivedBits))}\`
+    return `$workerd$${algorithm}$${cost}$${toHex(salt)}$${toHex(new Uint8Array(derivedBits))}`
   },
   
   async verify(pwd, hashStr) {
-    if (!hashStr.startsWith('\$workerd\$')) {
+    if (!hashStr.startsWith('$workerd$')) {
       const data = new TextEncoder().encode(pwd)
       const hashBuffer = await crypto.subtle.digest('SHA-256', data)
       const computed = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('')
       return computed === hashStr
     }
     
-    const parts = hashStr.split('\$')
+    const parts = hashStr.split('$')
     if (parts.length !== 6) return false
     
     const [, , , costStr, saltHex, expectedHashHex] = parts
@@ -547,7 +447,7 @@ function randomUUIDv7() {
   return [
     timestampHex.slice(0, 8),
     timestampHex.slice(8, 12),
-    \`7\${randomHex.slice(0, 3)}\`,
+    `7${randomHex.slice(0, 3)}`,
     ((parseInt(randomHex.slice(3, 5), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0') + randomHex.slice(5, 7),
     randomHex.slice(7, 19),
   ].join('-')
@@ -560,7 +460,7 @@ function fileURLToPath(url) {
 }
 
 function pathToFileURL(path) {
-  return new URL(\`file://\${path.startsWith('/') ? '' : '/'}\${path}\`)
+  return new URL(`file://${path.startsWith('/') ? '' : '/'}${path}`)
 }
 
 // Main Bun object - matches bun.ts exports
@@ -617,38 +517,12 @@ const Bun = {
   
   // DNS (not available in workerd)
   dns: {
-    async lookup(hostname) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.lookup', \`DNS lookups for '\${hostname}' not available\`) },
-    async reverse(ip) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.reverse', \`Reverse DNS for '\${ip}' not available\`) },
-    async resolve(hostname) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.resolve', \`DNS resolution for '\${hostname}' not available\`) },
+    async lookup(hostname) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.lookup', `DNS lookups for '${hostname}' not available`) },
+    async reverse(ip) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.reverse', `Reverse DNS for '${ip}' not available`) },
+    async resolve(hostname) { throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.resolve', `DNS resolution for '${hostname}' not available`) },
   },
 }
 
 // Export for ES modules
 export default Bun
 export { Bun }
-`
-  
-  writeFileSync(path.join(outDir, 'bun-bundle.js'), bundleCode.trim())
-  console.log('  - bun-bundle.js (standalone bundle)')
-  
-  console.log('\nStandalone bundle ready for worker injection.')
-}
-
-// Run builds
-async function main() {
-  try {
-    await buildModules()
-    await buildCombinedBundle()
-    
-    console.log('\n=== Build Summary ===')
-    console.log(`Output: ${outDir}`)
-    console.log('\nTo use in a worker, import from the bundle:')
-    console.log('  import Bun from "./bun-bundle.js"')
-    console.log('\nOr wait for workerd to be built with native bun: support.')
-  } catch (error) {
-    console.error('Build failed:', error)
-    process.exit(1)
-  }
-}
-
-main()

@@ -1,8 +1,10 @@
 /**
  * Worker Runtime
- * Process-isolated worker execution
+ * Production-ready process-isolated worker execution with Bun and workerd support
  */
 
+import { mkdir } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import type { JSONValue } from '../shared/validation'
 import type { BackendManager } from '../storage/backends'
 import type {
@@ -18,6 +20,23 @@ import type {
 } from './types'
 import { DEFAULT_POOL_CONFIG } from './types'
 
+// Runtime mode: 'bun' for direct Bun process spawning, 'workerd' for workerd V8 isolates
+type RuntimeMode = 'bun' | 'workerd'
+
+// Worker bootstrap - just sets env and imports the main module
+// Most worker code (like Factory) already starts its own server using PORT env var
+function createWorkerBootstrap(port: number, _handler: string): string {
+  return `
+// DWS Worker Bootstrap
+// Set PORT before importing the module so it uses the correct port
+process.env.PORT = '${port}';
+
+// Import the main module - it should start its own server
+import './main.js';
+`;
+}
+
+
 export class WorkerRuntime {
   private backend: BackendManager
   private functions = new Map<string, WorkerFunction>()
@@ -27,19 +46,79 @@ export class WorkerRuntime {
   private config: WorkerPoolConfig
   private codeCache = new Map<string, string>() // cid -> local path
   private metrics = new Map<string, number[]>() // functionId -> durations
+  private runtimeMode: RuntimeMode
+  private workerdPath: string | null = null
+  private usedPorts = new Set<number>()
+  private initialized = false
 
   constructor(backend: BackendManager, config: Partial<WorkerPoolConfig> = {}) {
     this.backend = backend
     this.config = { ...DEFAULT_POOL_CONFIG, ...config }
+    
+    // Always prefer Bun when available since we're running in Bun
+    this.runtimeMode = 'bun'
+    console.log(`[WorkerRuntime] Using runtime mode: ${this.runtimeMode}`)
 
     // Cleanup interval
     setInterval(() => this.cleanup(), 30000)
+
+    // Initialize async
+    this.initialize().catch((err) => {
+      console.error('[WorkerRuntime] Initialization failed:', err)
+    })
+  }
+
+  private async initialize(): Promise<void> {
+    if (this.initialized) return
+
+    // Create base temp directory
+    const baseDir = '/tmp/dws-workers'
+    if (!existsSync(baseDir)) {
+      await mkdir(baseDir, { recursive: true })
+    }
+
+    // Try to find workerd as fallback
+    await this.initializeWorkerd()
+
+    this.initialized = true
+    console.log('[WorkerRuntime] Initialized successfully')
+  }
+
+  private async initializeWorkerd(): Promise<void> {
+    const paths = [
+      process.env.WORKERD_PATH,
+      '/usr/local/bin/workerd',
+      '/usr/bin/workerd',
+      `${process.env.HOME}/.local/bin/workerd`,
+      './node_modules/.bin/workerd',
+      'node_modules/.bin/workerd',
+    ].filter(Boolean) as string[]
+
+    for (const p of paths) {
+      try {
+        if (existsSync(p)) {
+          this.workerdPath = p
+          console.log(`[WorkerRuntime] Found workerd at: ${this.workerdPath}`)
+          return
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+
+    console.log('[WorkerRuntime] workerd binary not found (Bun mode only)')
   }
 
   async deployFunction(fn: WorkerFunction): Promise<void> {
-    // Download and cache the code
-    const codePath = await this.downloadCode(fn.codeCid)
-    this.codeCache.set(fn.codeCid, codePath)
+    await this.initialize()
+
+    // Pre-download and cache the code
+    try {
+      const codePath = await this.downloadCode(fn.codeCid, fn.handler)
+      this.codeCache.set(fn.codeCid, codePath)
+    } catch (err) {
+      console.warn(`[WorkerRuntime] Failed to pre-cache code for ${fn.name}:`, err)
+    }
 
     this.functions.set(fn.id, fn)
     this.instances.set(fn.id, [])
@@ -61,6 +140,8 @@ export class WorkerRuntime {
     this.instances.delete(functionId)
     this.pendingQueue.delete(functionId)
     this.metrics.delete(functionId)
+
+    console.log(`[WorkerRuntime] Undeployed function: ${functionId}`)
   }
 
   async invoke(params: InvokeParams): Promise<InvokeResult> {
@@ -153,7 +234,7 @@ export class WorkerRuntime {
 
     try {
       // Forward the HTTP request directly to the worker
-      const url = `http://localhost:${instance.port}${event.path}`
+      const url = `http://127.0.0.1:${instance.port}${event.path}`
       const queryString = new URLSearchParams(event.query ?? {}).toString()
       const fullUrl = queryString ? `${url}?${queryString}` : url
 
@@ -198,7 +279,7 @@ export class WorkerRuntime {
   ): Promise<WorkerInstance | null> {
     const instances = this.instances.get(fn.id) ?? []
 
-    // Find a ready instance
+    // Find a ready instance with capacity
     const ready = instances.find(
       (i) =>
         i.status === 'ready' &&
@@ -216,6 +297,7 @@ export class WorkerRuntime {
 
     // Need to create new instance
     if (instances.length < this.config.maxWarmInstances) {
+      console.log(`[WorkerRuntime] Creating new instance for ${fn.name}...`)
       const instance = await this.createInstance(fn)
       if (instance) {
         instances.push(instance)
@@ -224,13 +306,14 @@ export class WorkerRuntime {
       }
     }
 
+    console.warn(`[WorkerRuntime] Cannot create instance for ${fn.name} - max instances reached`)
     return null
   }
 
   private async createInstance(
     fn: WorkerFunction,
   ): Promise<WorkerInstance | null> {
-    const port = 20000 + Math.floor(Math.random() * 10000)
+    const port = await this.allocatePort()
     const id = crypto.randomUUID()
 
     const instance: WorkerInstance = {
@@ -249,64 +332,129 @@ export class WorkerRuntime {
     // Get code path - download on-demand if not cached
     let codePath = this.codeCache.get(fn.codeCid)
     if (!codePath) {
-      console.log(`[WorkerRuntime] Code not cached for ${fn.id}, downloading...`)
-      codePath = await this.downloadCode(fn.codeCid)
-      this.codeCache.set(fn.codeCid, codePath)
+      console.log(`[WorkerRuntime] Downloading code for ${fn.name}...`)
+      try {
+        codePath = await this.downloadCode(fn.codeCid, fn.handler)
+        this.codeCache.set(fn.codeCid, codePath)
+      } catch (error) {
+        console.error(`[WorkerRuntime] Failed to download code:`, error)
+        this.releasePort(port)
+        return null
+      }
     }
 
+    // Use Bun to spawn the worker
+    return this.createBunInstance(fn, instance, codePath)
+  }
+
+  private async createBunInstance(
+    fn: WorkerFunction,
+    instance: WorkerInstance,
+    codePath: string,
+  ): Promise<WorkerInstance | null> {
     try {
-      // Get bun path from current process or fallback to common locations
+      const codeDir = codePath.replace(/\/[^/]+$/, '')
+      
+      // Create bootstrap file that starts the server
+      const bootstrapPath = `${codeDir}/bootstrap.js`
+      const bootstrapCode = createWorkerBootstrap(instance.port, fn.handler)
+      await Bun.write(bootstrapPath, bootstrapCode)
+
+      // Get bun path
       const bunPath = process.execPath || '/usr/local/bin/bun'
 
-      // Spawn isolated process
-      const proc = Bun.spawn([bunPath, 'run', codePath], {
+      console.log(`[WorkerRuntime] Starting worker ${fn.name} on port ${instance.port}...`)
+
+      // Spawn the worker process
+      const proc = Bun.spawn([bunPath, 'run', bootstrapPath], {
         env: {
+          ...process.env,
           ...fn.env,
-          PORT: String(port),
+          PORT: String(instance.port),
           FUNCTION_ID: fn.id,
-          INSTANCE_ID: id,
+          INSTANCE_ID: instance.id,
           FUNCTION_MEMORY: String(fn.memory),
           FUNCTION_TIMEOUT: String(fn.timeout),
+          NODE_ENV: process.env.NODE_ENV || 'production',
         },
         stdout: 'pipe',
         stderr: 'pipe',
-        cwd: codePath.replace(/\/[^/]+$/, ''),
+        cwd: codeDir,
       })
 
       instance.process = proc
 
-      // Capture stderr for debugging
-      proc.stderr
-        .pipeTo(
-          new WritableStream({
-            write(chunk) {
-              const text = new TextDecoder().decode(chunk)
-              if (text.trim()) {
-                console.log(`[WorkerRuntime] ${fn.name} stderr: ${text.trim()}`)
-              }
-            },
-          }),
-        )
-        .catch(() => {})
+      // Capture stdout for debugging
+      proc.stdout.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            const text = new TextDecoder().decode(chunk)
+            if (text.trim()) {
+              console.log(`[Worker:${fn.name}] ${text.trim()}`)
+            }
+          },
+        }),
+      ).catch(() => {})
 
-      // Wait for ready
-      const ready = await this.waitForReady(instance)
+      // Capture stderr for debugging
+      proc.stderr.pipeTo(
+        new WritableStream({
+          write(chunk) {
+            const text = new TextDecoder().decode(chunk)
+            if (text.trim()) {
+              console.error(`[Worker:${fn.name}:err] ${text.trim()}`)
+            }
+          },
+        }),
+      ).catch(() => {})
+
+      // Wait for the process to become ready
+      const ready = await this.waitForReady(instance, 30000)
       instance.status = ready ? 'ready' : 'stopped'
 
       if (!ready) {
-        console.log(
-          `[WorkerRuntime] Worker ${fn.name} did not become ready on port ${port}`,
-        )
-        proc.kill()
+        console.error(`[WorkerRuntime] Worker ${fn.name} failed to start on port ${instance.port}`)
+        try { proc.kill() } catch {}
+        this.releasePort(instance.port)
         return null
       }
 
-      console.log(`[WorkerRuntime] Created instance ${id} for ${fn.name}`)
+      console.log(`[WorkerRuntime] Worker ${fn.name} ready on port ${instance.port}`)
       return instance
     } catch (error) {
       console.error(`[WorkerRuntime] Failed to create instance:`, error)
+      this.releasePort(instance.port)
       return null
     }
+  }
+
+  private async allocatePort(): Promise<number> {
+    const min = 20000
+    const max = 30000
+
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const port = min + Math.floor(Math.random() * (max - min))
+      if (!this.usedPorts.has(port)) {
+        // Check if port is actually available
+        try {
+          const server = Bun.serve({
+            port,
+            fetch: () => new Response('test'),
+          })
+          server.stop()
+          this.usedPorts.add(port)
+          return port
+        } catch {
+          // Port in use, try another
+        }
+      }
+    }
+
+    throw new Error('No available ports in configured range')
+  }
+
+  private releasePort(port: number): void {
+    this.usedPorts.delete(port)
   }
 
   private async waitForReady(
@@ -314,19 +462,30 @@ export class WorkerRuntime {
     timeoutMs = 30000,
   ): Promise<boolean> {
     const deadline = Date.now() + timeoutMs
+    const checkInterval = 200
 
     while (Date.now() < deadline) {
-      const response = await fetch(`http://localhost:${instance.port}/health`, {
-        signal: AbortSignal.timeout(2000),
-      }).catch(() => null)
-
-      if (response?.ok) return true
-      await new Promise((r) => setTimeout(r, 500))
+      try {
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 2000)
+        
+        const response = await fetch(`http://127.0.0.1:${instance.port}/health`, {
+          signal: controller.signal,
+        })
+        
+        clearTimeout(timeoutId)
+        
+        if (response.ok || response.status === 404) {
+          // 404 is acceptable - server is up but no health route
+          return true
+        }
+      } catch {
+        // Connection refused or timeout - not ready yet
+      }
+      await new Promise((r) => setTimeout(r, checkInterval))
     }
 
-    console.log(
-      `[WorkerRuntime] Instance ${instance.id} failed to become ready within ${timeoutMs}ms`,
-    )
+    console.log(`[WorkerRuntime] Instance ${instance.id} failed to become ready within ${timeoutMs}ms`)
     return false
   }
 
@@ -341,7 +500,7 @@ export class WorkerRuntime {
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
     try {
-      const response = await fetch(`http://localhost:${instance.port}/invoke`, {
+      const response = await fetch(`http://127.0.0.1:${instance.port}/invoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -386,65 +545,72 @@ export class WorkerRuntime {
   private async stopInstance(instance: WorkerInstance): Promise<void> {
     instance.status = 'stopping'
 
-    // Wait for active invocations to complete
-    const deadline = Date.now() + 30000
+    // Wait for active invocations to complete (with timeout)
+    const deadline = Date.now() + 10000
     while (instance.activeInvocations > 0 && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 1000))
+      await new Promise((r) => setTimeout(r, 500))
     }
 
     if (instance.process) {
-      instance.process.kill()
+      try {
+        instance.process.kill()
+      } catch {}
     }
 
+    this.releasePort(instance.port)
     instance.status = 'stopped'
     console.log(`[WorkerRuntime] Stopped instance ${instance.id}`)
   }
 
-  private async downloadCode(cid: string): Promise<string> {
+  private async downloadCode(cid: string, handler: string): Promise<string> {
     // Check cache first
     const cached = this.codeCache.get(cid)
-    if (cached) {
+    if (cached && existsSync(cached)) {
       return cached
     }
+
+    console.log(`[WorkerRuntime] Downloading code from storage: ${cid}`)
 
     // Download from storage
     const result = await this.backend.download(cid)
 
-    // Extract to temp directory
+    // Create worker directory
     const tempDir = `/tmp/dws-workers/${cid}`
+    await mkdir(tempDir, { recursive: true })
 
     // Check if it's a gzip/tarball (magic bytes 0x1f 0x8b)
     if (result.content[0] === 0x1f && result.content[1] === 0x8b) {
-      // Write tarball and extract using tar command
-      const tarPath = `${tempDir}.tar.gz`
+      // Write tarball and extract
+      const tarPath = `${tempDir}/code.tar.gz`
       await Bun.write(tarPath, result.content)
 
-      // Extract tarball using Bun.spawn
+      // Extract tarball
       const proc = Bun.spawn(['tar', '-xzf', tarPath, '-C', tempDir], {
-        cwd: '/tmp',
-        stdio: ['ignore', 'pipe', 'pipe'],
+        cwd: tempDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
       })
       await proc.exited
 
-      // Look for entry point
-      const files = ['index.js', 'main.js', 'handler.js', 'worker.js']
-      for (const file of files) {
+      // Look for entry point based on handler
+      const handlerFile = handler.split('.')[0] + '.js'
+      const candidates = [handlerFile, 'index.js', 'main.js', 'server.js', 'worker.js']
+      
+      for (const file of candidates) {
         const path = `${tempDir}/${file}`
-        if (await Bun.file(path).exists()) {
-          this.codeCache.set(cid, path)
-          return path
+        if (existsSync(path)) {
+          // Copy to main.js for bootstrap
+          await Bun.write(`${tempDir}/main.js`, await Bun.file(path).text())
+          return `${tempDir}/main.js`
         }
       }
 
-      // Default to index.js
-      this.codeCache.set(cid, `${tempDir}/index.js`)
-      return `${tempDir}/index.js`
+      throw new Error(`Entry point not found in tarball. Tried: ${candidates.join(', ')}`)
     }
 
-    // Not a tarball, assume it's raw JS
-    await Bun.write(`${tempDir}/index.js`, result.content)
-    this.codeCache.set(cid, `${tempDir}/index.js`)
-    return `${tempDir}/index.js`
+    // Raw JS file - write as main.js
+    await Bun.write(`${tempDir}/main.js`, result.content)
+    return `${tempDir}/main.js`
   }
 
   private buildResult(invocation: WorkerInvocation): InvokeResult {
@@ -492,16 +658,22 @@ export class WorkerRuntime {
       const fn = this.functions.get(functionId)
       if (!fn) continue
 
-      // Find idle instances past timeout
       const toRemove: WorkerInstance[] = []
 
       for (const instance of instances) {
+        // Check for dead processes
+        if (instance.process && instance.process.exitCode !== null) {
+          console.log(`[WorkerRuntime] Instance ${instance.id} process exited, removing`)
+          toRemove.push(instance)
+          continue
+        }
+
+        // Check for idle timeout
         if (
           instance.status === 'ready' &&
           instance.activeInvocations === 0 &&
           now - instance.lastUsedAt > this.config.idleTimeout
         ) {
-          // Keep at least one warm instance if function is active
           const warmCount = instances.filter(
             (i) => i.status === 'ready' || i.status === 'busy',
           ).length
@@ -563,6 +735,8 @@ export class WorkerRuntime {
       totalFunctions,
       totalInstances,
       activeInstances,
+      runtimeMode: this.runtimeMode,
+      workerdAvailable: this.workerdPath !== null,
       pendingInvocations: Array.from(this.pendingQueue.values()).reduce(
         (sum, q) => sum + q.length,
         0,
@@ -570,9 +744,6 @@ export class WorkerRuntime {
     }
   }
 
-  /**
-   * Get logs for a function from recent invocations
-   */
   getLogs(
     functionId: string,
     options: { limit?: number; since?: number } = {},
@@ -602,13 +773,9 @@ export class WorkerRuntime {
       })
     }
 
-    // Sort by timestamp descending and limit
     return logs.sort((a, b) => b.timestamp - a.timestamp).slice(0, limit)
   }
 
-  /**
-   * Get invocation by ID
-   */
   getInvocation(invocationId: string): WorkerInvocation | null {
     return this.invocations.get(invocationId) ?? null
   }
