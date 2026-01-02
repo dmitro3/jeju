@@ -116,10 +116,17 @@ export async function withJsonCache<T>(
   fn: () => Promise<T>,
   ttlSeconds: number,
 ): Promise<T> {
-  const cached = await cache.get(key).catch(() => null)
+  const cached = await cache.get(key).catch((err) => {
+    console.warn(`[Cache] Failed to get ${key}:`, err)
+    return null
+  })
   if (cached !== null) {
-    const parsed = schema.parse(JSON.parse(cached))
-    return parsed
+    try {
+      const parsed = schema.parse(JSON.parse(cached))
+      return parsed
+    } catch (err) {
+      console.warn(`[Cache] Failed to parse cached value for ${key}:`, err)
+    }
   }
 
   const result = await fn()
@@ -292,7 +299,10 @@ export async function getCachedTokenPrice(
   const cache = getPriceCache()
   const key = `price:${symbol.toUpperCase()}`
 
-  const cached = await cache.get(key).catch(() => null)
+  const cached = await cache.get(key).catch((err) => {
+    console.warn(`[Cache] Failed to get price ${symbol}:`, err)
+    return null
+  })
   if (cached !== null) {
     return parseFloat(cached)
   }
@@ -322,7 +332,10 @@ export async function getCachedTokenPrices(
   for (const symbol of symbols) {
     const cached = await cache
       .get(`price:${symbol.toUpperCase()}`)
-      .catch(() => null)
+      .catch((err) => {
+        console.warn(`[Cache] Failed to get price ${symbol}:`, err)
+        return null
+      })
     if (cached !== null) {
       result.set(symbol, parseFloat(cached))
     } else {

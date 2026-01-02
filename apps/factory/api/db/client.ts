@@ -431,6 +431,44 @@ export function updateBountyStatus(id: string, status: string): boolean {
   return result.changes > 0
 }
 
+export function getBountyStats(): {
+  openBounties: number
+  totalValue: number
+  completed: number
+  avgPayout: number
+} {
+  const db = getDB()
+  const stats = db
+    .query<
+      {
+        total: number
+        open: number
+        completed: number
+        total_reward_value: number | null
+      },
+      []
+    >(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CAST(reward AS REAL)) as total_reward_value
+      FROM bounties
+    `)
+    .get()
+
+  const totalValue = stats?.total_reward_value ?? 0
+  const completedBounties = stats?.completed ?? 0
+  const avgPayout = completedBounties > 0 ? totalValue / completedBounties : 0
+
+  return {
+    openBounties: stats?.open ?? 0,
+    totalValue: totalValue,
+    completed: completedBounties,
+    avgPayout: avgPayout,
+  }
+}
+
 // Jobs
 export function listJobs(filter?: {
   type?: string

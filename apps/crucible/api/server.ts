@@ -83,6 +83,39 @@ const actionCounter = {
   },
 }
 
+// Activity feed for tracking recent events
+interface ActivityEvent {
+  id: string
+  type:
+    | 'agent_created'
+    | 'room_created'
+    | 'message_sent'
+    | 'action_executed'
+    | 'trade_completed'
+  actor: string
+  description: string
+  timestamp: number
+  metadata?: Record<string, string | number>
+}
+
+const activityStore = {
+  events: [] as ActivityEvent[],
+  maxEvents: 100,
+  add(event: Omit<ActivityEvent, 'id' | 'timestamp'>) {
+    this.events.unshift({
+      ...event,
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: Date.now(),
+    })
+    if (this.events.length > this.maxEvents) {
+      this.events.pop()
+    }
+  },
+  getRecent(limit = 10): ActivityEvent[] {
+    return this.events.slice(0, limit)
+  },
+}
+
 /**
  * Safely get contract address, returning undefined if not configured.
  * Used for optional contracts that may not be deployed yet.
