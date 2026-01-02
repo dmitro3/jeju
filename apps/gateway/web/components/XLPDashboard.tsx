@@ -4,7 +4,7 @@ import { CheckCircle, Clock, type LucideProps, XCircle } from 'lucide-react'
 import { type ComponentType, useMemo, useState } from 'react'
 import { type Address, formatEther, parseEther } from 'viem'
 import { useAccount } from 'wagmi'
-import { getIndexerUrl } from '../../lib/config'
+import { INDEXER_URL } from '../../lib/config'
 import {
   useEILConfig,
   useXLPLiquidity,
@@ -60,7 +60,7 @@ async function fetchXLPVoucherHistory(
     }
   `
 
-  const response = await fetch(getIndexerUrl(), {
+  const response = await fetch(INDEXER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -54,7 +54,7 @@ const POD_ID = `pod-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const NETWORK = getCurrentNetwork()
 
 // Default API paths to route to backend
-export const DEFAULT_API_PATHS = [
+const DEFAULT_API_PATHS = [
   '/api',
   '/health',
   '/a2a',
@@ -62,7 +62,6 @@ export const DEFAULT_API_PATHS = [
   '/oauth',
   '/callback',
   '/webhook',
-  '/.well-known',
 ]
 
 /**
@@ -135,19 +134,11 @@ function extractAppName(hostname: string): string | null {
 
 /**
  * Check if a path should be routed to the backend
- * Handles both with and without trailing slashes in apiPaths
  */
 function isApiPath(pathname: string, apiPaths: string[]): boolean {
-  return apiPaths.some((prefix) => {
-    // Normalize prefix - remove trailing slash if present
-    const normalizedPrefix = prefix.endsWith('/') ? prefix.slice(0, -1) : prefix
-    // Match exact path or path with additional segments
-    return (
-      pathname === normalizedPrefix ||
-      pathname === `${normalizedPrefix}/` ||
-      pathname.startsWith(`${normalizedPrefix}/`)
-    )
-  })
+  return apiPaths.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  )
 }
 
 /**
@@ -660,13 +651,8 @@ export async function proxyToBackend(
   let targetUrl: string
 
   if (app.backendEndpoint) {
-    // Check if this is a DWS worker endpoint that needs /http prefix
-    if (app.backendEndpoint.includes('/workers/')) {
-      targetUrl = `${app.backendEndpoint}/http${pathname}`
-    } else {
-      // Direct endpoint (container or external service)
-      targetUrl = `${app.backendEndpoint}${pathname}`
-    }
+    // Direct endpoint (container or external service)
+    targetUrl = `${app.backendEndpoint}${pathname}`
   } else if (app.backendWorkerId) {
     // DWS worker - route through workers runtime
     const host = getLocalhostHost()

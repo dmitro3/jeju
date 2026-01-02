@@ -1,0 +1,8 @@
+{
+  "priceOracle": "0x193521C8934bCF3473453AF4321911E7A89E0E12",
+  "marginManager": "0x9Fcca440F19c62CDF7f973eB6DDF218B15d4C71D",
+  "insuranceFund": "0x01E21d7B8c39dc4C764c19b308Bd8b14B1ba139E",
+  "perpetualMarket": "0x3C1Cb427D20F15563aDa8C249E71db76d7183B6c",
+  "markets": [],
+  "deployedAt": "2026-01-02T06:30:30.965Z"
+}

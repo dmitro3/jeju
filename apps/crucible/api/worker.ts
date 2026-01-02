@@ -80,16 +80,6 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
   const app = new Elysia()
     .use(
       cors({
-<<<<<<< HEAD
-        origin: isDev
-          ? true
-          : [
-              'https://crucible.jejunetwork.org',
-              'https://crucible.testnet.jejunetwork.org',
-              'https://jejunetwork.org',
-              getCoreAppUrl('CRUCIBLE_API'),
-            ],
-=======
         origin: (request) => {
           if (allowedOrigins === true) return true
           const origin = request.headers.get('origin')
@@ -101,7 +91,6 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           if (origin.endsWith('.jejunetwork.org')) return true
           return false
         },
->>>>>>> 21205c118dfef7697e8265f2ef0e67fc498955aa
         methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: [
           'Content-Type',
@@ -237,7 +226,8 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           balance: '0',
         }))
         .post('/:agentId/fund', () => ({
-          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+          txHash:
+            '0x0000000000000000000000000000000000000000000000000000000000000000',
         })),
     )
 
@@ -268,12 +258,19 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             .object({
               name: z.string(),
               description: z.string().optional(),
-              roomType: z.enum(['collaboration', 'adversarial', 'debate', 'council']),
-              config: z.object({
-                maxMembers: z.number().optional(),
-                turnBased: z.boolean().optional(),
-                turnTimeout: z.number().optional(),
-              }).optional(),
+              roomType: z.enum([
+                'collaboration',
+                'adversarial',
+                'debate',
+                'council',
+              ]),
+              config: z
+                .object({
+                  maxMembers: z.number().optional(),
+                  turnBased: z.boolean().optional(),
+                  turnTimeout: z.number().optional(),
+                })
+                .optional(),
             })
             .safeParse(body)
 
@@ -281,7 +278,11 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             return { error: 'Invalid room data', details: parsed.error.issues }
           }
 
-          return { success: true, roomId: crypto.randomUUID(), stateCid: 'pending' }
+          return {
+            success: true,
+            roomId: crypto.randomUUID(),
+            stateCid: 'pending',
+          }
         })
         .post('/:roomId/message', async ({ params, body }) => {
           const parsed = z.object({ content: z.string() }).safeParse(body)
@@ -301,18 +302,9 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
       const characterId = params.characterId
       const character = getCharacter(characterId)
 
-<<<<<<< HEAD
       if (!character) {
         return { error: `Character not found: ${characterId}` }
       }
-=======
-          if (!parsed.success) {
-            return {
-              error: 'Invalid trigger data',
-              details: parsed.error.issues,
-            }
-          }
->>>>>>> 21205c118dfef7697e8265f2ef0e67fc498955aa
 
       const parsed = z
         .object({
@@ -327,7 +319,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
         return { error: 'Invalid chat request' }
       }
 
-      const messageText = parsed.data.text ?? parsed.data.message ?? ''
+      const _messageText = parsed.data.text ?? parsed.data.message ?? ''
 
       // In worker mode, return a placeholder response
       // Full chat requires the ElizaOS runtime from server.ts
@@ -468,10 +460,6 @@ export const fetch = app.fetch
  * Default export - the Elysia app instance
  * Using the app directly (not { fetch }) to avoid Bun auto-serve behavior
  */
-<<<<<<< HEAD
-if (typeof Bun !== 'undefined' && Bun.main === import.meta.path) {
-  const port = process.env.PORT ?? process.env.CRUCIBLE_PORT ?? CORE_PORTS.CRUCIBLE_API.DEFAULT
-=======
 export default app
 
 /**
@@ -486,7 +474,6 @@ if (isMainModule) {
       process.env.CRUCIBLE_PORT ??
       CORE_PORTS.CRUCIBLE_API.get(),
   )
->>>>>>> 21205c118dfef7697e8265f2ef0e67fc498955aa
   const host = getLocalhostHost()
   const network = getCurrentNetwork()
 

@@ -11,12 +11,7 @@ import {PackedUserOperation} from "account-abstraction/interfaces/PackedUserOper
  * @dev Used for testing and development - sponsors all operations without validation
  */
 contract SimplePaymaster is BasePaymaster {
-    constructor(IEntryPoint _entryPoint, address _owner) BasePaymaster(_entryPoint) {
-        // Transfer ownership if specified different from deployer
-        if (_owner != msg.sender) {
-            _transferOwnership(_owner);
-        }
-    }
+    constructor(IEntryPoint _entryPoint, address _owner) BasePaymaster(_entryPoint, _owner) {}
 
     function _validatePaymasterUserOp(
         PackedUserOperation calldata,

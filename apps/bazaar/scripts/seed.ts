@@ -20,7 +20,8 @@
 import { execSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { getL2RpcUrl, isLocalnet } from '@jejunetwork/config'
+import { getL2RpcUrl, getLocalhostHost } from '@jejunetwork/config'
+import { isLocalnet } from '@jejunetwork/config/ports'
 import {
   bootstrapPerps,
   bootstrapPredictionMarkets,

@@ -371,7 +371,7 @@ async function deploy(): Promise<void> {
   const frontendResult = await uploadDirectory(
     config.dwsUrl,
     join(APP_DIR, 'dist'),
-    ['api', 'worker', 'workerd'], // Exclude API and worker directories
+    ['api'], // Exclude API directory
   )
   console.log(
     `[Deploy] Frontend: ${frontendResult.files.size} files, ${(frontendResult.totalSize / 1024).toFixed(1)} KB`,
@@ -440,22 +440,6 @@ async function deploy(): Promise<void> {
   }
   console.log(`  JNS:      ${config.jnsName}`)
   console.log('')
-
-  // Auto-verify deployment
-  const skipVerify = process.argv.includes('--skip-verify')
-  if (!skipVerify) {
-    console.log('[Deploy] Verifying deployment...')
-    const verifyUrl = `https://${config.domain}`
-    const proc = Bun.spawn(['bun', 'run', join(APP_DIR, 'scripts/verify-deployment.ts'), '--url', verifyUrl], {
-      cwd: APP_DIR,
-      stdout: 'inherit',
-      stderr: 'inherit',
-    })
-    const exitCode = await proc.exited
-    if (exitCode !== 0) {
-      console.warn('[Deploy] Verification found issues - check logs above')
-    }
-  }
 }
 
 deploy().catch((error) => {

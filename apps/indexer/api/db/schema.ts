@@ -40,8 +40,8 @@ export const SCHEMA_DDL = [
     first_seen_block INTEGER
   )`,
 
-  // Transaction table
-  `CREATE TABLE IF NOT EXISTS transaction (
+  // Transaction table (quoted because 'transaction' is a SQLite keyword)
+  `CREATE TABLE IF NOT EXISTS "transaction" (
     id TEXT PRIMARY KEY,
     hash TEXT NOT NULL UNIQUE,
     from_id TEXT,
@@ -260,12 +260,26 @@ export const SCHEMA_DDL = [
     registered_at TEXT
   )`,
 
+  // Compute Resource table (required by processor)
+  `CREATE TABLE IF NOT EXISTS compute_resource (
+    id TEXT PRIMARY KEY,
+    resource_id TEXT NOT NULL,
+    gpu_count INTEGER NOT NULL DEFAULT 0,
+    cpu_cores INTEGER NOT NULL DEFAULT 0,
+    memory_gb INTEGER NOT NULL DEFAULT 0,
+    price_per_hour TEXT NOT NULL DEFAULT '0',
+    is_available INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    provider_id TEXT
+  )`,
+
   // Compute Rental table
   `CREATE TABLE IF NOT EXISTS compute_rental (
     id TEXT PRIMARY KEY,
     rental_id TEXT NOT NULL,
     provider_id TEXT,
     renter_id TEXT,
+    resource_id TEXT,
     resource_type TEXT,
     cpu_cores INTEGER,
     memory_gb INTEGER,
@@ -274,7 +288,54 @@ export const SCHEMA_DDL = [
     status TEXT NOT NULL,
     started_at TEXT,
     ended_at TEXT,
-    total_cost TEXT
+    total_cost TEXT,
+    duration TEXT NOT NULL DEFAULT '0',
+    price TEXT NOT NULL DEFAULT '0',
+    start_time TEXT,
+    end_time TEXT,
+    created_at TEXT NOT NULL,
+    tx_hash TEXT NOT NULL,
+    block_number INTEGER NOT NULL
+  )`,
+
+  // Inference Request table (required by processor)
+  `CREATE TABLE IF NOT EXISTS inference_request (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE,
+    model TEXT NOT NULL,
+    max_tokens TEXT NOT NULL DEFAULT '0',
+    tokens_used TEXT,
+    status TEXT NOT NULL,
+    response_hash TEXT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT,
+    tx_hash TEXT NOT NULL,
+    block_number INTEGER NOT NULL,
+    requester_id TEXT,
+    provider_id TEXT
+  )`,
+
+  // Compute Ledger Balance table
+  `CREATE TABLE IF NOT EXISTS compute_ledger_balance (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    balance TEXT NOT NULL DEFAULT '0',
+    locked_amount TEXT NOT NULL DEFAULT '0',
+    last_updated TEXT NOT NULL,
+    account_id TEXT
+  )`,
+
+  // Storage Ledger Balance table (required by processor)
+  `CREATE TABLE IF NOT EXISTS storage_ledger_balance (
+    id TEXT PRIMARY KEY,
+    total_balance TEXT NOT NULL DEFAULT '0',
+    available_balance TEXT NOT NULL DEFAULT '0',
+    locked_balance TEXT NOT NULL DEFAULT '0',
+    pending_refund TEXT NOT NULL DEFAULT '0',
+    refund_unlock_time TEXT,
+    last_updated TEXT NOT NULL,
+    user_id TEXT,
+    provider_id TEXT
   )`,
 
   // Storage Deal table
@@ -410,6 +471,387 @@ export const SCHEMA_DDL = [
     total_deals INTEGER NOT NULL DEFAULT 0,
     total_agents INTEGER NOT NULL DEFAULT 0
   )`,
+
+  // EIL (Ethereum Interop Layer) tables
+  // XLP (Cross-Liquidity Provider) table
+  `CREATE TABLE IF NOT EXISTS xlp (
+    id TEXT PRIMARY KEY,
+    address TEXT NOT NULL UNIQUE,
+    staked_amount TEXT NOT NULL DEFAULT '0',
+    unbonding_amount TEXT NOT NULL DEFAULT '0',
+    unbonding_start_time TEXT,
+    slashed_amount TEXT NOT NULL DEFAULT '0',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    registered_at TEXT NOT NULL,
+    supported_chains TEXT NOT NULL DEFAULT '[]',
+    total_vouchers_issued INTEGER NOT NULL DEFAULT 0,
+    total_vouchers_fulfilled INTEGER NOT NULL DEFAULT 0,
+    total_vouchers_failed INTEGER NOT NULL DEFAULT 0,
+    total_fees_earned TEXT NOT NULL DEFAULT '0',
+    average_response_time_ms INTEGER NOT NULL DEFAULT 0,
+    reputation INTEGER NOT NULL DEFAULT 0
+  )`,
+
+  // XLP Liquidity Deposit table
+  `CREATE TABLE IF NOT EXISTS xlp_liquidity_deposit (
+    id TEXT PRIMARY KEY,
+    token TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    eth_amount TEXT NOT NULL DEFAULT '0',
+    last_updated TEXT NOT NULL,
+    xlp_id TEXT
+  )`,
+
+  // XLP Slash Event table
+  `CREATE TABLE IF NOT EXISTS xlp_slash_event (
+    id TEXT PRIMARY KEY,
+    voucher_id TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    victim TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    disputed INTEGER NOT NULL DEFAULT 0,
+    tx_hash TEXT NOT NULL,
+    xlp_id TEXT
+  )`,
+
+  // Cross Chain Voucher Request table
+  `CREATE TABLE IF NOT EXISTS cross_chain_voucher_request (
+    id TEXT PRIMARY KEY,
+    request_id TEXT NOT NULL UNIQUE,
+    source_chain INTEGER NOT NULL,
+    destination_chain INTEGER NOT NULL,
+    source_token TEXT NOT NULL,
+    destination_token TEXT NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    max_fee TEXT NOT NULL DEFAULT '0',
+    current_fee TEXT NOT NULL DEFAULT '0',
+    fee_increment TEXT NOT NULL DEFAULT '0',
+    recipient TEXT NOT NULL,
+    gas_on_destination TEXT NOT NULL DEFAULT '0',
+    deadline TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_block TEXT NOT NULL,
+    status TEXT NOT NULL,
+    claimed INTEGER NOT NULL DEFAULT 0,
+    expired INTEGER NOT NULL DEFAULT 0,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    requester_id TEXT,
+    voucher_id TEXT
+  )`,
+
+  // Cross Chain Voucher table
+  `CREATE TABLE IF NOT EXISTS cross_chain_voucher (
+    id TEXT PRIMARY KEY,
+    voucher_id TEXT NOT NULL UNIQUE,
+    source_chain_id INTEGER NOT NULL,
+    destination_chain_id INTEGER NOT NULL,
+    source_token TEXT NOT NULL,
+    destination_token TEXT NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    fee TEXT NOT NULL DEFAULT '0',
+    gas_provided TEXT NOT NULL DEFAULT '0',
+    issued_at TEXT NOT NULL,
+    issued_block TEXT NOT NULL,
+    expires_block TEXT NOT NULL,
+    status TEXT NOT NULL,
+    fulfilled INTEGER NOT NULL DEFAULT 0,
+    slashed INTEGER NOT NULL DEFAULT 0,
+    source_claim_tx TEXT,
+    destination_fulfill_tx TEXT,
+    fulfillment_time TEXT,
+    request_id TEXT,
+    xlp_id TEXT
+  )`,
+
+  // EIL Transfer table
+  `CREATE TABLE IF NOT EXISTS eil_transfer (
+    id TEXT PRIMARY KEY,
+    source_chain INTEGER NOT NULL,
+    destination_chain INTEGER NOT NULL,
+    source_token TEXT NOT NULL,
+    destination_token TEXT NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    fee TEXT NOT NULL DEFAULT '0',
+    status TEXT NOT NULL,
+    initiated_at TEXT NOT NULL,
+    completed_at TEXT,
+    source_tx_hash TEXT NOT NULL,
+    destination_tx_hash TEXT,
+    user_id TEXT,
+    xlp_id TEXT,
+    request_id TEXT,
+    voucher_id TEXT
+  )`,
+
+  // EIL Stats table
+  `CREATE TABLE IF NOT EXISTS eil_stats (
+    id TEXT PRIMARY KEY,
+    date TEXT,
+    total_volume_usd TEXT NOT NULL DEFAULT '0',
+    total_transactions TEXT NOT NULL DEFAULT '0',
+    total_xl_ps INTEGER NOT NULL DEFAULT 0,
+    active_xl_ps INTEGER NOT NULL DEFAULT 0,
+    total_staked_eth TEXT NOT NULL DEFAULT '0',
+    average_fee_percent INTEGER NOT NULL DEFAULT 0,
+    average_time_seconds INTEGER NOT NULL DEFAULT 0,
+    success_rate INTEGER NOT NULL DEFAULT 0,
+    last24h_volume TEXT NOT NULL DEFAULT '0',
+    last24h_transactions TEXT NOT NULL DEFAULT '0'
+  )`,
+
+  // Compute Stats table
+  `CREATE TABLE IF NOT EXISTS compute_stats (
+    id TEXT PRIMARY KEY,
+    date TEXT,
+    total_providers INTEGER NOT NULL DEFAULT 0,
+    active_providers INTEGER NOT NULL DEFAULT 0,
+    total_resources INTEGER NOT NULL DEFAULT 0,
+    available_resources INTEGER NOT NULL DEFAULT 0,
+    total_rentals INTEGER NOT NULL DEFAULT 0,
+    active_rentals INTEGER NOT NULL DEFAULT 0,
+    completed_rentals INTEGER NOT NULL DEFAULT 0,
+    total_inference_requests INTEGER NOT NULL DEFAULT 0,
+    total_staked TEXT NOT NULL DEFAULT '0',
+    total_earnings TEXT NOT NULL DEFAULT '0',
+    last24h_rentals INTEGER NOT NULL DEFAULT 0,
+    last24h_inference INTEGER NOT NULL DEFAULT 0,
+    last_updated TEXT NOT NULL
+  )`,
+
+  // Storage Market Stats table
+  `CREATE TABLE IF NOT EXISTS storage_market_stats (
+    id TEXT PRIMARY KEY,
+    date TEXT,
+    total_providers INTEGER NOT NULL DEFAULT 0,
+    active_providers INTEGER NOT NULL DEFAULT 0,
+    verified_providers INTEGER NOT NULL DEFAULT 0,
+    total_capacity_tb TEXT NOT NULL DEFAULT '0',
+    used_capacity_tb TEXT NOT NULL DEFAULT '0',
+    total_deals INTEGER NOT NULL DEFAULT 0,
+    active_deals INTEGER NOT NULL DEFAULT 0,
+    completed_deals INTEGER NOT NULL DEFAULT 0,
+    total_staked TEXT NOT NULL DEFAULT '0',
+    total_earnings TEXT NOT NULL DEFAULT '0',
+    avg_price_per_gb_month TEXT NOT NULL DEFAULT '0',
+    last24h_deals INTEGER NOT NULL DEFAULT 0,
+    last24h_volume TEXT NOT NULL DEFAULT '0',
+    last_updated TEXT NOT NULL
+  )`,
+
+  // OIF Solver table
+  `CREATE TABLE IF NOT EXISTS oif_solver (
+    id TEXT PRIMARY KEY,
+    address TEXT NOT NULL UNIQUE,
+    name TEXT,
+    endpoint TEXT,
+    staked_amount TEXT NOT NULL DEFAULT '0',
+    unbonding_amount TEXT NOT NULL DEFAULT '0',
+    unbonding_start_time TEXT,
+    slashed_amount TEXT NOT NULL DEFAULT '0',
+    is_active INTEGER NOT NULL DEFAULT 0,
+    registered_at TEXT NOT NULL,
+    last_active_at TEXT NOT NULL,
+    supported_chains TEXT NOT NULL DEFAULT '[]',
+    total_fills INTEGER NOT NULL DEFAULT 0,
+    successful_fills INTEGER NOT NULL DEFAULT 0,
+    failed_fills INTEGER NOT NULL DEFAULT 0,
+    success_rate INTEGER NOT NULL DEFAULT 0,
+    average_response_ms INTEGER NOT NULL DEFAULT 0,
+    average_fill_time_ms INTEGER NOT NULL DEFAULT 0,
+    total_volume_usd TEXT NOT NULL DEFAULT '0',
+    total_fees_earned TEXT NOT NULL DEFAULT '0',
+    reputation INTEGER NOT NULL DEFAULT 50
+  )`,
+
+  // OIF Solver Liquidity table
+  `CREATE TABLE IF NOT EXISTS oif_solver_liquidity (
+    id TEXT PRIMARY KEY,
+    solver_id TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    token TEXT NOT NULL,
+    amount TEXT NOT NULL DEFAULT '0',
+    locked_amount TEXT NOT NULL DEFAULT '0',
+    last_updated TEXT NOT NULL
+  )`,
+
+  // OIF Intent table
+  `CREATE TABLE IF NOT EXISTS oif_intent (
+    id TEXT PRIMARY KEY,
+    intent_id TEXT NOT NULL UNIQUE,
+    nonce TEXT NOT NULL,
+    source_chain_id INTEGER NOT NULL,
+    open_deadline TEXT NOT NULL,
+    fill_deadline TEXT NOT NULL,
+    input_token TEXT NOT NULL,
+    input_amount TEXT NOT NULL,
+    output_token TEXT NOT NULL,
+    output_amount TEXT NOT NULL,
+    output_chain_id INTEGER NOT NULL,
+    recipient TEXT NOT NULL,
+    max_fee TEXT NOT NULL,
+    actual_fee TEXT,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    claimed_at TEXT,
+    filled_at TEXT,
+    settled_at TEXT,
+    expired_at TEXT,
+    input_settler_tx TEXT NOT NULL,
+    output_settler_tx TEXT,
+    attestation_tx TEXT,
+    claim_tx TEXT,
+    created_block TEXT NOT NULL,
+    filled_block TEXT,
+    user_id TEXT,
+    solver_id TEXT,
+    settlement_id TEXT,
+    accepted_quote_id TEXT
+  )`,
+
+  // OIF Settlement table
+  `CREATE TABLE IF NOT EXISTS oif_settlement (
+    id TEXT PRIMARY KEY,
+    settlement_id TEXT NOT NULL UNIQUE,
+    source_chain_id INTEGER NOT NULL,
+    destination_chain_id INTEGER NOT NULL,
+    input_token TEXT NOT NULL,
+    output_token TEXT NOT NULL,
+    input_amount TEXT NOT NULL,
+    output_amount TEXT NOT NULL,
+    fee TEXT NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    attested_at TEXT,
+    settled_at TEXT,
+    input_settler_tx TEXT NOT NULL,
+    output_settler_tx TEXT NOT NULL,
+    attestation_tx TEXT,
+    claim_tx TEXT,
+    intent_id TEXT,
+    solver_id TEXT,
+    attestation_id TEXT
+  )`,
+
+  // OIF Quote table
+  `CREATE TABLE IF NOT EXISTS oif_quote (
+    id TEXT PRIMARY KEY,
+    quote_id TEXT NOT NULL UNIQUE,
+    source_chain_id INTEGER NOT NULL,
+    destination_chain_id INTEGER NOT NULL,
+    source_token TEXT NOT NULL,
+    destination_token TEXT NOT NULL,
+    input_amount TEXT NOT NULL,
+    output_amount TEXT NOT NULL,
+    fee TEXT NOT NULL,
+    fee_percent INTEGER NOT NULL,
+    price_impact INTEGER NOT NULL,
+    estimated_fill_time_seconds INTEGER NOT NULL,
+    valid_until TEXT NOT NULL,
+    solver_reputation INTEGER NOT NULL,
+    accepted INTEGER NOT NULL DEFAULT 0,
+    expired INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    solver_id TEXT
+  )`,
+
+  // OIF Route table
+  `CREATE TABLE IF NOT EXISTS oif_route (
+    id TEXT PRIMARY KEY,
+    route_id TEXT NOT NULL UNIQUE,
+    source_chain_id INTEGER NOT NULL,
+    destination_chain_id INTEGER NOT NULL,
+    input_settler TEXT NOT NULL,
+    output_settler TEXT NOT NULL,
+    oracle TEXT NOT NULL,
+    oracle_address TEXT,
+    is_active INTEGER NOT NULL DEFAULT 0,
+    total_volume TEXT NOT NULL DEFAULT '0',
+    total_volume_usd TEXT NOT NULL DEFAULT '0',
+    total_intents INTEGER NOT NULL DEFAULT 0,
+    successful_intents INTEGER NOT NULL DEFAULT 0,
+    failed_intents INTEGER NOT NULL DEFAULT 0,
+    average_fee_percent INTEGER NOT NULL DEFAULT 0,
+    average_fill_time_seconds INTEGER NOT NULL DEFAULT 0,
+    success_rate INTEGER NOT NULL DEFAULT 0,
+    active_solvers INTEGER NOT NULL DEFAULT 0,
+    total_liquidity TEXT NOT NULL DEFAULT '0',
+    created_at TEXT NOT NULL,
+    last_updated TEXT NOT NULL
+  )`,
+
+  // OIF Attestation table
+  `CREATE TABLE IF NOT EXISTS oif_attestation (
+    id TEXT PRIMARY KEY,
+    attestation_id TEXT NOT NULL UNIQUE,
+    order_id TEXT NOT NULL,
+    oracle_type TEXT NOT NULL,
+    source_chain_id INTEGER NOT NULL,
+    destination_chain_id INTEGER NOT NULL,
+    proof TEXT NOT NULL,
+    proof_block_number TEXT NOT NULL,
+    proof_timestamp TEXT NOT NULL,
+    verified INTEGER NOT NULL DEFAULT 0,
+    verified_at TEXT,
+    verification_tx TEXT,
+    intent_id TEXT,
+    settlement_id TEXT
+  )`,
+
+  // OIF Slash Event table
+  `CREATE TABLE IF NOT EXISTS oif_slash_event (
+    id TEXT PRIMARY KEY,
+    intent_id TEXT NOT NULL,
+    order_id TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    amount TEXT NOT NULL,
+    victim TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    timestamp TEXT NOT NULL,
+    disputed INTEGER NOT NULL DEFAULT 0,
+    tx_hash TEXT NOT NULL,
+    solver_id TEXT
+  )`,
+
+  // OIF Stats table
+  `CREATE TABLE IF NOT EXISTS oif_stats (
+    id TEXT PRIMARY KEY,
+    date TEXT,
+    total_volume_usd TEXT NOT NULL DEFAULT '0',
+    total_intents INTEGER NOT NULL DEFAULT 0,
+    successful_intents INTEGER NOT NULL DEFAULT 0,
+    failed_intents INTEGER NOT NULL DEFAULT 0,
+    total_solvers INTEGER NOT NULL DEFAULT 0,
+    active_solvers INTEGER NOT NULL DEFAULT 0,
+    total_liquidity_usd TEXT NOT NULL DEFAULT '0',
+    average_fee_percent INTEGER NOT NULL DEFAULT 0,
+    average_fill_time_seconds INTEGER NOT NULL DEFAULT 0,
+    success_rate INTEGER NOT NULL DEFAULT 0,
+    last24h_volume TEXT NOT NULL DEFAULT '0',
+    last24h_intents INTEGER NOT NULL DEFAULT 0,
+    last_updated TEXT NOT NULL
+  )`,
+
+  // OIF Chain Stats table
+  `CREATE TABLE IF NOT EXISTS oif_chain_stats (
+    id TEXT PRIMARY KEY,
+    chain_id INTEGER NOT NULL,
+    date TEXT,
+    total_volume_usd TEXT NOT NULL DEFAULT '0',
+    total_intents INTEGER NOT NULL DEFAULT 0,
+    successful_intents INTEGER NOT NULL DEFAULT 0,
+    failed_intents INTEGER NOT NULL DEFAULT 0,
+    total_solvers INTEGER NOT NULL DEFAULT 0,
+    active_solvers INTEGER NOT NULL DEFAULT 0,
+    total_liquidity_usd TEXT NOT NULL DEFAULT '0',
+    average_fee_percent INTEGER NOT NULL DEFAULT 0,
+    average_fill_time_seconds INTEGER NOT NULL DEFAULT 0,
+    success_rate INTEGER NOT NULL DEFAULT 0,
+    last24h_volume TEXT NOT NULL DEFAULT '0',
+    last24h_intents INTEGER NOT NULL DEFAULT 0,
+    last_updated TEXT NOT NULL
+  )`,
 ]
 
 // Indexes for performance
@@ -467,6 +909,120 @@ export const INDEX_DDL = [
   'CREATE INDEX IF NOT EXISTS idx_oracle_operator_active ON oracle_operator(is_active)',
   'CREATE INDEX IF NOT EXISTS idx_oracle_report_feed ON oracle_report(feed_id)',
   'CREATE INDEX IF NOT EXISTS idx_oracle_dispute_status ON oracle_dispute(status)',
+
+  // XLP indexes
+  'CREATE INDEX IF NOT EXISTS idx_xlp_address ON xlp(address)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_active ON xlp(is_active)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_registered_at ON xlp(registered_at)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_reputation ON xlp(reputation)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_liquidity_deposit_xlp ON xlp_liquidity_deposit(xlp_id)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_liquidity_deposit_token ON xlp_liquidity_deposit(token)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_liquidity_deposit_chain ON xlp_liquidity_deposit(chain_id)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_slash_event_xlp ON xlp_slash_event(xlp_id)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_slash_event_voucher ON xlp_slash_event(voucher_id)',
+  'CREATE INDEX IF NOT EXISTS idx_xlp_slash_event_timestamp ON xlp_slash_event(timestamp)',
+
+  // Cross Chain Voucher indexes
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_request_id ON cross_chain_voucher_request(request_id)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_requester ON cross_chain_voucher_request(requester_id)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_source_chain ON cross_chain_voucher_request(source_chain)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_dest_chain ON cross_chain_voucher_request(destination_chain)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_status ON cross_chain_voucher_request(status)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_voucher_id ON cross_chain_voucher(voucher_id)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_request_id ON cross_chain_voucher(request_id)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_xlp ON cross_chain_voucher(xlp_id)',
+  'CREATE INDEX IF NOT EXISTS idx_cross_chain_voucher_status ON cross_chain_voucher(status)',
+
+  // EIL Transfer indexes
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_user ON eil_transfer(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_source_chain ON eil_transfer(source_chain)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_dest_chain ON eil_transfer(destination_chain)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_xlp ON eil_transfer(xlp_id)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_request_id ON eil_transfer(request_id)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_voucher_id ON eil_transfer(voucher_id)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_status ON eil_transfer(status)',
+  'CREATE INDEX IF NOT EXISTS idx_eil_transfer_initiated_at ON eil_transfer(initiated_at)',
+
+  // EIL Stats indexes
+  'CREATE INDEX IF NOT EXISTS idx_eil_stats_date ON eil_stats(date)',
+
+  // Compute Stats indexes
+  'CREATE INDEX IF NOT EXISTS idx_compute_stats_date ON compute_stats(date)',
+
+  // Storage Market Stats indexes
+  'CREATE INDEX IF NOT EXISTS idx_storage_market_stats_date ON storage_market_stats(date)',
+
+  // Compute Resource indexes
+  'CREATE INDEX IF NOT EXISTS idx_compute_resource_provider ON compute_resource(provider_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_resource_resource_id ON compute_resource(resource_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_resource_available ON compute_resource(is_available)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_resource_created ON compute_resource(created_at)',
+
+  // Compute Rental indexes
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_rental_id ON compute_rental(rental_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_renter ON compute_rental(renter_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_provider ON compute_rental(provider_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_resource ON compute_rental(resource_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_status ON compute_rental(status)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_rental_created ON compute_rental(created_at)',
+
+  // Compute Ledger Balance indexes
+  'CREATE INDEX IF NOT EXISTS idx_compute_ledger_balance_account ON compute_ledger_balance(account_id)',
+  'CREATE INDEX IF NOT EXISTS idx_compute_ledger_balance_token ON compute_ledger_balance(token)',
+
+  // Storage Ledger Balance indexes
+  'CREATE INDEX IF NOT EXISTS idx_storage_ledger_balance_user ON storage_ledger_balance(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_storage_ledger_balance_provider ON storage_ledger_balance(provider_id)',
+  'CREATE INDEX IF NOT EXISTS idx_storage_ledger_balance_updated ON storage_ledger_balance(last_updated)',
+
+  // Inference Request indexes
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_request_id ON inference_request(request_id)',
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_requester ON inference_request(requester_id)',
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_provider ON inference_request(provider_id)',
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_model ON inference_request(model)',
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_status ON inference_request(status)',
+  'CREATE INDEX IF NOT EXISTS idx_inference_request_created ON inference_request(created_at)',
+
+  // OIF Solver indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_address ON oif_solver(address)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_active ON oif_solver(is_active)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_registered ON oif_solver(registered_at)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_reputation ON oif_solver(reputation)',
+
+  // OIF Solver Liquidity indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_liquidity_solver ON oif_solver_liquidity(solver_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_liquidity_chain ON oif_solver_liquidity(chain_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_solver_liquidity_token ON oif_solver_liquidity(token)',
+
+  // OIF Intent indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_intent_intent ON oif_intent(intent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_intent_user ON oif_intent(user_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_intent_source_chain ON oif_intent(source_chain_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_intent_status ON oif_intent(status)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_intent_solver ON oif_intent(solver_id)',
+
+  // OIF Settlement indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_settlement_settlement ON oif_settlement(settlement_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_settlement_intent ON oif_settlement(intent_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_settlement_solver ON oif_settlement(solver_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_settlement_status ON oif_settlement(status)',
+
+  // OIF Quote indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_quote_quote ON oif_quote(quote_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_quote_solver ON oif_quote(solver_id)',
+
+  // OIF Route indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_route_route ON oif_route(route_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_route_source ON oif_route(source_chain_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_route_dest ON oif_route(destination_chain_id)',
+
+  // OIF Attestation indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_attestation_attestation ON oif_attestation(attestation_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_attestation_intent ON oif_attestation(intent_id)',
+
+  // OIF Slash Event indexes
+  'CREATE INDEX IF NOT EXISTS idx_oif_slash_event_solver ON oif_slash_event(solver_id)',
+  'CREATE INDEX IF NOT EXISTS idx_oif_slash_event_intent ON oif_slash_event(intent_id)',
 ]
 
 // Table name to snake_case mapping for TypeORM entity compatibility
@@ -499,6 +1055,29 @@ export const TABLE_NAMES = {
   OracleSubscription: 'oracle_subscription',
   JnsName: 'jns_name',
   MarketplaceStats: 'marketplace_stats',
+  XLP: 'xlp',
+  XLPLiquidityDeposit: 'xlp_liquidity_deposit',
+  XLPSlashEvent: 'xlp_slash_event',
+  CrossChainVoucherRequest: 'cross_chain_voucher_request',
+  CrossChainVoucher: 'cross_chain_voucher',
+  EILTransfer: 'eil_transfer',
+  EILStats: 'eil_stats',
+  ComputeStats: 'compute_stats',
+  StorageMarketStats: 'storage_market_stats',
+  ComputeResource: 'compute_resource',
+  ComputeLedgerBalance: 'compute_ledger_balance',
+  StorageLedgerBalance: 'storage_ledger_balance',
+  InferenceRequest: 'inference_request',
+  OIFSolver: 'oif_solver',
+  OIFSolverLiquidity: 'oif_solver_liquidity',
+  OIFIntent: 'oif_intent',
+  OIFSettlement: 'oif_settlement',
+  OIFQuote: 'oif_quote',
+  OIFRoute: 'oif_route',
+  OIFAttestation: 'oif_attestation',
+  OIFSlashEvent: 'oif_slash_event',
+  OIFStats: 'oif_stats',
+  OIFChainStats: 'oif_chain_stats',
 } as const
 
 export type TableName = (typeof TABLE_NAMES)[keyof typeof TABLE_NAMES]

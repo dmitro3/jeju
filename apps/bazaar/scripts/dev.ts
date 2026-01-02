@@ -16,6 +16,7 @@ import {
   CORE_PORTS,
   getCoreAppUrl,
   getIndexerGraphqlUrl,
+  getLocalhostHost,
   getRpcUrl,
   getSQLitBlockProducerUrl,
 } from '@jejunetwork/config'
@@ -217,9 +218,12 @@ async function startApiServer(): Promise<void> {
     SQLIT_PRIVATE_KEY: process.env.SQLIT_PRIVATE_KEY || '',
   })
 
-  app.listen(API_PORT, () =>
-    console.log(`[Bazaar] API: http://localhost:${API_PORT}`),
-  )
+  const host = getLocalhostHost()
+  app.listen({
+    port: API_PORT,
+    hostname: host,
+  })
+  console.log(`[Bazaar] API: http://${host}:${API_PORT}`)
 }
 
 async function startFrontendServer(): Promise<void> {
@@ -230,8 +234,10 @@ async function startFrontendServer(): Promise<void> {
     ? `${DWS_URL}/workers/bazaar-api`
     : `http://localhost:${API_PORT}`
 
+  const host = getLocalhostHost()
   Bun.serve({
     port: FRONTEND_PORT,
+    hostname: host,
     async fetch(req) {
       const url = new URL(req.url)
       const path = url.pathname
@@ -291,7 +297,7 @@ async function startFrontendServer(): Promise<void> {
     },
   })
 
-  console.log(`[Bazaar] Frontend: http://localhost:${FRONTEND_PORT}`)
+  console.log(`[Bazaar] Frontend: http://${host}:${FRONTEND_PORT}`)
 
   // Watch for changes
   for (const dir of ['./web', './components', './hooks', './lib']) {

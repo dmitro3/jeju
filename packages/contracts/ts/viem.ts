@@ -26,9 +26,7 @@ import type {
   Chain,
   ContractFunctionArgs,
   ContractFunctionName,
-  GetContractReturnType,
   Hex,
-  PublicClient,
   ReadContractReturnType,
   Transport,
   WalletClient,
@@ -159,8 +157,8 @@ export function getContract<
   address: Address
   abi: TAbi
   client: unknown
-}): GetContractReturnType<TAbi> {
-  return viemGetContract(params as Parameters<typeof viemGetContract>[0]) as GetContractReturnType<TAbi>
+}): ReturnType<typeof viemGetContract> {
+  return viemGetContract(params as Parameters<typeof viemGetContract>[0])
 }
 
 /**
@@ -188,7 +186,9 @@ export interface PublicClientConfig {
  * })
  * ```
  */
-export function createTypedPublicClient(config: PublicClientConfig) {
+export function createTypedPublicClient(
+  config: PublicClientConfig,
+): ReturnType<typeof createPublicClient> {
   return createPublicClient({
     chain: {
       id: config.chainId,
@@ -223,7 +223,9 @@ export interface WalletClientConfig extends PublicClientConfig {
  * })
  * ```
  */
-export function createTypedWalletClient(config: WalletClientConfig) {
+export function createTypedWalletClient(
+  config: WalletClientConfig,
+): ReturnType<typeof createWalletClient> {
   return createWalletClient({
     account: config.account,
     chain: {

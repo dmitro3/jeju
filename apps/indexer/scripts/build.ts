@@ -27,10 +27,11 @@ async function build() {
   console.log('[Indexer] Compiling TypeScript...')
   await $`bunx tsc 2>/dev/null || true`.cwd(APP_DIR)
 
-  // Setup model symlink
-  console.log('[Indexer] Setting up model symlink...')
+  // Copy compiled model files (migration tool needs actual files, not symlink)
+  console.log('[Indexer] Setting up model directory...')
   await rm(resolve(APP_DIR, 'lib/model'), { recursive: true, force: true })
-  await $`ln -s ${resolve(APP_DIR, 'src/model')} ${resolve(APP_DIR, 'lib/model')}`
+  // Copy compiled model from lib/src/model to lib/model for migration tool
+  await $`cp -r ${resolve(APP_DIR, 'lib/src/model')} ${resolve(APP_DIR, 'lib/model')}`.cwd(APP_DIR)
 
   // Run post-build script
   console.log('[Indexer] Running post-build...')

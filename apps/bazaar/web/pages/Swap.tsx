@@ -1,8 +1,9 @@
 import { SUPPORTED_CHAINS } from '@jejunetwork/shared'
-import { useState } from 'react'
+import { erc20Abi } from 'viem'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { formatEther, parseEther } from 'viem'
-import { useAccount } from 'wagmi'
+import { useAccount, useBalance, useReadContract, useSwitchChain } from 'wagmi'
 import {
   getSwapButtonText,
   getTokenBySymbol,
@@ -12,6 +13,7 @@ import {
 } from '../../api/swap'
 import { InfoCard } from '../components/ui'
 import { JEJU_CHAIN_ID } from '../config/chains'
+import { wagmiConfig } from '../config/wagmi'
 import {
   type ChainInfo,
   isCrossChainSwap as checkCrossChain,
@@ -19,9 +21,11 @@ import {
   useEILConfig,
   useSwapFeeEstimate,
 } from '../hooks/useEIL'
+import { useSameChainSwap } from '../hooks/useSameChainSwap'
 
 export default function SwapPage() {
   const { isConnected, chain, address } = useAccount()
+  const { switchChain } = useSwitchChain()
   const [inputAmount, setInputAmount] = useState('')
   const [inputToken, setInputToken] = useState('ETH')
   const [outputToken, setOutputToken] = useState('ETH')
@@ -30,19 +34,150 @@ export default function SwapPage() {
 
   const isCorrectChain = chain?.id === JEJU_CHAIN_ID
 
+  const handleSwitchNetwork = async () => {
+    if (!switchChain) {
+      toast.error('Please switch to the correct network in MetaMask')
+      return
+    }
+    try {
+      const targetChain = wagmiConfig.chains.find(
+        (c) => c.id === JEJU_CHAIN_ID,
+      )
+      if (!targetChain) {
+        toast.error('Chain not configured in wallet')
+        return
+      }
+      await switchChain({ chainId: JEJU_CHAIN_ID })
+      toast.success(`Switched to ${targetChain.name}`)
+    } catch (error) {
+      const err = error as Error
+      // User rejection is expected, don't show error
+      if (err.message?.includes('reject') || err.message?.includes('denied')) {
+        return
+      }
+      toast.error(err.message || 'Failed to switch network')
+    }
+  }
+
   const eilConfig = useEILConfig()
   const eilAvailable = eilConfig?.isAvailable ?? false
   const crossChainPaymaster = eilConfig?.crossChainPaymaster
   const {
     executeCrossChainSwap,
-    swapStatus,
-    isLoading: isSwapping,
-    hash,
+    swapStatus: crossChainStatus,
+    isLoading: isCrossChainSwapping,
+    hash: crossChainHash,
   } = useCrossChainSwap(crossChainPaymaster)
-
+  
+  const {
+    executeSameChainSwap,
+    swapStatus: sameChainStatus,
+    isLoading: isSameChainSwapping,
+    hash: sameChainHash,
+  } = useSameChainSwap()
+  
   const isCrossChainSwap = checkCrossChain(sourceChainId, destChainId)
-  const amount = inputAmount ? parseEther(inputAmount) : 0n
+  const isSwapping = isCrossChainSwapping || isSameChainSwapping
+  const hash = crossChainHash || sameChainHash
+  // Use the appropriate status based on swap type
+  const swapStatus = isCrossChainSwap ? crossChainStatus : sameChainStatus
+  
+  // Get input and output token info first
+  const inputTokenInfo = getTokenBySymbol(inputToken)
+  const outputTokenInfo = getTokenBySymbol(outputToken)
+  const inputDecimals = inputTokenInfo?.decimals ?? 18
+  const outputDecimals = outputTokenInfo?.decimals ?? 18
+  const amount = inputAmount 
+    ? BigInt(Math.floor(parseFloat(inputAmount) * 10 ** inputDecimals))
+    : 0n
   const feeEstimate = useSwapFeeEstimate(sourceChainId, destChainId, amount)
+
+  // Get balances for input and output tokens
+  const isInputETH = inputToken === 'ETH' || inputTokenInfo?.address === '0x0000000000000000000000000000000000000000'
+  const isOutputETH = outputToken === 'ETH' || outputTokenInfo?.address === '0x0000000000000000000000000000000000000000'
+  
+  // ETH balance
+  const { data: ethBalance, refetch: refetchEthBalance } = useBalance({
+    address,
+    query: {
+      enabled: !!address && (isInputETH || isOutputETH),
+      refetchInterval: 5000, // Refresh every 5 seconds
+    },
+  })
+
+  // Input token balance (ERC20)
+  const { data: inputTokenBalance, refetch: refetchInputBalance } = useReadContract({
+    address: isInputETH ? undefined : (inputTokenInfo?.address as `0x${string}` | undefined),
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && !!inputTokenInfo && !isInputETH,
+      refetchInterval: 5000, // Refresh every 5 seconds
+    },
+  })
+
+  // Output token balance (ERC20)
+  const { data: outputTokenBalance, refetch: refetchOutputBalance } = useReadContract({
+    address: isOutputETH ? undefined : (outputTokenInfo?.address as `0x${string}` | undefined),
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && !!outputTokenInfo && !isOutputETH,
+      refetchInterval: 5000, // Refresh every 5 seconds
+    },
+  })
+
+  // Format balances for display
+  const inputBalance = isInputETH 
+    ? ethBalance?.value ?? 0n
+    : (inputTokenBalance as bigint | undefined) ?? 0n
+  const inputBalanceFormatted = inputBalance > 0n
+    ? (Number(inputBalance) / 10 ** inputDecimals).toFixed(6).replace(/\.?0+$/, '')
+    : '0'
+
+  const outputBalance = isOutputETH
+    ? ethBalance?.value ?? 0n
+    : (outputTokenBalance as bigint | undefined) ?? 0n
+  const outputBalanceFormatted = outputBalance > 0n
+    ? (Number(outputBalance) / 10 ** outputDecimals).toFixed(6).replace(/\.?0+$/, '')
+    : '0'
+
+  // Refetch balances when swap completes or transaction hash changes
+  useEffect(() => {
+    if (swapStatus === 'complete' || hash) {
+      // Immediate refetch, then again after delay to ensure transaction is mined
+      refetchEthBalance()
+      refetchInputBalance()
+      refetchOutputBalance()
+      
+      const timer1 = setTimeout(() => {
+        refetchEthBalance()
+        refetchInputBalance()
+        refetchOutputBalance()
+      }, 1000)
+      
+      const timer2 = setTimeout(() => {
+        refetchEthBalance()
+        refetchInputBalance()
+        refetchOutputBalance()
+      }, 3000)
+      
+      return () => {
+        clearTimeout(timer1)
+        clearTimeout(timer2)
+      }
+    }
+  }, [swapStatus, hash, refetchEthBalance, refetchInputBalance, refetchOutputBalance])
+
+  // Also refetch when token selection changes
+  useEffect(() => {
+    if (isConnected) {
+      refetchInputBalance()
+      refetchOutputBalance()
+    }
+  }, [inputToken, outputToken, isConnected, refetchInputBalance, refetchOutputBalance])
 
   const sourceChain = SUPPORTED_CHAINS.find(
     (c: ChainInfo) => c.id === sourceChainId,
@@ -51,13 +186,26 @@ export default function SwapPage() {
     (c: ChainInfo) => c.id === destChainId,
   )
 
-  // Calculate output - for same token, output equals input minus fees
-  const outputAmount =
-    inputAmount && inputToken === outputToken
-      ? formatEther(
-          amount > feeEstimate.totalFee ? amount - feeEstimate.totalFee : 0n,
-        )
-      : ''
+  // Calculate output - for different tokens, use 1:1 rate (placeholder until oracle)
+  // For same token, output equals input minus fees
+  // Note: outputTokenInfo and outputDecimals are already declared above
+  
+  let outputAmount = ''
+  if (inputAmount && amount > 0n) {
+    if (inputToken === outputToken) {
+      // Same token: output = input - fees
+      const outputWei = amount > feeEstimate.totalFee ? amount - feeEstimate.totalFee : 0n
+      outputAmount = (Number(outputWei) / 10 ** outputDecimals).toFixed(outputDecimals)
+    } else {
+      // Different tokens: use 1:1 rate (placeholder until oracle integration)
+      // Convert input amount to output token decimals
+      const inputAmountScaled = Number(amount) / 10 ** inputDecimals
+      const outputAmountScaled = inputAmountScaled * (10 ** outputDecimals / 10 ** inputDecimals)
+      const outputWei = BigInt(Math.floor(outputAmountScaled * 10 ** outputDecimals))
+      const afterFees = outputWei > feeEstimate.totalFee ? outputWei - feeEstimate.totalFee : 0n
+      outputAmount = (Number(afterFees) / 10 ** outputDecimals).toFixed(outputDecimals)
+    }
+  }
 
   const handleSwap = async () => {
     const validation = validateSwap(
@@ -84,23 +232,41 @@ export default function SwapPage() {
       return
     }
 
+    // Parse amount based on token decimals
+    const inputAmountParsed = parseFloat(inputAmount)
+    const decimals = sourceTokenInfo.decimals
+    const amount = BigInt(Math.floor(inputAmountParsed * 10 ** decimals))
+
+    // For same-chain swaps, we need a different approach since EIL isn't configured
+    // For now, show a message that same-chain swaps need a DEX or direct transfer
     if (isCrossChainSwap) {
+      if (!eilAvailable) {
+        toast.error('Cross-chain swaps require EIL integration')
+        return
+      }
       await executeCrossChainSwap({
         sourceToken: sourceTokenInfo.address,
         destinationToken: destTokenInfo.address,
-        amount: parseEther(inputAmount),
+        amount,
         sourceChainId,
         destinationChainId: destChainId,
       })
     } else {
-      await executeCrossChainSwap({
-        sourceToken: sourceTokenInfo.address,
-        destinationToken: destTokenInfo.address,
-        amount: parseEther(inputAmount),
-        sourceChainId: JEJU_CHAIN_ID,
-        destinationChainId: JEJU_CHAIN_ID,
-        recipient: address,
-      })
+      // Same-chain swap - execute token-to-token swap
+      try {
+        await executeSameChainSwap({
+          sourceToken: sourceTokenInfo.address,
+          destinationToken: destTokenInfo.address,
+          amount,
+          sourceDecimals: sourceTokenInfo.decimals,
+          destDecimals: destTokenInfo.decimals,
+          rate: 1.0, // 1:1 rate for now
+        })
+        toast.success('Swap executed successfully!')
+      } catch (error) {
+        const err = error as Error
+        toast.error(err.message || 'Swap failed')
+      }
     }
   }
 
@@ -142,20 +308,34 @@ export default function SwapPage() {
         <p className="text-secondary">
           Trade tokens instantly with the best rates
         </p>
+        {isConnected && address && (
+          <div className="mt-3 text-xs text-tertiary font-mono">
+            Connected: {address.slice(0, 6)}...{address.slice(-4)}
+          </div>
+        )}
       </header>
 
       {/* Warnings */}
       <div className="space-y-3 mb-6">
-        {!eilAvailable && (
+        {!eilAvailable && isCrossChainSwap && (
           <InfoCard variant="warning">
-            Cross-chain swaps require EIL integration. Only same-chain ETH
-            transfers are available.
+            Cross-chain swaps require EIL integration. Only same-chain swaps
+            are available.
           </InfoCard>
         )}
 
         {isConnected && !isCorrectChain && !isCrossChainSwap && (
           <InfoCard variant="error">
-            Switch to the correct network to swap
+            <div className="flex items-center justify-between gap-4">
+              <span>Switch to the correct network to swap</span>
+              <button
+                type="button"
+                onClick={handleSwitchNetwork}
+                className="btn-primary px-4 py-2 text-sm"
+              >
+                Switch Network
+              </button>
+            </div>
           </InfoCard>
         )}
       </div>
@@ -165,12 +345,19 @@ export default function SwapPage() {
         {/* From Section */}
         <div className="mb-2">
           <div className="flex items-center justify-between mb-2">
-            <label
-              htmlFor="swap-input-amount"
-              className="text-sm text-tertiary"
-            >
-              From
-            </label>
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="swap-input-amount"
+                className="text-sm text-tertiary"
+              >
+                From
+              </label>
+              {isConnected && (
+                <span className="text-xs text-secondary">
+                  Balance: {inputBalanceFormatted} {inputToken}
+                </span>
+              )}
+            </div>
             {eilAvailable && (
               <select
                 value={sourceChainId}
@@ -239,12 +426,34 @@ export default function SwapPage() {
         {/* To Section */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
-            <label
-              htmlFor="swap-output-amount"
-              className="text-sm text-tertiary"
-            >
-              To
-            </label>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="swap-output-amount"
+                  className="text-sm text-tertiary"
+                >
+                  To
+                </label>
+                {isConnected && (
+                  <span className="text-xs text-secondary">
+                    Balance: {outputBalanceFormatted} {outputToken}
+                  </span>
+                )}
+              </div>
+              {isConnected && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    refetchOutputBalance()
+                    refetchEthBalance()
+                  }}
+                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                  title="Refresh balance"
+                >
+                  ↻
+                </button>
+              )}
+            </div>
             {eilAvailable && (
               <select
                 value={destChainId}
