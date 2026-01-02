@@ -167,15 +167,12 @@
       "crossChainPaymaster": "",
       "liquidityPaymaster": ""
     },
-<<<<<<< HEAD
-=======
     "federation": {
       "registryHub": "",
       "networkRegistry": "",
       "federationBridge": "",
       "federationGovernance": ""
     },
->>>>>>> xlp
     "liquidity": {
       "riskSleeve": "",
       "liquidityRouter": "",
