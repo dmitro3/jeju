@@ -25,6 +25,7 @@ export interface AutocratConfig {
   // API Keys
   autocratApiKey?: string
   cloudApiKey?: string
+  dwsProxySecret?: string
 
   // TEE
   teePlatform?: string
@@ -65,6 +66,7 @@ const { config, configure: setAutocratConfig } =
     sqlitDatabaseId: getEnvVar('SQLIT_DATABASE_ID') ?? 'autocrat',
     autocratApiKey: getEnvVar('AUTOCRAT_API_KEY'),
     cloudApiKey: getEnvVar('CLOUD_API_KEY'),
+    dwsProxySecret: getEnvVar('DWS_PROXY_SECRET'),
     teePlatform: getEnvVar('TEE_PLATFORM'),
     teeEncryptionSecret: getEnvVar('TEE_ENCRYPTION_SECRET'),
     ollamaUrl: getEnvVar('OLLAMA_URL') ?? `http://${getLocalhostHost()}:11434`,

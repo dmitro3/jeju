@@ -1,4 +1,4 @@
-import { getCacheClient } from '@jejunetwork/cache'
+import { getCacheClient } from '@jejunetwork/shared'
 import {
   type FarcasterCast,
   FarcasterClient,

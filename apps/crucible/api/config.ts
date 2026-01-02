@@ -21,8 +21,7 @@ export interface CrucibleConfig {
   rateLimitMaxRequests: number
   corsAllowedOrigins: string
 
-  // Private Key
-  privateKey?: string
+  // NOTE: privateKey removed for security - use KMS signer via @jejunetwork/kms instead
 
   // Contracts
   autocratTreasuryAddress?: string
@@ -73,7 +72,7 @@ const { config, configure: setCrucibleConfig } =
         `http://${host}:4020,http://${host}:4021`
       )
     })(),
-    privateKey: getEnvVar('PRIVATE_KEY'),
+    // privateKey removed - use KMS signer instead
     autocratTreasuryAddress: getEnvVar('AUTOCRAT_TREASURY_ADDRESS'),
     computeMarketplaceUrl: getEnvVar('COMPUTE_MARKETPLACE_URL'),
     sqlitEndpoint: getEnvVar('SQLIT_ENDPOINT') ?? getSQLitBlockProducerUrl(),

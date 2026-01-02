@@ -394,11 +394,23 @@ class SQLitStore implements SQLitStoreInterface {
     }
   }
 
+  // Allowed characters in table names (alphanumeric and underscore only)
+  private static readonly TABLE_NAME_REGEX = /^[a-z][a-z0-9_]*$/
+
   private getTableName<E>(entityClass: EntityClass<E>): string {
     const name = entityClass.name ?? 'unknown'
-    return name
+    const snakeName = name
       .replace(/([a-z\d])([A-Z])/g, '$1_$2')
       .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
       .toLowerCase()
+
+    // Validate table name to prevent SQL injection
+    if (!SQLitStore.TABLE_NAME_REGEX.test(snakeName)) {
+      throw new Error(
+        `Invalid table name derived from entity "${name}": "${snakeName}"`,
+      )
+    }
+
+    return snakeName
   }
 }

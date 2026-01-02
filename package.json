@@ -5,9 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "vendor/babylon",
-    "vendor/eliza-cloud-v2"
+    "apps/*"
   ],
   "overrides": {
     "bigint-buffer": "file:./patches/bigint-buffer-safe",

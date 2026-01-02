@@ -1,5 +1,7 @@
 import { expectValid } from '@jejunetwork/types'
 import { Elysia, t } from 'elysia'
+import type { Address } from 'viem'
+import { verifyMessage } from 'viem'
 import {
   BountySeveritySchema,
   type BountySubmissionDraft,
@@ -14,6 +16,18 @@ import {
   type ValidationContext,
   validateSubmission,
 } from '../security-validation-agent'
+import { auditLog } from '../security'
+
+// Authorization helper - verify signature for privileged operations
+async function verifyOperatorSignature(
+  address: Address,
+  signature: `0x${string}`,
+  action: string,
+  submissionId: string,
+): Promise<boolean> {
+  const message = `Autocrat Bug Bounty\nAction: ${action}\nSubmission: ${submissionId}\nTimestamp: ${Math.floor(Date.now() / 60000)}` // 1-minute window
+  return verifyMessage({ address, message, signature })
+}
 
 const BountySubmissionDraftSchema = t.Object({
   title: t.String({ minLength: 1 }),
@@ -212,16 +226,21 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
       detail: { tags: ['bug-bounty'], summary: 'Submit bug bounty report' },
     },
   )
-  // Validation
+  // Validation - REQUIRES API KEY (admin/operator only)
+  // Protected by security middleware for POST to /api/v1/bug-bounty paths
   .post(
     '/validate/:id',
-    async ({ params }) => {
+    async ({ params, request }) => {
       const service = getBugBountyService()
       const submission = await service.get(params.id)
 
       if (!submission) {
         throw new Error('Submission not found')
       }
+
+      auditLog('validation_triggered', 'operator', request, true, {
+        submissionId: params.id,
+      })
 
       await service.triggerValidation(params.id)
 
@@ -233,13 +252,19 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
     },
     {
       params: t.Object({ id: t.String() }),
-      detail: { tags: ['bug-bounty'], summary: 'Trigger validation' },
+      detail: { tags: ['bug-bounty'], summary: 'Trigger validation (requires API key)' },
     },
   )
+  // Complete validation - REQUIRES API KEY (admin/operator only)
   .post(
     '/validate/:id/complete',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getBugBountyService()
+
+      auditLog('validation_completed', 'operator', request, true, {
+        submissionId: params.id,
+        result: body.result,
+      })
 
       const submission = await service.completeValidation(
         params.id,
@@ -259,7 +284,7 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
         result: t.Number({ minimum: 0, maximum: 4 }),
         notes: t.Optional(t.String()),
       }),
-      detail: { tags: ['bug-bounty'], summary: 'Complete validation' },
+      detail: { tags: ['bug-bounty'], summary: 'Complete validation (requires API key)' },
     },
   )
   // AI Validation
@@ -309,20 +334,47 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
       detail: { tags: ['bug-bounty'], summary: 'AI validation' },
     },
   )
-  // Guardian Voting
+  // Guardian Voting - REQUIRES SIGNATURE to prove guardian owns the address
   .post(
     '/vote/:id',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getBugBountyService()
+      const guardianAddr = toAddress(body.guardian)
+
+      // SECURITY: Verify signature to prove caller owns the guardian address
+      if (!body.signature) {
+        throw new Error('Signature required for guardian votes')
+      }
+      const validSig = await verifyOperatorSignature(
+        guardianAddr,
+        body.signature as `0x${string}`,
+        'guardian_vote',
+        params.id,
+      )
+      if (!validSig) {
+        auditLog(
+          'guardian_vote_invalid_signature',
+          guardianAddr,
+          request,
+          false,
+          { submissionId: params.id },
+        )
+        throw new Error('Invalid signature - cannot verify guardian ownership')
+      }
 
       await service.guardianVote(
         params.id,
-        toAddress(body.guardian),
+        guardianAddr,
         BigInt(body.agentId),
         body.approved,
         BigInt(body.suggestedReward),
         body.feedback ?? '',
       )
+
+      auditLog('guardian_vote', guardianAddr, request, true, {
+        submissionId: params.id,
+        approved: body.approved,
+      })
 
       const submission = await service.get(params.id)
       if (!submission) {
@@ -344,8 +396,9 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
         approved: t.Boolean(),
         suggestedReward: t.String(),
         feedback: t.Optional(t.String()),
+        signature: t.String(), // Required: proves guardian owns the address
       }),
-      detail: { tags: ['bug-bounty'], summary: 'Guardian vote' },
+      detail: { tags: ['bug-bounty'], summary: 'Guardian vote (requires signature)' },
     },
   )
   .get(
@@ -367,11 +420,32 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
       detail: { tags: ['bug-bounty'], summary: 'Get guardian votes' },
     },
   )
-  // CEO Decision
+  // CEO/Director Decision - REQUIRES API KEY (admin only)
+  // Note: This endpoint is protected by security middleware API key validation
+  // Only operators with AUTOCRAT_API_KEY can call this endpoint
   .post(
     '/ceo-decision/:id',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getBugBountyService()
+
+      // Additional signature verification for CEO decisions
+      if (!body.ceoAddress || !body.signature) {
+        throw new Error('CEO address and signature required for decisions')
+      }
+
+      const ceoAddr = toAddress(body.ceoAddress)
+      const validSig = await verifyOperatorSignature(
+        ceoAddr,
+        body.signature as `0x${string}`,
+        'ceo_decision',
+        params.id,
+      )
+      if (!validSig) {
+        auditLog('ceo_decision_invalid_signature', ceoAddr, request, false, {
+          submissionId: params.id,
+        })
+        throw new Error('Invalid CEO signature')
+      }
 
       const submission = await service.ceoDecision(
         params.id,
@@ -379,6 +453,12 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
         BigInt(body.rewardAmount),
         body.notes ?? '',
       )
+
+      auditLog('ceo_decision', ceoAddr, request, true, {
+        submissionId: params.id,
+        approved: body.approved,
+        rewardAmount: body.rewardAmount,
+      })
 
       return {
         submissionId: params.id,
@@ -393,16 +473,38 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
         approved: t.Boolean(),
         rewardAmount: t.String(),
         notes: t.Optional(t.String()),
+        ceoAddress: t.String(), // Required: CEO wallet address
+        signature: t.String(), // Required: proves CEO owns the address
       }),
-      detail: { tags: ['bug-bounty'], summary: 'CEO decision' },
+      detail: { tags: ['bug-bounty'], summary: 'CEO decision (requires API key + signature)' },
     },
   )
-  // Payout
+  // Payout - REQUIRES API KEY (admin only operation)
+  // Protected by security middleware - only operators can process payouts
   .post(
     '/payout/:id',
-    async ({ params }) => {
+    async ({ params, request }) => {
       const service = getBugBountyService()
+
+      // Payout is protected by API key middleware in security.ts
+      // Additional audit logging for this sensitive operation
+      const submission = await service.get(params.id)
+      if (!submission) {
+        throw new Error('Submission not found')
+      }
+
+      auditLog('payout_initiated', submission.researcher, request, true, {
+        submissionId: params.id,
+        expectedAmount: submission.rewardAmount.toString(),
+      })
+
       const result = await service.payReward(params.id)
+
+      auditLog('payout_completed', submission.researcher, request, true, {
+        submissionId: params.id,
+        txHash: result.txHash,
+        amount: result.amount.toString(),
+      })
 
       return {
         submissionId: params.id,
@@ -412,7 +514,7 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
     },
     {
       params: t.Object({ id: t.String() }),
-      detail: { tags: ['bug-bounty'], summary: 'Process payout' },
+      detail: { tags: ['bug-bounty'], summary: 'Process payout (requires API key)' },
     },
   )
   // Fix & Disclosure
@@ -434,14 +536,39 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
       detail: { tags: ['bug-bounty'], summary: 'Record fix' },
     },
   )
+  // Researcher Disclosure - REQUIRES SIGNATURE to prove researcher identity
   .post(
     '/disclose/:id',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getBugBountyService()
-      const submission = await service.researcherDisclose(
+      const researcherAddr = toAddress(body.researcher)
+
+      // SECURITY: Verify signature to prove caller is the researcher
+      if (!body.signature) {
+        throw new Error('Signature required to prove researcher identity')
+      }
+      const validSig = await verifyOperatorSignature(
+        researcherAddr,
+        body.signature as `0x${string}`,
+        'researcher_disclose',
         params.id,
-        toAddress(body.researcher),
       )
+      if (!validSig) {
+        auditLog(
+          'disclosure_invalid_signature',
+          researcherAddr,
+          request,
+          false,
+          { submissionId: params.id },
+        )
+        throw new Error('Invalid signature - cannot verify researcher identity')
+      }
+
+      const submission = await service.researcherDisclose(params.id, researcherAddr)
+
+      auditLog('researcher_disclosure', researcherAddr, request, true, {
+        submissionId: params.id,
+      })
 
       return {
         submissionId: params.id,
@@ -451,8 +578,11 @@ export const bugBountyRoutes = new Elysia({ prefix: '/api/v1/bug-bounty' })
     },
     {
       params: t.Object({ id: t.String() }),
-      body: t.Object({ researcher: t.String() }),
-      detail: { tags: ['bug-bounty'], summary: 'Researcher disclosure' },
+      body: t.Object({
+        researcher: t.String(),
+        signature: t.String(), // Required: proves researcher owns the address
+      }),
+      detail: { tags: ['bug-bounty'], summary: 'Researcher disclosure (requires signature)' },
     },
   )
   // Researcher Stats

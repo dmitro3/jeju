@@ -102,9 +102,17 @@ function timingSafeCompare(a: string | undefined | null, b: string): boolean {
 /**
  * SECURITY: Validate internal service requests using HMAC signature
  * Requires SERVICE_AUTH_SECRET env var to be set in production
+ *
+ * In production, if SERVICE_AUTH_SECRET is not set, all internal API calls will be rejected
  */
 const SERVICE_AUTH_SECRET = process.env.SERVICE_AUTH_SECRET
+// SECURITY: Always require auth in production, warn if secret not configured
 const SERVICE_AUTH_ENABLED = isProductionEnv() || Boolean(SERVICE_AUTH_SECRET)
+
+// SECURITY: Log warning at startup if production but no secret configured
+if (isProductionEnv() && !SERVICE_AUTH_SECRET) {
+  console.error('[SECURITY ERROR] SERVICE_AUTH_SECRET not configured in production - internal APIs will be blocked')
+}
 
 async function validateServiceAuth(
   request: Request,
@@ -115,9 +123,17 @@ async function validateServiceAuth(
     return { valid: false, error: 'Invalid service header' }
   }
 
-  // In production, require HMAC signature
+  // SECURITY: Always require HMAC signature for internal service calls
+  // In production, this is mandatory. In development, it's required if SECRET is set.
   if (SERVICE_AUTH_ENABLED) {
     if (!SERVICE_AUTH_SECRET) {
+      // SECURITY: In production without secret, reject all internal calls
+      if (isProductionEnv()) {
+        return {
+          valid: false,
+          error: 'Internal service authentication not configured',
+        }
+      }
       return {
         valid: false,
         error: 'SERVICE_AUTH_SECRET not configured',

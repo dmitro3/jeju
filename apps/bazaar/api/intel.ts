@@ -1,4 +1,4 @@
-import { getCacheClient } from '@jejunetwork/cache'
+import { getCacheClient } from '@jejunetwork/shared'
 import { getServiceUrl } from '@jejunetwork/config'
 import { logger } from '@jejunetwork/shared'
 import { Elysia } from 'elysia'
@@ -372,10 +372,29 @@ async function getIntelData(): Promise<IntelResponse> {
   return response
 }
 
+// Rate limiting for refresh endpoint - prevent cache busting abuse
+let lastRefreshTime = 0
+const MIN_REFRESH_INTERVAL_MS = 60_000 // 1 minute minimum between refreshes
+
 export function createIntelRouter() {
   return new Elysia({ prefix: '/intel' })
     .get('/', async () => getIntelData())
     .get('/refresh', async () => {
+      // Rate limit refresh to prevent cache-busting DoS
+      const now = Date.now()
+      if (now - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) {
+        const waitSeconds = Math.ceil(
+          (MIN_REFRESH_INTERVAL_MS - (now - lastRefreshTime)) / 1000,
+        )
+        return {
+          error: 'Rate limited',
+          message: `Please wait ${waitSeconds}s before refreshing`,
+          retryAfter: waitSeconds,
+        }
+      }
+
+      lastRefreshTime = now
+
       // Clear DWS cache and refresh
       const cache = getIntelCache()
       await cache.delete('intel:full').catch(() => {})

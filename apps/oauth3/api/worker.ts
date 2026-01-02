@@ -86,6 +86,32 @@ async function createApp(env: Env) {
     process.env.DISCORD_CLIENT_SECRET = env.DISCORD_CLIENT_SECRET
 
   const host = getLocalhostHost()
+  // SECURITY: Validate required secrets in production (DWS)
+  if (!env.JWT_SECRET) {
+    throw new Error(
+      'JWT_SECRET is required in DWS/production. ' +
+        'Set JWT_SECRET environment variable or configure MPC signing.',
+    )
+  }
+
+  // SECURITY: Validate ALLOWED_ORIGINS is explicitly set - no wildcard default
+  if (!env.ALLOWED_ORIGINS) {
+    throw new Error(
+      'ALLOWED_ORIGINS is required in DWS/production. ' +
+        'Set explicit allowed origins (comma-separated), not wildcard.',
+    )
+  }
+
+  const allowedOrigins = env.ALLOWED_ORIGINS.split(',').filter(
+    (o) => o !== '*',
+  )
+  if (allowedOrigins.length === 0) {
+    throw new Error(
+      'ALLOWED_ORIGINS cannot be wildcard (*) in production. ' +
+        'Specify explicit origins.',
+    )
+  }
+
   const config: AuthConfig = {
     rpcUrl: env.RPC_URL ?? `http://${host}:8545`,
     mpcRegistryAddress: parseAddress(env.MPC_REGISTRY_ADDRESS, ZERO_ADDRESS),
@@ -94,12 +120,12 @@ async function createApp(env: Env) {
       ZERO_ADDRESS,
     ),
     serviceAgentId: env.SERVICE_AGENT_ID ?? 'auth.jeju',
-    jwtSecret: env.JWT_SECRET ?? 'dev-secret-change-in-production', // Legacy
+    jwtSecret: env.JWT_SECRET,
     jwtSigningKeyId: env.JWT_SIGNING_KEY_ID ?? 'oauth3-jwt-signing',
     jwtSignerAddress: parseAddress(env.JWT_SIGNER_ADDRESS, ZERO_ADDRESS),
     chainId: env.CHAIN_ID ?? 'eip155:420691',
     sessionDuration: 24 * 60 * 60 * 1000, // 24 hours
-    allowedOrigins: (env.ALLOWED_ORIGINS ?? '*').split(','),
+    allowedOrigins,
     devMode: false, // DWS is production
   }
 

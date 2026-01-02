@@ -4,6 +4,7 @@ import { Elysia, t } from 'elysia'
 import { A2AJsonRpcResponseSchema } from '../../lib'
 import { createAutocratA2AServer } from '../a2a-server'
 import { type ERC8004Config, getERC8004Client } from '../erc8004'
+import { auditLog } from '../security'
 import { autocratConfig, blockchain, config } from '../shared-state'
 
 // Helper to safely get contract addresses
@@ -52,7 +53,12 @@ export const agentsRoutes = new Elysia({ prefix: '/api/v1/agents' })
   )
   .post(
     '/register',
-    async ({ body }) => {
+    async ({ body, request }) => {
+      auditLog('agent_register', body.name, request, true, {
+        name: body.name,
+        role: body.role,
+      })
+
       const agentId = await erc8004.registerAgent(
         body.name,
         body.role,
@@ -152,7 +158,13 @@ export const agentsRoutes = new Elysia({ prefix: '/api/v1/agents' })
   )
   .post(
     '/ceo/nominate',
-    async ({ body }) => {
+    async ({ body, request }) => {
+      auditLog('ceo_nominate', body.provider, request, true, {
+        modelId: body.modelId,
+        modelName: body.modelName,
+        provider: body.provider,
+      })
+
       // When contract is deployed, this would call the contract
       // For now, return success with the nominated model info
       const { modelId, modelName, provider, benchmarkScore } = body

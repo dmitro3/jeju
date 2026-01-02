@@ -100,8 +100,22 @@ export function createFactoryWorkerdApp(env?: Partial<FactoryEnv>) {
 
     .post(
       '/api/bounties',
-      async ({ body, headers }) => {
-        const creator = headers['x-jeju-address'] ?? '0x0'
+      async ({ body, headers, set }) => {
+        // Require authenticated address - don't allow spoofing
+        const creator = headers['x-jeju-address']
+        const signature = headers['x-jeju-signature']
+
+        if (!creator || !signature) {
+          set.status = 401
+          return {
+            error: 'Authentication required. Provide x-jeju-address and x-jeju-signature headers.',
+          }
+        }
+
+        // In production workerd, we'd verify the signature here
+        // For now, at minimum require both headers to be present
+        // TODO: Implement full signature verification in workerd worker
+
         const bounty = await createBountyAsync({
           title: body.title,
           description: body.description,

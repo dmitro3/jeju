@@ -617,21 +617,13 @@ app.get('/health', () => ({
   timestamp: new Date().toISOString(),
 }))
 
-app.get('/info', async ({ request }) => {
+app.get('/info', async () => {
   const dwsAvailable = await checkDWSHealth()
 
-  // Check if request is authenticated (has valid API key)
-  const providedKey =
-    request.headers.get('x-api-key') ??
-    request.headers.get('authorization')?.replace('Bearer ', '')
-  const isAuthenticated = !!(
-    API_KEY &&
-    providedKey &&
-    constantTimeCompare(providedKey, API_KEY)
-  )
-
-  // Basic info for unauthenticated requests
-  const basicInfo = {
+  // SECURITY: Only return non-sensitive info
+  // Contract addresses and service URLs are NOT exposed even to authenticated users
+  // This prevents reconnaissance attacks
+  return {
     service: 'crucible',
     version: '1.0.0',
     network: config.network,
@@ -639,17 +631,6 @@ app.get('/info', async ({ request }) => {
     dwsAvailable,
     runtimes: runtimeManager.getAllRuntimes().length,
   }
-
-  // Return full info only for authenticated requests
-  if (isAuthenticated) {
-    return {
-      ...basicInfo,
-      contracts: config.contracts,
-      services: config.services,
-    }
-  }
-
-  return basicInfo
 })
 
 // Agent Chat API - ElizaOS + @jejunetwork/eliza-plugin (60+ actions)
@@ -710,7 +691,17 @@ app.get('/api/v1/chat/characters', () => {
 })
 
 // Initialize all character runtimes
-app.post('/api/v1/chat/init', async () => {
+// SECURITY: Requires API key - prevents DoS by unauthenticated users
+app.post('/api/v1/chat/init', async ({ request, set }) => {
+  // Admin-only endpoint to prevent resource exhaustion DoS
+  const providedKey =
+    request.headers.get('x-api-key') ??
+    request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!API_KEY || !providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    set.status = 403
+    return { error: 'Admin API key required to initialize runtimes' }
+  }
+
   const results: Record<string, { success: boolean; error?: string }> = {}
 
   for (const [id, character] of Object.entries(characters)) {
@@ -991,7 +982,7 @@ app.get('/api/v1/rooms/:roomId', async ({ params }) => {
   }
 })
 
-app.post('/api/v1/rooms/:roomId/join', async ({ params, body }) => {
+app.post('/api/v1/rooms/:roomId/join', async ({ params, body, request, set }) => {
   const parsedParams = parseOrThrow(
     RoomIdParamSchema,
     params,
@@ -1002,15 +993,29 @@ app.post('/api/v1/rooms/:roomId/join', async ({ params, body }) => {
     body,
     'Join room request',
   )
+  const agentId = BigInt(parsedBody.agentId)
+
+  // SECURITY: Verify caller owns the agent they're trying to join with
+  const authResult = await verifyAgentOwnership(
+    agentId,
+    request,
+    agentSdk,
+    kmsSigner.isInitialized() ? { address: kmsSigner.getAddress() } : null,
+  )
+  if (!authResult.authorized) {
+    set.status = 403
+    return { error: authResult.reason }
+  }
+
   await roomSdk.joinRoom(
     BigInt(parsedParams.roomId),
-    BigInt(parsedBody.agentId),
+    agentId,
     parsedBody.role,
   )
   return { success: true }
 })
 
-app.post('/api/v1/rooms/:roomId/leave', async ({ params, body }) => {
+app.post('/api/v1/rooms/:roomId/leave', async ({ params, body, request, set }) => {
   const parsedParams = parseOrThrow(
     RoomIdParamSchema,
     params,
@@ -1021,14 +1026,28 @@ app.post('/api/v1/rooms/:roomId/leave', async ({ params, body }) => {
     body,
     'Leave room request',
   )
+  const agentId = BigInt(parsedBody.agentId)
+
+  // SECURITY: Verify caller owns the agent they're trying to remove
+  const authResult = await verifyAgentOwnership(
+    agentId,
+    request,
+    agentSdk,
+    kmsSigner.isInitialized() ? { address: kmsSigner.getAddress() } : null,
+  )
+  if (!authResult.authorized) {
+    set.status = 403
+    return { error: authResult.reason }
+  }
+
   await roomSdk.leaveRoom(
     BigInt(parsedParams.roomId),
-    BigInt(parsedBody.agentId),
+    agentId,
   )
   return { success: true }
 })
 
-app.post('/api/v1/rooms/:roomId/message', async ({ params, body }) => {
+app.post('/api/v1/rooms/:roomId/message', async ({ params, body, request, set }) => {
   const parsedParams = parseOrThrow(
     RoomIdParamSchema,
     params,
@@ -1039,9 +1058,23 @@ app.post('/api/v1/rooms/:roomId/message', async ({ params, body }) => {
     body,
     'Post message request',
   )
+  const agentId = BigInt(parsedBody.agentId)
+
+  // SECURITY: Verify caller owns the agent they're posting as
+  const authResult = await verifyAgentOwnership(
+    agentId,
+    request,
+    agentSdk,
+    kmsSigner.isInitialized() ? { address: kmsSigner.getAddress() } : null,
+  )
+  if (!authResult.authorized) {
+    set.status = 403
+    return { error: authResult.reason }
+  }
+
   const message = await roomSdk.postMessage(
     BigInt(parsedParams.roomId),
-    BigInt(parsedBody.agentId),
+    agentId,
     parsedBody.content,
     parsedBody.action ?? undefined,
   )
@@ -1075,7 +1108,7 @@ app.get('/api/v1/rooms/:roomId/messages', async ({ params, query, set }) => {
   }
 })
 
-app.post('/api/v1/rooms/:roomId/phase', async ({ params, body }) => {
+app.post('/api/v1/rooms/:roomId/phase', async ({ params, body, request, set }) => {
   const parsedParams = parseOrThrow(
     RoomIdParamSchema,
     params,
@@ -1086,17 +1119,72 @@ app.post('/api/v1/rooms/:roomId/phase', async ({ params, body }) => {
     body,
     'Set phase request',
   )
-  await roomSdk.setPhase(BigInt(parsedParams.roomId), parsedBody.phase)
+  const roomId = BigInt(parsedParams.roomId)
+
+  // SECURITY: Verify caller owns the room or is the server
+  // Get room to check ownership
+  const room = await roomSdk.getRoom(roomId)
+  if (!room) {
+    set.status = 404
+    return { error: `Room not found: ${parsedParams.roomId}` }
+  }
+
+  // Extract and validate wallet signature from headers
+  const headers = extractAuthHeaders(request.headers)
+  const signatureResult = await validateWalletSignatureFromHeaders(
+    headers,
+    walletSignatureConfig,
+  )
+
+  if (!signatureResult.valid) {
+    set.status = 403
+    return {
+      error:
+        signatureResult.error ??
+        'Wallet signature verification failed. Required headers: x-jeju-address, x-jeju-timestamp, x-jeju-signature',
+    }
+  }
+
+  const callerAddress = signatureResult.user?.address
+  if (!callerAddress) {
+    set.status = 403
+    return { error: 'Could not extract address from signature' }
+  }
+
+  const callerLower = callerAddress.toLowerCase()
+  const ownerLower = room.owner.toLowerCase()
+  const serverAddress = kmsSigner.isInitialized() ? kmsSigner.getAddress().toLowerCase() : null
+
+  // Only room owner or server can change phase
+  if (callerLower !== ownerLower && callerLower !== serverAddress) {
+    set.status = 403
+    return { error: 'Only room owner can change room phase' }
+  }
+
+  await roomSdk.setPhase(roomId, parsedBody.phase)
   return { success: true }
 })
 
 // Execution
-app.post('/api/v1/execute', async ({ body }) => {
+app.post('/api/v1/execute', async ({ body, request, set }) => {
   if (!kmsSigner.isInitialized()) {
     throw new Error('Executor not configured - KMS signer not initialized')
   }
 
   const parsedBody = parseOrThrow(ExecuteRequestSchema, body, 'Execute request')
+  const agentId = BigInt(parsedBody.agentId)
+
+  // SECURITY: Verify caller owns the agent they're executing
+  const authResult = await verifyAgentOwnership(
+    agentId,
+    request,
+    agentSdk,
+    { address: kmsSigner.getAddress() },
+  )
+  if (!authResult.authorized) {
+    set.status = 403
+    return { error: authResult.reason }
+  }
 
   log.info('Executing agent', { agentId: parsedBody.agentId })
 
@@ -1113,13 +1201,9 @@ app.post('/api/v1/execute', async ({ body }) => {
     executorAddress,
   })
 
-  const agentId = expect(
-    parsedBody.agentId,
-    'Agent ID is required for execution',
-  )
   const inputContext: JsonObject | null = parsedBody.input.context ?? null
-  const request: ExecutionRequest = {
-    agentId: BigInt(agentId),
+  const executionRequest: ExecutionRequest = {
+    agentId,
     triggerId: parsedBody.triggerId ?? undefined,
     input: {
       message: parsedBody.input.message ?? null,
@@ -1137,7 +1221,7 @@ app.post('/api/v1/execute', async ({ body }) => {
       : undefined,
   }
 
-  const result = await executorSdk.execute(request)
+  const result = await executorSdk.execute(executionRequest)
   metrics.agents.executions++
 
   return {
@@ -1275,7 +1359,18 @@ app.get('/api/v1/autonomous/status', () => {
 })
 
 // Start autonomous runner (if not already running)
-app.post('/api/v1/autonomous/start', async () => {
+// SECURITY: Requires API key authentication (checked by middleware)
+app.post('/api/v1/autonomous/start', async ({ request, set }) => {
+  // Additional check: only allow if API key is configured and valid
+  // This endpoint is admin-only
+  const providedKey =
+    request.headers.get('x-api-key') ??
+    request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!API_KEY || !providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    set.status = 403
+    return { error: 'Admin API key required for autonomous runner control' }
+  }
+
   if (!autonomousRunner) {
     autonomousRunner = createAgentRunner()
   }
@@ -1284,7 +1379,17 @@ app.post('/api/v1/autonomous/start', async () => {
 })
 
 // Stop autonomous runner
-app.post('/api/v1/autonomous/stop', async ({ set }) => {
+// SECURITY: Requires API key authentication
+app.post('/api/v1/autonomous/stop', async ({ request, set }) => {
+  // Additional check: only allow if API key is configured and valid
+  const providedKey =
+    request.headers.get('x-api-key') ??
+    request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!API_KEY || !providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    set.status = 403
+    return { error: 'Admin API key required for autonomous runner control' }
+  }
+
   if (!autonomousRunner) {
     set.status = 400
     return { success: false, message: 'Runner not started' }
@@ -1294,7 +1399,17 @@ app.post('/api/v1/autonomous/stop', async ({ set }) => {
 })
 
 // Register an agent for autonomous mode
-app.post('/api/v1/autonomous/agents', async ({ body, set }) => {
+// SECURITY: Requires API key authentication
+app.post('/api/v1/autonomous/agents', async ({ body, request, set }) => {
+  // Admin-only endpoint
+  const providedKey =
+    request.headers.get('x-api-key') ??
+    request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!API_KEY || !providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    set.status = 403
+    return { error: 'Admin API key required to register autonomous agents' }
+  }
+
   if (!autonomousRunner) {
     set.status = 400
     return { error: 'Autonomous runner not started' }
@@ -1336,7 +1451,17 @@ app.post('/api/v1/autonomous/agents', async ({ body, set }) => {
 })
 
 // Remove an agent from autonomous mode
-app.delete('/api/v1/autonomous/agents/:agentId', ({ params, set }) => {
+// SECURITY: Requires API key authentication
+app.delete('/api/v1/autonomous/agents/:agentId', ({ params, request, set }) => {
+  // Admin-only endpoint
+  const providedKey =
+    request.headers.get('x-api-key') ??
+    request.headers.get('authorization')?.replace('Bearer ', '')
+  if (!API_KEY || !providedKey || !constantTimeCompare(providedKey, API_KEY)) {
+    set.status = 403
+    return { error: 'Admin API key required to unregister autonomous agents' }
+  }
+
   if (!autonomousRunner) {
     set.status = 400
     return { error: 'Autonomous runner not started' }

@@ -98,29 +98,7 @@ export interface TFMMPool {
   userBalance: bigint
 }
 
-// Pool registry ABI for fetching pools from on-chain registry
-const _POOL_REGISTRY_ABI = [
-  {
-    name: 'getAllPools',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ name: 'pools', type: 'address[]' }],
-  },
-  {
-    name: 'getPoolInfo',
-    type: 'function',
-    stateMutability: 'view',
-    inputs: [{ name: 'pool', type: 'address' }],
-    outputs: [
-      { name: 'name', type: 'string' },
-      { name: 'strategy', type: 'string' },
-      { name: 'tvlUsd', type: 'uint256' },
-      { name: 'apyBps', type: 'uint256' },
-      { name: 'volume24hUsd', type: 'uint256' },
-    ],
-  },
-] as const
+// Note: Pool registry ABI will be added when TFMM contracts are deployed
 
 export function useTFMMPools() {
   useAccount()

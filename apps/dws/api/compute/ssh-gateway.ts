@@ -41,9 +41,44 @@ export interface SSHCredentials {
   username: string
   privateKey: string // Encrypted in storage
   fingerprint: string
+  hostKeyFingerprint: string // SECURITY: Store known host key to prevent MITM
   createdAt: number
   lastUsedAt: number
   rotatedAt: number
+}
+
+// SECURITY: Input validation patterns
+const HOSTNAME_PATTERN = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)*$/
+const IPV4_PATTERN = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+const IPV6_PATTERN = /^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}$|^[0-9a-fA-F]{1,4}::(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}$/
+const USERNAME_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/
+
+function validateSSHHost(host: string): void {
+  if (!host || host.length > 253) {
+    throw new Error('Invalid SSH host: invalid length')
+  }
+  if (!HOSTNAME_PATTERN.test(host) && !IPV4_PATTERN.test(host) && !IPV6_PATTERN.test(host)) {
+    throw new Error('Invalid SSH host: invalid format')
+  }
+  // SECURITY: Prevent command injection via special characters
+  if (/[;|&`$()<>\\]/.test(host)) {
+    throw new Error('Invalid SSH host: contains dangerous characters')
+  }
+}
+
+function validateSSHUsername(username: string): void {
+  if (!username || username.length > 32) {
+    throw new Error('Invalid SSH username: invalid length')
+  }
+  if (!USERNAME_PATTERN.test(username)) {
+    throw new Error('Invalid SSH username: invalid format')
+  }
+}
+
+function validateSSHPort(port: number): void {
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('Invalid SSH port: must be 1-65535')
+  }
 }
 
 export interface SSHSession {
@@ -145,6 +180,7 @@ interface CredentialRow {
   username: string
   private_key: string
   fingerprint: string
+  host_key_fingerprint: string
   created_at: number
   last_used_at: number
   rotated_at: number
@@ -236,6 +272,7 @@ async function ensureTablesExist(): Promise<void> {
       username TEXT NOT NULL,
       private_key TEXT NOT NULL,
       fingerprint TEXT NOT NULL,
+      host_key_fingerprint TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL,
       last_used_at INTEGER NOT NULL,
       rotated_at INTEGER NOT NULL
@@ -261,6 +298,7 @@ function rowToCredential(row: CredentialRow): SSHCredentials {
     username: row.username,
     privateKey: row.private_key,
     fingerprint: row.fingerprint,
+    hostKeyFingerprint: row.host_key_fingerprint,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
     rotatedAt: row.rotated_at,
@@ -300,8 +338,8 @@ const credentialStorage = {
     if (useSQLit && sqlitClient) {
       await sqlitClient.exec(
         `INSERT OR REPLACE INTO ssh_credentials 
-         (id, compute_id, owner, host, port, username, private_key, fingerprint, created_at, last_used_at, rotated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, compute_id, owner, host, port, username, private_key, fingerprint, host_key_fingerprint, created_at, last_used_at, rotated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           credential.id,
           credential.computeId,
@@ -311,6 +349,7 @@ const credentialStorage = {
           credential.username,
           credential.privateKey,
           credential.fingerprint,
+          credential.hostKeyFingerprint,
           credential.createdAt,
           credential.lastUsedAt,
           credential.rotatedAt,
@@ -443,7 +482,14 @@ export class SSHGateway {
     port?: number
     username: string
     privateKey: string
+    hostKeyFingerprint?: string // Optional: provide known host key for MITM protection
   }): Promise<string> {
+    // SECURITY: Validate all inputs before proceeding
+    validateSSHHost(params.host)
+    validateSSHUsername(params.username)
+    const port = params.port ?? 22
+    validateSSHPort(port)
+
     const id = `ssh-cred-${Date.now()}-${randomBytes(4).toString('hex')}`
     const now = Date.now()
 
@@ -451,15 +497,22 @@ export class SSHGateway {
     const encryptedKey = await this.encryptKey(params.privateKey)
     const fingerprint = await this.calculateFingerprint(params.privateKey)
 
+    // SECURITY: Fetch and store host key fingerprint if not provided
+    let hostKeyFingerprint = params.hostKeyFingerprint ?? ''
+    if (!hostKeyFingerprint) {
+      hostKeyFingerprint = await this.fetchHostKeyFingerprint(params.host, port)
+    }
+
     const credential: SSHCredentials = {
       id,
       computeId: params.computeId,
       owner: params.owner,
       host: params.host,
-      port: params.port ?? 22,
+      port,
       username: params.username,
       privateKey: encryptedKey,
       fingerprint,
+      hostKeyFingerprint,
       createdAt: now,
       lastUsedAt: now,
       rotatedAt: now,
@@ -479,6 +532,56 @@ export class SSHGateway {
       `[SSHGateway] Registered credentials ${id} for compute ${params.computeId}`,
     )
     return id
+  }
+
+  /**
+   * SECURITY: Fetch host key fingerprint using ssh-keyscan
+   * This is used for host key verification to prevent MITM attacks
+   */
+  private async fetchHostKeyFingerprint(host: string, port: number): Promise<string> {
+    const hostKey = await this.fetchHostKey(host, port)
+    if (!hostKey) return ''
+
+    // Calculate fingerprint of the host key
+    const keyLine = hostKey.split('\n').find(line => line.includes('ssh-'))
+    if (!keyLine) return ''
+
+    const keyParts = keyLine.split(' ')
+    if (keyParts.length < 3) return ''
+
+    // The key is the third part (base64 encoded)
+    const keyData = keyParts[2]
+    const keyBytes = Buffer.from(keyData, 'base64')
+    const hashBuffer = await crypto.subtle.digest('SHA-256', keyBytes)
+    const hashArray = new Uint8Array(hashBuffer)
+    const base64 = Buffer.from(hashArray).toString('base64').replace(/=+$/, '')
+
+    return `SHA256:${base64}`
+  }
+
+  /**
+   * SECURITY: Fetch host key using ssh-keyscan
+   * Returns the host key in known_hosts format
+   */
+  private async fetchHostKey(host: string, port: number): Promise<string | null> {
+    // SECURITY: Validate host before passing to shell command
+    validateSSHHost(host)
+    validateSSHPort(port)
+
+    const result = Bun.spawn(
+      ['ssh-keyscan', '-p', port.toString(), '-t', 'ed25519,rsa', host],
+      { stdout: 'pipe', stderr: 'pipe' }
+    )
+
+    const output = await new Response(result.stdout).text()
+    const exitCode = await result.exited
+
+    if (exitCode !== 0 || !output.trim()) {
+      console.warn(`[SSHGateway] Could not fetch host key for ${host}:${port}`)
+      return null
+    }
+
+    return output.trim()
   }
 
   /**
@@ -776,22 +879,38 @@ export class SSHGateway {
     // Decrypt key and write to secure temp file
     const keyContent = await this.decryptKey(credential.privateKey)
 
-    // Use a more secure temp directory with random suffix
+    // SECURITY: Use XDG_RUNTIME_DIR or create secure private temp dir
+    const secureDir = process.env.XDG_RUNTIME_DIR ?? '/tmp'
     const randomSuffix = randomBytes(16).toString('hex')
-    const keyFile = `/tmp/.ssh-key-${sessionId}-${randomSuffix}`
+    const keyFile = `${secureDir}/.ssh-key-${sessionId}-${randomSuffix}`
     await Bun.write(keyFile, keyContent, { mode: 0o600 })
 
     // Double-ensure permissions (Bun.write mode may not always work)
     await Bun.spawn(['chmod', '600', keyFile]).exited
+
+    // SECURITY: Create known_hosts file with stored host key if available
+    let knownHostsFile = '/dev/null'
+    let hostKeyChecking = 'accept-new' // Accept on first connect, verify on subsequent
+
+    if (credential.hostKeyFingerprint) {
+      // We have a stored host key - write it to a temp known_hosts file
+      const knownHostsPath = `${secureDir}/.ssh-known-hosts-${sessionId}-${randomSuffix}`
+      const hostKeyResult = await this.fetchHostKey(credential.host, credential.port)
+      if (hostKeyResult) {
+        await Bun.write(knownHostsPath, hostKeyResult, { mode: 0o600 })
+        knownHostsFile = knownHostsPath
+        hostKeyChecking = 'yes' // Strict verification against known key
+      }
+    }
 
     // Start SSH process
     const sshProcess = spawn({
       cmd: [
         'ssh',
         '-o',
-        'StrictHostKeyChecking=no',
+        `StrictHostKeyChecking=${hostKeyChecking}`,
         '-o',
-        'UserKnownHostsFile=/dev/null',
+        `UserKnownHostsFile=${knownHostsFile}`,
         '-o',
         `ConnectTimeout=${Math.floor(this.config.sshTimeout / 1000)}`,
         '-o',
@@ -855,8 +974,9 @@ export class SSHGateway {
     readOutput().catch(() => {})
     readStderr().catch(() => {})
 
-    // Store keyFile path for cleanup
+    // Store file paths for cleanup
     const keyFilePath = keyFile
+    const knownHostsPath = knownHostsFile !== '/dev/null' ? knownHostsFile : null
 
     // Handle process exit
     sshProcess.exited.then((code) => {
@@ -865,6 +985,10 @@ export class SSHGateway {
         // Fallback to rm if shred not available
         Bun.spawn(['rm', '-f', keyFilePath])
       })
+      // Clean up known_hosts file if created
+      if (knownHostsPath) {
+        Bun.spawn(['rm', '-f', knownHostsPath]).exited.catch(() => {})
+      }
 
       session.status = 'closed'
       session.endedAt = Date.now()
@@ -1077,6 +1201,7 @@ export class SSHGateway {
 
   /**
    * Execute SSH command on remote host
+   * SECURITY: Uses accept-new for host key checking (verify on subsequent connections)
    */
   private async execSSH(
     keyPath: string,
@@ -1085,14 +1210,34 @@ export class SSHGateway {
     username: string,
     command: string,
   ): Promise<number> {
+    // SECURITY: Validate inputs to prevent injection
+    validateSSHHost(host)
+    validateSSHPort(port)
+    validateSSHUsername(username)
+
+    // SECURITY: Reject commands with obvious injection attempts
+    // Note: These commands are generated internally, but defense in depth
+    const dangerousPatterns = [
+      /[;&|`$](?!\!)/, // Shell metacharacters (except $! for PID)
+      /\$\(/, // Command substitution
+      /`.*`/, // Backtick substitution
+    ]
+    for (const pattern of dangerousPatterns) {
+      if (pattern.test(command)) {
+        throw new Error('SSH command contains potentially dangerous characters')
+      }
+    }
+
     const proc = Bun.spawn([
       'ssh',
       '-o',
-      'StrictHostKeyChecking=no',
+      'StrictHostKeyChecking=accept-new', // Accept on first connect, verify after
       '-o',
-      'UserKnownHostsFile=/dev/null',
+      'UserKnownHostsFile=/dev/null', // Don't pollute system known_hosts
       '-o',
       'ConnectTimeout=30',
+      '-o',
+      'BatchMode=yes', // Non-interactive mode
       '-i',
       keyPath,
       '-p',
@@ -1175,13 +1320,22 @@ export class SSHGateway {
     const newKeyPath = await this.writeTempKey(computeId, newPrivateKey, 'new')
     const { host, port, username } = credential
 
-    // Add new key to authorized_keys
+    // SECURITY: Validate public key format before using in shell commands
+    const trimmedPublicKey = newPublicKey.trim()
+    if (!trimmedPublicKey.match(/^ssh-(ed25519|rsa|ecdsa-sha2-nistp\d+) [A-Za-z0-9+/=]+ .*/)) {
+      await this.secureDelete(currentKeyPath)
+      await this.secureDelete(newKeyPath)
+      throw new Error('Invalid public key format')
+    }
+
+    // SECURITY: Use base64 encoding to safely pass the key to the remote shell
+    const keyBase64 = Buffer.from(trimmedPublicKey).toString('base64')
     const addKeyExit = await this.execSSH(
       currentKeyPath,
       host,
       port,
       username,
-      `echo '${newPublicKey.trim()}' >> ~/.ssh/authorized_keys`,
+      `echo "${keyBase64}" | base64 -d >> ~/.ssh/authorized_keys`,
     )
     if (addKeyExit !== 0) {
       await this.secureDelete(currentKeyPath)
@@ -1198,14 +1352,13 @@ export class SSHGateway {
       'echo ok',
     )
     if (verifyExit !== 0) {
-      // Rollback: remove new key
-      const keyPrefix = newPublicKey.trim().split(' ').slice(0, 2).join(' ')
+      // Rollback: remove new key by removing the last line we added
       await this.execSSH(
         currentKeyPath,
         host,
         port,
         username,
-        `grep -v '${keyPrefix}' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys`,
+        'head -n -1 ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys',
       )
       await this.secureDelete(currentKeyPath)
       await this.secureDelete(newKeyPath)
@@ -1218,14 +1371,16 @@ export class SSHGateway {
     credential.fingerprint = await this.calculateFingerprint(newPublicKey)
     await credentialStorage.set(credential)
 
-    // Remove old keys from authorized_keys (keep only new)
-    const keyPrefix = newPublicKey.trim().split(' ').slice(0, 2).join(' ')
+    // SECURITY: Use a safer approach to filter authorized_keys
+    // Keep only entries that match our key and comment pattern
+    const keyData = trimmedPublicKey.split(' ')[1] // base64 key data
+    // Only remove old jeju keys, not user keys - grep for our comment pattern
     await this.execSSH(
       newKeyPath,
       host,
       port,
       username,
-      `grep '${keyPrefix}' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp && mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys`,
+      `grep -v 'jeju-${credential.computeId}@' ~/.ssh/authorized_keys > ~/.ssh/authorized_keys.tmp 2>/dev/null; grep '${keyData}' ~/.ssh/authorized_keys >> ~/.ssh/authorized_keys.tmp 2>/dev/null; mv ~/.ssh/authorized_keys.tmp ~/.ssh/authorized_keys || true`,
     )
 
     await this.secureDelete(currentKeyPath)

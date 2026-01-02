@@ -20,7 +20,6 @@ describe('Trading Bot Integration', () => {
           const options = createTradingBotOptions(
             bot,
             1n,
-            `0x${'1'.repeat(64)}`,
             network as 'localnet' | 'testnet' | 'mainnet',
           )
 
@@ -28,7 +27,7 @@ describe('Trading Bot Integration', () => {
           expect(options.name).toBe(bot.name)
           expect(options.strategies).toEqual(bot.strategies)
           expect(Array.isArray(options.chains)).toBe(true)
-          expect(options.privateKey).toBe(`0x${'1'.repeat(64)}`)
+          // NOTE: privateKey removed for security - use KMS signer instead
           expect(options.maxConcurrentExecutions).toBe(5)
         })
       })
@@ -165,7 +164,6 @@ describe('Data Flow Validation', () => {
     const options = createTradingBotOptions(
       botConfig,
       1n,
-      `0x${'1'.repeat(64)}`,
       'mainnet',
     )
 
@@ -195,7 +193,6 @@ describe('Data Flow Validation', () => {
         const options = createTradingBotOptions(
           bot,
           1n,
-          `0x${'1'.repeat(64)}`,
           network,
         )
 

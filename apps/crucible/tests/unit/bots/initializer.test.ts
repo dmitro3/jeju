@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { getCoreAppUrl, getL2RpcUrl } from '@jejunetwork/config'
-import type { PublicClient, WalletClient } from 'viem'
+import type { PublicClient } from 'viem'
 import {
   createTradingBotOptions,
   DEFAULT_BOTS,
@@ -8,6 +8,7 @@ import {
 } from '../../../api/bots/default-bots'
 import { BotInitializer } from '../../../api/bots/initializer'
 import type { AgentSDK } from '../../../api/sdk/agent'
+import type { KMSSigner } from '../../../api/sdk/kms-signer'
 import type { CrucibleConfig } from '../../../lib/types'
 import {
   type AgentSDKRegisterOnly,
@@ -16,13 +17,45 @@ import {
   TEST_CHAIN_IDS,
 } from '../../fixtures/bot-mocks'
 
+// Mock KMS signer for tests
+function createMockKMSSigner(initialized = true): KMSSigner {
+  return {
+    isInitialized: () => initialized,
+    getAddress: () => `0x${'a'.repeat(40)}` as `0x${string}`,
+    getKeyId: () => 'mock-key-id',
+    initialize: async () => {},
+    signMessage: async () => ({
+      signature: '0x' as `0x${string}`,
+      r: '0x' as `0x${string}`,
+      s: '0x' as `0x${string}`,
+      v: 27,
+      mode: 'development' as const,
+      participants: 1,
+    }),
+    signTransaction: async () => '0x' as `0x${string}`,
+    signContractWrite: async () => '0x' as `0x${string}`,
+    rotateKey: async () => {},
+    getKeyMetadata: async () => ({
+      keyId: 'mock-key-id',
+      publicKey: '0x' as `0x${string}`,
+      address: `0x${'a'.repeat(40)}` as `0x${string}`,
+      threshold: 1,
+      totalParties: 1,
+      createdAt: Date.now(),
+      lastRotatedAt: 0,
+      rotationCount: 0,
+    }),
+    scheduleRotation: () => setInterval(() => {}, 1000),
+  } as KMSSigner
+}
+
 describe('BotInitializer', () => {
   const mockPublicClient = {} as PublicClient
-  const mockWalletClient = {} as WalletClient
+  const mockKMSSigner = createMockKMSSigner()
 
   const baseConfig: CrucibleConfig = {
     rpcUrl: getL2RpcUrl(),
-    privateKey: `0x${'1'.repeat(64)}`,
+    // NOTE: privateKey removed for security - use KMS signer instead
     contracts: {
       agentVault: `0x${'1'.repeat(40)}` as `0x${string}`,
       roomRegistry: `0x${'2'.repeat(40)}` as `0x${string}`,
@@ -51,7 +84,7 @@ describe('BotInitializer', () => {
       crucibleConfig: baseConfig,
       agentSdk: mockAgentSdk as AgentSDK,
       publicClient: mockPublicClient,
-      walletClient: mockWalletClient,
+      kmsSigner: mockKMSSigner,
     })
   })
 
@@ -106,7 +139,6 @@ describe('BotInitializer', () => {
       const options = createTradingBotOptions(
         botConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'testnet',
         `0x${'2'.repeat(40)}`,
       )
@@ -115,7 +147,7 @@ describe('BotInitializer', () => {
       expect(options.name).toBe(botConfig.name)
       expect(options.strategies).toEqual(botConfig.strategies)
       expect(options.chains.length).toBeGreaterThan(0)
-      expect(options.privateKey).toBe(`0x${'1'.repeat(64)}`)
+      // NOTE: privateKey removed for security - use KMS signer instead
       expect(options.maxConcurrentExecutions).toBe(5)
       expect(options.useFlashbots).toBe(true)
     })
@@ -125,7 +157,6 @@ describe('BotInitializer', () => {
       const options = createTradingBotOptions(
         botConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'localnet',
       )
       expect(options.useFlashbots).toBe(false)
@@ -140,7 +171,6 @@ describe('BotInitializer', () => {
       const options = createTradingBotOptions(
         botConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'testnet',
       )
       expect(options.chains.length).toBe(0)
@@ -151,7 +181,6 @@ describe('BotInitializer', () => {
       const options = createTradingBotOptions(
         botConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'testnet',
       )
       expect(options.chains).toEqual([])
@@ -165,13 +194,13 @@ describe('BotInitializer', () => {
       expect(mockAgentSdk.registerAgent).toHaveBeenCalled()
     })
 
-    test('should skip initialization without signer (no KMS or wallet)', async () => {
-      const configWithoutKey = { ...baseConfig, privateKey: undefined }
+    test('should skip initialization without KMS signer', async () => {
+      const uninitializedKMSSigner = createMockKMSSigner(false)
       const init = new BotInitializer({
-        crucibleConfig: configWithoutKey,
+        crucibleConfig: baseConfig,
         agentSdk: mockAgentSdk as AgentSDK,
         publicClient: mockPublicClient,
-        // No walletClient, no kmsSigner - should skip
+        kmsSigner: uninitializedKMSSigner,
       })
 
       const bots = await init.initializeDefaultBots()
@@ -186,7 +215,7 @@ describe('BotInitializer', () => {
         crucibleConfig: baseConfig,
         agentSdk: failingAgentSdk as AgentSDK,
         publicClient: mockPublicClient,
-        walletClient: mockWalletClient,
+        kmsSigner: mockKMSSigner,
       })
 
       const bots = await failingInitializer.initializeDefaultBots()
@@ -266,7 +295,7 @@ describe('BotInitializer', () => {
         crucibleConfig: config,
         agentSdk: mockAgentSdk as AgentSDK,
         publicClient: mockPublicClient,
-        walletClient: mockWalletClient,
+        kmsSigner: mockKMSSigner,
       })
 
       const bots = await init.initializeDefaultBots()

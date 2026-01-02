@@ -133,8 +133,16 @@ export class KMSSigner {
     if (config.threshold < 2 && !config.allowDevMode) {
       throw new Error('Threshold must be at least 2 for production security')
     }
-    if (config.totalParties < config.threshold + 1) {
-      throw new Error('Total parties must be greater than threshold')
+    // In dev mode, allow 1-of-1 (totalParties >= threshold)
+    // In production, require redundancy (totalParties > threshold)
+    if (config.allowDevMode) {
+      if (config.totalParties < config.threshold) {
+        throw new Error('Total parties must be at least equal to threshold')
+      }
+    } else {
+      if (config.totalParties < config.threshold + 1) {
+        throw new Error('Total parties must be greater than threshold')
+      }
     }
   }
 
@@ -715,8 +723,9 @@ export function createKMSSigner(
     if (fullConfig.allowDevMode) {
       throw new Error('Mainnet cannot run in development mode')
     }
+    // Reject software-only keys - require real HSM on mainnet
     if (!fullConfig.hsm || fullConfig.hsm.provider === 'software') {
-      throw new Error('Mainnet requires HSM-backed key storage (not software)')
+      throw new Error('Mainnet requires HSM-backed key storage')
     }
   }
 

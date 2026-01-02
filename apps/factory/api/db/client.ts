@@ -319,9 +319,18 @@ function toJSON(data: unknown): string {
   return JSON.stringify(data)
 }
 
-// ID generation
+/**
+ * Escape SQL LIKE wildcards to prevent injection attacks
+ * This prevents user input from being interpreted as SQL patterns
+ */
+function escapeLikePattern(input: string): string {
+  return input.replace(/[%_\\]/g, '\\$&')
+}
+
+// ID generation using cryptographically secure random bytes
 export function generateId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const randomPart = randomBytes(8).toString('hex')
+  return `${prefix}-${Date.now()}-${randomPart}`
 }
 
 // Bounties
@@ -345,8 +354,8 @@ export function listBounties(filter?: {
     params.push(filter.creator)
   }
   if (filter?.skill) {
-    conditions.push('skills LIKE ?')
-    params.push(`%${filter.skill}%`)
+    conditions.push("skills LIKE ? ESCAPE '\\'")
+    params.push(`%${escapeLikePattern(filter.skill)}%`)
   }
 
   const whereClause =
@@ -761,12 +770,12 @@ export function listIssues(filter?: {
     params.push(filter.status)
   }
   if (filter?.label) {
-    conditions.push('labels LIKE ?')
-    params.push(`%${filter.label}%`)
+    conditions.push("labels LIKE ? ESCAPE '\\'")
+    params.push(`%${escapeLikePattern(filter.label)}%`)
   }
   if (filter?.assignee) {
-    conditions.push('assignees LIKE ?')
-    params.push(`%${filter.assignee}%`)
+    conditions.push("assignees LIKE ? ESCAPE '\\'")
+    params.push(`%${escapeLikePattern(filter.assignee)}%`)
   }
 
   const whereClause =
@@ -1371,8 +1380,8 @@ export function listAgents(filter?: {
   const params: (string | number)[] = []
 
   if (filter?.capability) {
-    conditions.push('capabilities LIKE ?')
-    params.push(`%${filter.capability}%`)
+    conditions.push("capabilities LIKE ? ESCAPE '\\'")
+    params.push(`%${escapeLikePattern(filter.capability)}%`)
   }
   if (filter?.active !== undefined) {
     conditions.push('active = ?')
@@ -1456,8 +1465,8 @@ export function listContainers(filter?: {
     params.push(filter.org)
   }
   if (filter?.name) {
-    conditions.push('name LIKE ?')
-    params.push(`%${filter.name}%`)
+    conditions.push("name LIKE ? ESCAPE '\\'")
+    params.push(`%${escapeLikePattern(filter.name)}%`)
   }
 
   const whereClause =
@@ -1571,6 +1580,16 @@ export function createContainerInstance(instance: {
   return ContainerInstanceRowSchema.parse(row)
 }
 
+export function getContainerInstance(id: string): ContainerInstanceRow | null {
+  const db = getDB()
+  const row = db
+    .query<ContainerInstanceRow, [string]>(
+      'SELECT * FROM container_instances WHERE id = ?',
+    )
+    .get(id)
+  return row ? ContainerInstanceRowSchema.parse(row) : null
+}
+
 export function updateContainerInstanceStatus(
   id: string,
   status: string,
@@ -1581,6 +1600,21 @@ export function updateContainerInstanceStatus(
   const result = db.run(
     `UPDATE container_instances SET status = ?, endpoint = ?, started_at = CASE WHEN status = 'running' THEN ? ELSE started_at END WHERE id = ?`,
     [status, endpoint ?? null, now, id],
+  )
+  return result.changes > 0
+}
+
+export function updateContainerInstanceStatusForOwner(
+  id: string,
+  owner: string,
+  status: string,
+  endpoint?: string,
+): boolean {
+  const db = getDB()
+  const now = Date.now()
+  const result = db.run(
+    `UPDATE container_instances SET status = ?, endpoint = ?, started_at = CASE WHEN status = 'running' THEN ? ELSE started_at END WHERE id = ? AND owner = ?`,
+    [status, endpoint ?? null, now, id, owner.toLowerCase()],
   )
   return result.changes > 0
 }

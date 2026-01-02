@@ -151,7 +151,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         testBotConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
         `0x${'2'.repeat(40)}`,
       )
@@ -160,7 +159,7 @@ describe('Default Bots Configuration', () => {
       expect(options.name).toBe('Test Bot')
       expect(options.strategies).toEqual(testBotConfig.strategies)
       expect(options.chains.length).toBe(2)
-      expect(options.privateKey).toBe(`0x${'1'.repeat(64)}`)
+      // NOTE: privateKey removed for security - use KMS signer instead
       expect(options.maxConcurrentExecutions).toBe(5)
     })
 
@@ -168,7 +167,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         testBotConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'localnet',
       )
       expect(options.useFlashbots).toBe(false)
@@ -179,7 +177,6 @@ describe('Default Bots Configuration', () => {
         const options = createTradingBotOptions(
           testBotConfig,
           1n,
-          `0x${'1'.repeat(64)}`,
           network as 'localnet' | 'testnet' | 'mainnet',
         )
         expect(options.useFlashbots).toBe(true)
@@ -196,7 +193,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
       expect(options.chains.length).toBe(0)
@@ -207,7 +203,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
       expect(options.chains).toEqual([])
@@ -219,7 +214,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
 
@@ -232,7 +226,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         testBotConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
       expect(options.treasuryAddress).toBeUndefined()
@@ -243,7 +236,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         testBotConfig,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
         treasuryAddr,
       )
@@ -287,7 +279,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
       expect(options).toBeDefined()
@@ -298,7 +289,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
       expect(options).toBeDefined()
@@ -309,7 +299,6 @@ describe('Default Bots Configuration', () => {
       const options = createTradingBotOptions(
         config,
         1n,
-        `0x${'1'.repeat(64)}`,
         'mainnet',
       )
 

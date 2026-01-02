@@ -4,6 +4,7 @@ import { Elysia, t } from 'elysia'
 import type { Address } from 'viem'
 import { createDAOService, type DAOService } from '../dao-service'
 import { getProposalAssistant } from '../proposal-assistant'
+import { auditLog } from '../security'
 import { autocratConfig, blockchain, config } from '../shared-state'
 
 const ZERO_ADDR = ZERO_ADDRESS
@@ -50,10 +51,15 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     { detail: { tags: ['dao'], summary: 'List active DAOs' } },
   )
 
-  // Create DAO
+  // Create DAO - PROTECTED BY SECURITY MIDDLEWARE (API KEY REQUIRED)
   .post(
     '/',
-    async ({ body }) => {
+    async ({ body, request }) => {
+      auditLog('dao_create', 'operator', request, true, {
+        daoName: body.name,
+        treasury: body.treasury,
+      })
+
       const service = getService()
       const txHash = await service.createDAO({
         name: body.name,
@@ -139,13 +145,19 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Update DAO (Director persona/model)
+  // Update DAO (Director persona/model) - PROTECTED BY SECURITY MIDDLEWARE
   .patch(
     '/:daoId',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('dao_update', 'operator', request, true, {
+        daoId: params.daoId,
+        updatingPersona: !!body.directorPersona,
+        updatingModel: !!body.directorModel,
+      })
 
       if (body.directorPersona) {
         await service.setDirectorPersona(params.daoId, {
@@ -186,13 +198,19 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Update governance params
+  // Update governance params - PROTECTED BY SECURITY MIDDLEWARE
   .patch(
     '/:daoId/governance',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('dao_governance_update', 'operator', request, true, {
+        daoId: params.daoId,
+        minQualityScore: body.minQualityScore,
+        quorumBps: body.quorumBps,
+      })
 
       await service.setGovernanceParams(params.daoId, {
         minQualityScore: body.minQualityScore,
@@ -243,13 +261,20 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Add council member (agent)
+  // Add council member (agent) - PROTECTED BY SECURITY MIDDLEWARE
   .post(
     '/:daoId/agents',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('dao_agent_add', 'operator', request, true, {
+        daoId: params.daoId,
+        agentAddress: body.address,
+        agentId: body.agentId,
+        role: body.role,
+      })
 
       const txHash = await service.addCouncilMember(
         params.daoId,
@@ -294,13 +319,20 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Update agent (for CEO, use setDirectorPersona; for council, limited update)
+  // Update agent (for CEO, use setDirectorPersona; for council, limited update) - PROTECTED
   .patch(
     '/:daoId/agents/:agentId',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('dao_agent_update', 'operator', request, true, {
+        daoId: params.daoId,
+        agentId: params.agentId,
+        updatingPersona: !!body.persona,
+        updatingModel: !!body.model,
+      })
 
       // If updating Director (agentId = 0 or role = Director), update persona
       if (params.agentId === '0' || body.role === 'Director') {
@@ -355,13 +387,18 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Remove council member
+  // Remove council member - PROTECTED BY SECURITY MIDDLEWARE
   .delete(
     '/:daoId/agents/:agentId',
-    async ({ params }) => {
+    async ({ params, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('dao_agent_remove', 'operator', request, true, {
+        daoId: params.daoId,
+        agentId: params.agentId,
+      })
 
       // Get member address from agentId
       const members = await service.getBoardMembers(params.daoId)
@@ -434,13 +471,19 @@ export const daoRoutes = new Elysia({ prefix: '/api/v1/dao' })
     },
   )
 
-  // Create proposal for DAO
+  // Create proposal for DAO - PROTECTED BY SECURITY MIDDLEWARE
   .post(
     '/:daoId/proposals',
-    async ({ params, body }) => {
+    async ({ params, body, request }) => {
       const service = getService()
       const exists = await service.daoExists(params.daoId)
       if (!exists) throw new Error('DAO not found')
+
+      auditLog('proposal_create', 'operator', request, true, {
+        daoId: params.daoId,
+        title: body.title.slice(0, 50),
+        proposalType: body.proposalType,
+      })
 
       const assistant = getProposalAssistant()
       const draft = {

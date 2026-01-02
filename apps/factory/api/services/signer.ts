@@ -2,8 +2,6 @@ import { getFarcasterHubUrl } from '@jejunetwork/config'
 import { FarcasterPoster } from '@jejunetwork/messaging'
 import { createLogger } from '@jejunetwork/shared'
 import { ed25519 } from '@noble/curves/ed25519'
-import { hkdf } from '@noble/hashes/hkdf'
-import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex, hexToBytes, randomBytes } from '@noble/hashes/utils'
 import type { Address, Hex } from 'viem'
 import { getFactoryConfig } from '../config'
@@ -21,76 +19,82 @@ const log = createLogger('signer-service')
 const HUB_URL = getFarcasterHubUrl()
 
 /**
- * Derive encryption key from config or fallback
+ * Get encryption key from config
+ * SECURITY: No fallback - key MUST be configured
  */
 function getEncryptionKey(): Uint8Array {
   const config = getFactoryConfig()
-  if (config.signerEncryptionKey) {
-    return hexToBytes(config.signerEncryptionKey.replace('0x', ''))
+  if (!config.signerEncryptionKey) {
+    throw new Error(
+      'SIGNER_ENCRYPTION_KEY is required. Generate with: openssl rand -hex 32',
+    )
   }
-  // Fallback: derive from environment identifier (not secure for production)
-  const seed = `factory-signer-${config.isDev ? 'development' : 'production'}`
-  return hkdf(
-    sha256,
-    new TextEncoder().encode(seed),
-    new Uint8Array(0),
-    new TextEncoder().encode('aes-key'),
-    32,
-  )
+  const key = hexToBytes(config.signerEncryptionKey.replace('0x', ''))
+  if (key.length !== 32) {
+    throw new Error('SIGNER_ENCRYPTION_KEY must be 32 bytes (64 hex chars)')
+  }
+  return key
 }
 
 /**
- * Encrypt signer private key using key derivation
+ * Encrypt signer private key using AES-256-GCM
+ * SECURITY: Uses proper authenticated encryption
  */
 function encryptPrivateKey(privateKey: Uint8Array): {
   encrypted: string
   iv: string
 } {
   const key = getEncryptionKey()
-  const iv = randomBytes(12)
+  const iv = randomBytes(12) // 96-bit IV for GCM
 
-  // Simple XOR encryption with key derivation for storage
-  // In production, use proper AES-GCM via Web Crypto
-  const derivedKey = hkdf(
-    sha256,
-    key,
-    iv,
-    new TextEncoder().encode('encrypt'),
-    privateKey.length,
-  )
-  const encrypted = new Uint8Array(privateKey.length)
-  for (let i = 0; i < privateKey.length; i++) {
-    encrypted[i] = privateKey[i] ^ derivedKey[i]
-  }
+  // Use Node.js crypto for AES-256-GCM
+  const crypto = require('node:crypto')
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+
+  const ciphertext = Buffer.concat([
+    cipher.update(privateKey),
+    cipher.final(),
+  ])
+  const authTag = cipher.getAuthTag()
+
+  // Concatenate ciphertext + authTag (16 bytes)
+  const encrypted = Buffer.concat([ciphertext, authTag])
 
   return {
-    encrypted: `0x${bytesToHex(encrypted)}`,
+    encrypted: `0x${encrypted.toString('hex')}`,
     iv: `0x${bytesToHex(iv)}`,
   }
 }
 
 /**
- * Decrypt signer private key
+ * Decrypt signer private key using AES-256-GCM
+ * SECURITY: Uses proper authenticated decryption
  */
 function decryptPrivateKey(encrypted: string, ivHex: string): Uint8Array {
   const key = getEncryptionKey()
   const iv = hexToBytes(ivHex.replace('0x', ''))
-  const encryptedBytes = hexToBytes(encrypted.replace('0x', ''))
+  const encryptedData = Buffer.from(encrypted.replace('0x', ''), 'hex')
 
-  // Reverse the XOR encryption
-  const derivedKey = hkdf(
-    sha256,
-    key,
-    iv,
-    new TextEncoder().encode('encrypt'),
-    encryptedBytes.length,
-  )
-  const decrypted = new Uint8Array(encryptedBytes.length)
-  for (let i = 0; i < encryptedBytes.length; i++) {
-    decrypted[i] = encryptedBytes[i] ^ derivedKey[i]
+  // Split ciphertext and authTag (last 16 bytes)
+  const authTagLength = 16
+  if (encryptedData.length < authTagLength) {
+    throw new Error('Invalid encrypted data: too short')
   }
 
-  return decrypted
+  const ciphertext = encryptedData.subarray(0, -authTagLength)
+  const authTag = encryptedData.subarray(-authTagLength)
+
+  // Use Node.js crypto for AES-256-GCM decryption
+  const crypto = require('node:crypto')
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv)
+  decipher.setAuthTag(authTag)
+
+  const decrypted = Buffer.concat([
+    decipher.update(ciphertext),
+    decipher.final(),
+  ])
+
+  return new Uint8Array(decrypted)
 }
 
 /**

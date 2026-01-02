@@ -149,45 +149,51 @@ export function getOracleStatus(): Record<string, OracleStatus> {
 }
 
 /**
+ * TFMM Contract Status
+ * All write operations are disabled until contracts are deployed and audited.
+ * These functions validate inputs but return service unavailable errors.
+ */
+const TFMM_DISABLED_MESSAGE =
+  'TFMM contracts not yet deployed. Feature coming soon.'
+
+/**
  * Create a new TFMM pool
+ * DISABLED: Contracts pending deployment
  */
 export async function createTFMMPool(
   params: TFMMCreatePoolParams,
-): Promise<{ poolAddress: string; message: string }> {
+): Promise<never> {
+  // Validate input even though we can't process it yet
   for (const token of params.tokens) {
     AddressSchema.parse(token)
   }
   expect(params.tokens.length >= 2, 'At least 2 tokens required')
 
-  throw new Error(
-    'TFMM pool creation not yet available - contracts pending deployment',
-  )
+  throw new Error(TFMM_DISABLED_MESSAGE)
 }
 
 /**
  * Update pool strategy
+ * DISABLED: Contracts pending deployment
  */
 export async function updatePoolStrategy(
   params: TFMMUpdateStrategyParams,
-): Promise<{ message: string; effectiveAt: number }> {
+): Promise<never> {
   AddressSchema.parse(params.poolAddress)
 
-  throw new Error(
-    'TFMM strategy updates not yet available - contracts pending deployment',
-  )
+  throw new Error(TFMM_DISABLED_MESSAGE)
 }
 
 /**
  * Trigger pool rebalance
+ * DISABLED: Contracts pending deployment
  */
 export async function triggerPoolRebalance(
   params: TFMMTriggerRebalanceParams,
-): Promise<{ message: string; txHash: string }> {
+): Promise<never> {
   AddressSchema.parse(params.poolAddress)
 
-  throw new Error(
-    'TFMM rebalancing not yet available - contracts pending deployment',
-  )
+  throw new Error(TFMM_DISABLED_MESSAGE)
 }
 
 /**

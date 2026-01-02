@@ -318,14 +318,13 @@ describe('Default Bots Configuration', () => {
     const options = createTradingBotOptions(
       botConfig,
       1n,
-      `0x${'1'.repeat(64)}`,
       'testnet',
     )
 
     expect(options.agentId).toBe(1n)
     expect(options.name).toBe(botConfig.name)
     expect(options.strategies).toEqual(botConfig.strategies)
-    expect(options.privateKey).toBe(`0x${'1'.repeat(64)}`)
+    // NOTE: privateKey removed for security - use KMS signer instead
     expect(options.maxConcurrentExecutions).toBe(5)
   })
 })
