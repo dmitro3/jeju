@@ -457,11 +457,24 @@ export class InfrastructureService {
 
   async isBundlerRunning(): Promise<boolean> {
     try {
+      // Stackup bundler doesn't have /health, use RPC method instead
       const response = await fetch(
-        `http://${getLocalhostHost()}:${BUNDLER_PORT}/health`,
-        { signal: AbortSignal.timeout(2000) },
+        `http://${getLocalhostHost()}:${BUNDLER_PORT}/`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'eth_supportedEntryPoints',
+            params: [],
+            id: 1,
+          }),
+          signal: AbortSignal.timeout(2000),
+        },
       )
-      return response.ok
+      if (!response.ok) return false
+      const data = await response.json()
+      return Array.isArray(data.result)
     } catch {
       return false
     }

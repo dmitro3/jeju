@@ -50,6 +50,9 @@ const UpdateWorkerJsonBodySchema = z.object({
 // Shared runtime instance for use by other modules
 let sharedRuntime: WorkerRuntime | null = null
 
+// Cache for CID -> functionId mapping (for lazy deployment)
+const cidToFunctionId = new Map<string, string>()
+
 export function getSharedWorkersRuntime(): WorkerRuntime | null {
   return sharedRuntime
 }

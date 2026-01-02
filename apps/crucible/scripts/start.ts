@@ -198,7 +198,7 @@ async function uploadDirectory(
 const LOCALNET_DEPLOYER = '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
 
 // Store worker process for cleanup
-let workerProcess: ReturnType<typeof Bun.spawn> | null = null
+let _workerProcess: ReturnType<typeof Bun.spawn> | null = null
 
 /**
  * Deploy backend worker to DWS workerd
@@ -212,7 +212,8 @@ async function deployWorker(
 ): Promise<string> {
   // Use deployer address from env or default localnet address
   const deployerAddress =
-    process.env.DEPLOYER_ADDRESS ?? (config.network === 'localnet' ? LOCALNET_DEPLOYER : '')
+    process.env.DEPLOYER_ADDRESS ??
+    (config.network === 'localnet' ? LOCALNET_DEPLOYER : '')
   if (!deployerAddress) {
     throw new Error('DEPLOYER_ADDRESS required for non-localnet deployments')
   }
@@ -276,7 +277,7 @@ async function deployWorker(
 
   // Start local Bun process for the worker (ensures immediate availability)
   console.log('[Crucible] Starting worker process...')
-  workerProcess = Bun.spawn(['bun', 'run', 'api/worker.ts'], {
+  _workerProcess = Bun.spawn(['bun', 'run', 'api/worker.ts'], {
     cwd: APP_DIR,
     env: {
       ...process.env,

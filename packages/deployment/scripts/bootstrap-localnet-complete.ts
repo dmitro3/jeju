@@ -1696,14 +1696,15 @@ class CompleteBootstrapper {
       )
 
       // Deploy ERC1967Proxy with initialize call
-      const entryPoint = contracts.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032'
+      const entryPoint =
+        contracts.entryPoint || '0x0000000071727De22E5E9d8BAf0edAc6f37da032'
       const initData = this.encodeInitialize(
         this.deployerAddress, // owner
         '31337', // l1ChainId
         l1StakeManager, // l1StakeManager
         entryPoint, // entryPoint
       )
-      
+
       const crossChainPaymaster = this.deployContractFromPackages(
         'lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy',
         [paymasterImpl, initData],
@@ -1745,7 +1746,12 @@ class CompleteBootstrapper {
     }
   }
 
-  private encodeInitialize(owner: string, l1ChainId: string, l1StakeManager: string, entryPoint: string): string {
+  private encodeInitialize(
+    owner: string,
+    l1ChainId: string,
+    l1StakeManager: string,
+    entryPoint: string,
+  ): string {
     // Encode CrossChainPaymasterUpgradeable.initialize(address,uint256,address,address)
     // Function selector: 0x3c17b2f7
     const selector = 'initialize(address,uint256,address,address)'
@@ -1757,14 +1763,17 @@ class CompleteBootstrapper {
       return result
     } catch {
       // Fallback: manual encoding
-      const padded = (addr: string) => addr.slice(2).toLowerCase().padStart(64, '0')
+      const padded = (addr: string) =>
+        addr.slice(2).toLowerCase().padStart(64, '0')
       const padNum = (n: string) => BigInt(n).toString(16).padStart(64, '0')
-      return '0x' + 
+      return (
+        '0x' +
         'f8c8765e' + // initialize selector
         padded(owner) +
         padNum(l1ChainId) +
         padded(l1StakeManager) +
         padded(entryPoint)
+      )
     }
   }
 
