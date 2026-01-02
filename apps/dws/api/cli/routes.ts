@@ -27,7 +27,7 @@ interface AuthSession {
   expiresAt: number
 }
 
-interface DeployedWorker {
+export interface DeployedWorker {
   workerId: string
   name: string
   owner: Address
@@ -43,20 +43,20 @@ interface DeployedWorker {
   errors: number
 }
 
-interface Secret {
+export interface Secret {
   key: string
   scope: 'production' | 'preview' | 'development' | 'all'
   createdAt: number
   updatedAt: number
 }
 
-interface SecretValue {
+export interface SecretValue {
   key: string
   value: string
   scope: string
 }
 
-interface LogEntry {
+export interface LogEntry {
   timestamp: number
   level: 'log' | 'info' | 'warn' | 'error' | 'debug'
   message: string
@@ -65,7 +65,7 @@ interface LogEntry {
   appName?: string
 }
 
-interface PreviewDeployment {
+export interface PreviewDeployment {
   previewId: string
   appName: string
   branchName: string
@@ -79,7 +79,7 @@ interface PreviewDeployment {
   expiresAt: number
 }
 
-interface AccountUsage {
+export interface AccountUsage {
   cpuHoursUsed: number
   cpuHoursLimit: number
   storageUsedGb: number

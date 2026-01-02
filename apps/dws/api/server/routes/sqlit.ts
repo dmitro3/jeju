@@ -61,7 +61,6 @@ export function createSQLitProxyRouter() {
     .get('/v1/status', async ({ set }) => {
       try {
         const { endpoint, mode } = await ensureSQLitService()
-        const status = getSQLitStatus()
 
         return {
           status: 'ok',

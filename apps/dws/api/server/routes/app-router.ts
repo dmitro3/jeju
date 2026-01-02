@@ -626,8 +626,9 @@ function isIPFSCid(str: string): boolean {
 
 /**
  * Deploy a worker from CID if not already deployed on this pod
+ * @internal Reserved for future lazy worker deployment
  */
-async function ensureWorkerDeployed(
+export async function ensureWorkerDeployed(
   workerId: string,
   appName: string,
 ): Promise<string> {

@@ -49,7 +49,6 @@ const UpdateWorkerJsonBodySchema = z.object({
 
 // Shared runtime instance for use by other modules
 let sharedRuntime: WorkerRuntime | null = null
-let sharedBackend: BackendManager | null = null
 
 // Cache for CID -> functionId mapping (for lazy deployment)
 const cidToFunctionId = new Map<string, string>()
@@ -170,7 +169,6 @@ async function loadPersistedWorkers(runtime: WorkerRuntime): Promise<void> {
 export function createWorkersRouter(backend: BackendManager) {
   const runtime = new WorkerRuntime(backend)
   sharedRuntime = runtime // Store reference for shared access
-  sharedBackend = backend // Store reference for lazy CID deployment
 
   // Load persisted workers from SQLit on startup (async, non-blocking)
   loadPersistedWorkers(runtime).catch((err) => {
