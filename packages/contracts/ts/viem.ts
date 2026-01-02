@@ -28,10 +28,10 @@ import type {
   ContractFunctionName,
   GetContractReturnType,
   Hex,
-  PublicClient,
+  PublicClient as ViemPublicClient,
   ReadContractReturnType,
   Transport,
-  WalletClient,
+  WalletClient as ViemWalletClient,
   WriteContractParameters,
 } from 'viem'
 import {
@@ -113,7 +113,7 @@ export async function writeContract<
   TChain extends Chain | undefined = Chain | undefined,
   TAccount extends Account | undefined = Account | undefined,
 >(
-  client: WalletClient<Transport, TChain, TAccount>,
+  client: ViemWalletClient<Transport, TChain, TAccount>,
   params: {
     address: Address
     abi: TAbi
@@ -188,7 +188,7 @@ export interface PublicClientConfig {
  * })
  * ```
  */
-export function createTypedPublicClient(config: PublicClientConfig) {
+export function createTypedPublicClient(config: PublicClientConfig): ViemPublicClient {
   return createPublicClient({
     chain: {
       id: config.chainId,
@@ -223,7 +223,7 @@ export interface WalletClientConfig extends PublicClientConfig {
  * })
  * ```
  */
-export function createTypedWalletClient(config: WalletClientConfig) {
+export function createTypedWalletClient(config: WalletClientConfig): ViemWalletClient {
   return createWalletClient({
     account: config.account,
     chain: {

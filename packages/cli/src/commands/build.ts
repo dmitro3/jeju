@@ -564,6 +564,7 @@ buildCommand
     logger.step('Syncing ABIs from forge out/ to abis/')
     const { synced, skipped } = await syncAbis(contractsDir)
     logger.success(`Done: ${synced} synced, ${skipped} skipped`)
+    process.exit(0)
   })
 
 buildCommand

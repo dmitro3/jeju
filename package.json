@@ -5,9 +5,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "vendor/babylon",
-    "vendor/eliza-cloud-v2"
+    "apps/*"
   ],
   "overrides": {
     "bigint-buffer": "file:./patches/bigint-buffer-safe",
@@ -71,7 +69,7 @@
     "@types/chai": "5.2.3"
   },
   "scripts": {
-    "preinstall": "test -f scripts/setup-tools.sh && bash scripts/setup-tools.sh || true",
+    "clean": "find apps packages vendor -type d -name node_modules -prune -exec rm -rf {} + && rm -rf node_modules .turbo && bun install",
     "postinstall": "bun run build:packages && bun run packages/deployment/scripts/setup-apps.ts && bun run link:cli",
     "build:packages": "bun run --cwd packages/types build && bun run --cwd packages/contracts build",
     "link:cli": "bun run --cwd packages/cli build && mkdir -p ~/.bun/bin && ln -sf $PWD/packages/cli/bin/jeju.js ~/.bun/bin/jeju",

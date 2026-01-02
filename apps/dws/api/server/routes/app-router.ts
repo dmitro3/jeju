@@ -20,6 +20,7 @@ import { getAppRegistry } from '../../../src/cdn/app-registry'
 import { getLocalCDNServer } from '../../../src/cdn/local-server'
 import { getIngressController } from '../../infrastructure'
 import { deployedAppState, isDegradedMode } from '../../state'
+import { getSharedWorkersRuntime } from './workers'
 import {
   isConfigMapAvailable,
   loadAppsFromConfigMap,
@@ -685,17 +686,76 @@ export async function proxyToBackend(
 
   if (app.backendEndpoint) {
     // Check if this is a DWS worker endpoint that needs /http prefix
-    if (app.backendEndpoint.includes('/workers/')) {
+    if (app.backendEndpoint.includes('/workers/') && !app.backendEndpoint.endsWith('/http')) {
       targetUrl = `${app.backendEndpoint}/http${pathname}`
     } else {
-      // Direct endpoint (container or external service)
+      // Direct endpoint (container, external service, or worker endpoint already with /http)
       targetUrl = `${app.backendEndpoint}${pathname}`
     }
   } else if (app.backendWorkerId) {
-    // DWS worker - route through workers runtime
-    const host = getLocalhostHost()
-    // Use the workers router which handles deployment from IPFS if needed
-    targetUrl = `http://${host}:4030/workers/${app.backendWorkerId}/http${pathname}`
+    // DWS worker - try direct in-process invocation first for reliability
+    const runtime = getSharedWorkersRuntime()
+    if (runtime) {
+      try {
+        // Try to get function directly or deploy from CID if needed
+        let fn = runtime.getFunction(app.backendWorkerId)
+
+        // If not found and it looks like a CID, try on-demand deployment
+        if (!fn && (app.backendWorkerId.startsWith('Qm') || app.backendWorkerId.startsWith('bafy'))) {
+          console.log(`[AppRouter] Worker ${app.backendWorkerId} not in memory, attempting CID deployment`)
+          // The workers router handles CID deployment, so we still need HTTP for this case
+        } else if (fn) {
+          // Direct invocation for in-memory workers
+          const requestHeaders: Record<string, string> = {}
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value
+          })
+
+          const url = new URL(request.url)
+          const httpEvent = {
+            method: request.method,
+            path: pathname,
+            headers: requestHeaders,
+            query: Object.fromEntries(url.searchParams),
+            body: request.method !== 'GET' && request.method !== 'HEAD' ? await request.text() : null,
+          }
+
+          const httpResponse = await runtime.invokeHTTP(fn.id, httpEvent)
+
+          const responseHeaders = new Headers(httpResponse.headers)
+          responseHeaders.set('X-DWS-Backend', app.backendWorkerId)
+          responseHeaders.set('X-DWS-Invocation', 'direct')
+
+          return new Response(httpResponse.body, {
+            status: httpResponse.statusCode,
+            headers: responseHeaders,
+          })
+        }
+      } catch (err) {
+        console.error(`[AppRouter] Direct worker invocation failed: ${err instanceof Error ? err.message : String(err)}`)
+        // Fall through to HTTP proxy
+      }
+    }
+
+    // Fall back to HTTP proxy (for CID-based workers or when direct invocation fails)
+    // Use K8s internal service URL if available, otherwise external URL
+    const k8sServiceUrl = 'http://dws.dws.svc.cluster.local:4030'
+    const network = getCurrentNetwork()
+
+    // Try K8s internal service first (testnet/mainnet), fallback to localhost (localnet) or external
+    let dwsServiceUrl: string
+    if (network === 'localnet') {
+      dwsServiceUrl = `http://${getLocalhostHost()}:4030`
+    } else {
+      // In K8s, use internal service URL for reliability
+      // This avoids going through ALB/external DNS
+      dwsServiceUrl = process.env.KUBERNETES_SERVICE_HOST
+        ? k8sServiceUrl
+        : network === 'testnet'
+          ? 'https://dws.testnet.jejunetwork.org'
+          : 'https://dws.jejunetwork.org'
+    }
+    targetUrl = `${dwsServiceUrl}/workers/${app.backendWorkerId}/http${pathname}`
   } else {
     return new Response(JSON.stringify({ error: 'No backend configured' }), {
       status: 502,
