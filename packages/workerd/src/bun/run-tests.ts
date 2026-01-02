@@ -6,7 +6,7 @@ import { spawn, type Subprocess } from 'bun'
 import path from 'path'
 
 const __dirname = path.dirname(new URL(import.meta.url).pathname)
-const WORKERD_URL = 'http://localhost:9124'
+const WORKERD_URL = 'http://127.0.0.1:9124'
 const WORKERD_CONFIG = path.resolve(__dirname, '../../samples/bun-bundle/config.capnp')
 const STARTUP_TIMEOUT = 10000
 

@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./react": {
+      "bun": "./src/react/index.ts",
+      "types": "./dist/react/index.d.ts",
+      "import": "./dist/react/index.js"
+    },
     "./providers": {
       "bun": "./src/providers/social.ts",
       "types": "./dist/providers/social.d.ts",

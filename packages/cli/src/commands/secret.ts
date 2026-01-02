@@ -102,7 +102,11 @@ async function listSecrets(
   })
 
   if (!response.ok) {
-    return []
+    // For localnet, DWS may not be running
+    if (network === 'localnet') {
+      return []
+    }
+    throw new Error(`Failed to list secrets: ${response.statusText}`)
   }
 
   const data = await response.json()
@@ -163,7 +167,10 @@ async function getSecretValue(
   )
 
   if (!response.ok) {
-    return null
+    if (response.status === 404) {
+      return null
+    }
+    throw new Error(`Failed to get secret ${key}: ${response.statusText}`)
   }
 
   const data = await response.json()

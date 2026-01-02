@@ -718,9 +718,9 @@ describe('SQLit HTTP Client', () => {
 
           // Query endpoint
           if (url.pathname === '/v1/query') {
-            const body = await req.clone().json() as { database?: string }
-            // Simulate 500 error for error-db database
-            if (body.database === 'error-db') {
+            // Simulate 500 error for error-trigger-db
+            const dbid = req.headers.get('x-sqlit-database') ?? ''
+            if (dbid === 'error-trigger-db') {
               return new Response('Internal Server Error', { status: 500 })
             }
             return handleQuery(req)
@@ -728,9 +728,9 @@ describe('SQLit HTTP Client', () => {
 
           // Exec endpoint
           if (url.pathname === '/v1/exec') {
-            const body = await req.clone().json() as { database?: string }
-            // Simulate 500 error for error-db database
-            if (body.database === 'error-db') {
+            // Simulate 500 error for error-trigger-db
+            const dbid = req.headers.get('x-sqlit-database') ?? ''
+            if (dbid === 'error-trigger-db') {
               return new Response('Internal Server Error', { status: 500 })
             }
             return handleExec(req)
@@ -745,21 +745,25 @@ describe('SQLit HTTP Client', () => {
   }
 
   async function handleQuery(req: Request): Promise<Response> {
-    const body = await req.json() as { query: string; database: string }
-    const sql = body.query.toUpperCase()
+    const body = await req.json() as { sql: string }
+    const sql = body.sql.toUpperCase()
 
     // Simulate SELECT 1
     if (sql.includes('SELECT 1')) {
       return Response.json({
-        status: 'ok',
-        data: { rows: [{ test: 1 }] },
+        success: true,
+        rows: [{ test: 1 }],
+        rowCount: 1,
+        columns: ['test'],
+        executionTime: 0,
+        blockHeight: 1,
       })
     }
 
     // Simulate SELECT from non-existent table
     if (sql.includes('DEFINITELY_DOES_NOT_EXIST')) {
       return Response.json({
-        status: 'error',
+        success: false,
         error: 'no such table: definitely_does_not_exist_table_12345',
       })
     }
@@ -770,17 +774,21 @@ describe('SQLit HTTP Client', () => {
       const tableName = selectMatch[1].toLowerCase()
       const rows = mockTables.get(tableName) ?? []
       return Response.json({
-        status: 'ok',
-        data: { rows },
+        success: true,
+        rows,
+        rowCount: rows.length,
+        columns: rows.length > 0 ? Object.keys(rows[0]) : [],
+        executionTime: 0,
+        blockHeight: 1,
       })
     }
 
-    return Response.json({ status: 'ok', data: { rows: [] } })
+    return Response.json({ success: true, rows: [], rowCount: 0, columns: [], executionTime: 0, blockHeight: 1 })
   }
 
   async function handleExec(req: Request): Promise<Response> {
-    const body = await req.json() as { query: string; database: string }
-    const sql = body.query.toUpperCase()
+    const body = await req.json() as { sql: string }
+    const sql = body.sql.toUpperCase()
 
     // Simulate CREATE TABLE
     if (sql.includes('CREATE TABLE')) {
@@ -792,9 +800,13 @@ describe('SQLit HTTP Client', () => {
         }
       }
       return Response.json({
-        status: 'ok',
+        success: true,
         rowsAffected: 0,
-        lastInsertId: 0,
+        lastInsertId: '0',
+        txHash: '0x0000000000000000000000000000000000000000000000000000000000000001',
+        gasUsed: '21000',
+        executionTime: 1,
+        blockHeight: 1,
       })
     }
 
@@ -802,31 +814,43 @@ describe('SQLit HTTP Client', () => {
     if (sql.includes('INSERT INTO')) {
       lastInsertId++
       return Response.json({
-        status: 'ok',
+        success: true,
         rowsAffected: 1,
-        lastInsertId: lastInsertId,
+        lastInsertId: String(lastInsertId),
+        txHash: '0x0000000000000000000000000000000000000000000000000000000000000002',
+        gasUsed: '21000',
+        executionTime: 1,
+        blockHeight: 2,
       })
     }
 
     // Simulate DELETE
     if (sql.includes('DELETE FROM')) {
       return Response.json({
-        status: 'ok',
+        success: true,
         rowsAffected: 1,
-        lastInsertId: 0,
+        lastInsertId: '0',
+        txHash: '0x0000000000000000000000000000000000000000000000000000000000000003',
+        gasUsed: '21000',
+        executionTime: 1,
+        blockHeight: 3,
       })
     }
 
     // Simulate UPDATE
     if (sql.includes('UPDATE')) {
       return Response.json({
-        status: 'ok',
+        success: true,
         rowsAffected: 1,
-        lastInsertId: 0,
+        lastInsertId: '0',
+        txHash: '0x0000000000000000000000000000000000000000000000000000000000000004',
+        gasUsed: '21000',
+        executionTime: 1,
+        blockHeight: 4,
       })
     }
 
-    return Response.json({ status: 'ok', rowsAffected: 0, lastInsertId: 0 })
+    return Response.json({ success: true, rowsAffected: 0, lastInsertId: '0', executionTime: 0, blockHeight: 0 })
   }
 
   beforeAll(async () => {
@@ -901,11 +925,12 @@ describe('SQLit HTTP Client', () => {
     // Result should have proper structure (SQLiteRunResult)
     expect(typeof result.changes).toBe('number')
     expect(result.changes).toBe(1)
-    expect(result.lastInsertRowid).toBe(1)
+    // lastInsertRowid can be number or bigint depending on implementation
+    expect(Number(result.lastInsertRowid)).toBe(1)
 
     // Insert another row
     const result2 = await db.execAsync("INSERT INTO sqlit_test (value) VALUES ('test-value-2')")
-    expect(result2.lastInsertRowid).toBe(2)
+    expect(Number(result2.lastInsertRowid)).toBe(2)
 
     db.close()
   })
@@ -966,7 +991,8 @@ describe('SQLit HTTP Client', () => {
   })
 
   test('handles HTTP error status codes', async () => {
-    const db = new Database(`http://localhost:${mockServerPort}/error-db`)
+    // Use error-trigger path that the mock server recognizes
+    const db = new Database(`http://localhost:${mockServerPort}/error-trigger-db`)
 
     await expect(db.queryAsync('SELECT 1')).rejects.toThrow('SQLit request failed: 500')
     await expect(db.execAsync('SELECT 1')).rejects.toThrow('SQLit request failed: 500')

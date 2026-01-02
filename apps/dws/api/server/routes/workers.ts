@@ -119,6 +119,43 @@ async function deployFromCid(
 }
 
 /**
+ * Load a specific worker from SQLit by ID and deploy to runtime
+ * Used for on-demand loading when a function is not found in memory
+ */
+async function loadWorkerById(runtime: WorkerRuntime, functionId: string): Promise<WorkerFunction | null> {
+  try {
+    const worker = await dwsWorkerState.get(functionId)
+    if (!worker) return null
+    
+    const fn: WorkerFunction = {
+      id: worker.id,
+      name: worker.name,
+      owner: worker.owner as Address,
+      runtime: worker.runtime,
+      handler: worker.handler,
+      codeCid: worker.codeCid,
+      memory: worker.memory,
+      timeout: worker.timeout,
+      env: worker.env,
+      status: worker.status,
+      version: worker.version,
+      createdAt: worker.createdAt,
+      updatedAt: worker.updatedAt,
+      invocationCount: worker.invocationCount,
+      avgDurationMs: worker.avgDurationMs,
+      errorCount: worker.errorCount,
+    }
+    
+    await runtime.deployFunction(fn)
+    console.log(`[Workers] On-demand loaded worker from SQLit: ${worker.name} (${worker.id})`)
+    return fn
+  } catch (err) {
+    console.warn(`[Workers] Failed to load worker ${functionId} from SQLit: ${err instanceof Error ? err.message : String(err)}`)
+    return null
+  }
+}
+
+/**
  * Load persisted workers from SQLit and deploy them to the runtime
  */
 async function loadPersistedWorkers(runtime: WorkerRuntime): Promise<void> {
@@ -635,12 +672,23 @@ export function createWorkersRouter(backend: BackendManager) {
       )
 
       // HTTP handler (for web functions)
-      .all(
+      // Define handler once, then apply to all HTTP methods
+      // Note: Elysia's .all() doesn't include GET, so we explicitly register each method
+      .route(
+        'GET',
         '/:functionId/http/*',
         async ({ params, request, set }) => {
           let fn = runtime.getFunction(params.functionId)
 
-          // If not found, check if the ID is a CID and deploy on-demand
+          // If not found in memory, try to load from SQLit (on-demand for multi-pod)
+          if (!fn) {
+            const loadedFn = await loadWorkerById(runtime, params.functionId)
+            if (loadedFn) {
+              fn = loadedFn
+            }
+          }
+
+          // If still not found, check if the ID is a CID and deploy on-demand
           if (!fn && isIPFSCid(params.functionId)) {
             console.log(
               `[Workers] Function ${params.functionId} not found, attempting CID deployment`,
@@ -665,8 +713,6 @@ export function createWorkersRouter(backend: BackendManager) {
           }
 
           const url = new URL(request.url)
-          // Use params.functionId (could be CID or UUID) for path extraction
-          // since fn.id might be a different UUID after CID deployment
           const path = url.pathname.replace(`/workers/${params.functionId}/http`, '') || '/'
 
           const requestHeaders: Record<string, string> = {}
@@ -679,10 +725,228 @@ export function createWorkersRouter(backend: BackendManager) {
             path,
             headers: requestHeaders,
             query: Object.fromEntries(url.searchParams),
-            body:
-              request.method !== 'GET' && request.method !== 'HEAD'
-                ? await request.text()
-                : null,
+            body: null,
+          }
+
+          const response = await runtime.invokeHTTP(fn.id, event)
+
+          return new Response(response.body, {
+            status: response.statusCode,
+            headers: response.headers,
+          })
+        },
+        {
+          params: t.Object({
+            functionId: t.String(),
+            '*': t.String(),
+          }),
+        },
+      )
+      .post(
+        '/:functionId/http/*',
+        async ({ params, request, set }) => {
+          let fn = runtime.getFunction(params.functionId)
+
+          // If not found in memory, try to load from SQLit (on-demand for multi-pod)
+          if (!fn) {
+            const loadedFn = await loadWorkerById(runtime, params.functionId)
+            if (loadedFn) fn = loadedFn
+          }
+
+          if (!fn && isIPFSCid(params.functionId)) {
+            console.log(`[Workers] Function ${params.functionId} not found, attempting CID deployment`)
+            try {
+              const deployed = await deployFromCid(runtime, backend, params.functionId)
+              fn = deployed
+            } catch (err) {
+              console.error(`[Workers] Failed to deploy from CID: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+
+          if (!fn) {
+            set.status = 404
+            return { error: 'Function not found' }
+          }
+
+          const url = new URL(request.url)
+          const path = url.pathname.replace(`/workers/${params.functionId}/http`, '') || '/'
+
+          const requestHeaders: Record<string, string> = {}
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value
+          })
+
+          const event: HTTPEvent = {
+            method: request.method,
+            path,
+            headers: requestHeaders,
+            query: Object.fromEntries(url.searchParams),
+            body: await request.text(),
+          }
+
+          const response = await runtime.invokeHTTP(fn.id, event)
+
+          return new Response(response.body, {
+            status: response.statusCode,
+            headers: response.headers,
+          })
+        },
+        {
+          params: t.Object({
+            functionId: t.String(),
+            '*': t.String(),
+          }),
+        },
+      )
+      .put(
+        '/:functionId/http/*',
+        async ({ params, request, set }) => {
+          let fn = runtime.getFunction(params.functionId)
+
+          // If not found in memory, try to load from SQLit (on-demand for multi-pod)
+          if (!fn) {
+            const loadedFn = await loadWorkerById(runtime, params.functionId)
+            if (loadedFn) fn = loadedFn
+          }
+
+          if (!fn && isIPFSCid(params.functionId)) {
+            try {
+              const deployed = await deployFromCid(runtime, backend, params.functionId)
+              fn = deployed
+            } catch (err) {
+              console.error(`[Workers] Failed to deploy from CID: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+
+          if (!fn) {
+            set.status = 404
+            return { error: 'Function not found' }
+          }
+
+          const url = new URL(request.url)
+          const path = url.pathname.replace(`/workers/${params.functionId}/http`, '') || '/'
+
+          const requestHeaders: Record<string, string> = {}
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value
+          })
+
+          const event: HTTPEvent = {
+            method: request.method,
+            path,
+            headers: requestHeaders,
+            query: Object.fromEntries(url.searchParams),
+            body: await request.text(),
+          }
+
+          const response = await runtime.invokeHTTP(fn.id, event)
+
+          return new Response(response.body, {
+            status: response.statusCode,
+            headers: response.headers,
+          })
+        },
+        {
+          params: t.Object({
+            functionId: t.String(),
+            '*': t.String(),
+          }),
+        },
+      )
+      .patch(
+        '/:functionId/http/*',
+        async ({ params, request, set }) => {
+          let fn = runtime.getFunction(params.functionId)
+
+          // If not found in memory, try to load from SQLit (on-demand for multi-pod)
+          if (!fn) {
+            const loadedFn = await loadWorkerById(runtime, params.functionId)
+            if (loadedFn) fn = loadedFn
+          }
+
+          if (!fn && isIPFSCid(params.functionId)) {
+            try {
+              const deployed = await deployFromCid(runtime, backend, params.functionId)
+              fn = deployed
+            } catch (err) {
+              console.error(`[Workers] Failed to deploy from CID: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+
+          if (!fn) {
+            set.status = 404
+            return { error: 'Function not found' }
+          }
+
+          const url = new URL(request.url)
+          const path = url.pathname.replace(`/workers/${params.functionId}/http`, '') || '/'
+
+          const requestHeaders: Record<string, string> = {}
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value
+          })
+
+          const event: HTTPEvent = {
+            method: request.method,
+            path,
+            headers: requestHeaders,
+            query: Object.fromEntries(url.searchParams),
+            body: await request.text(),
+          }
+
+          const response = await runtime.invokeHTTP(fn.id, event)
+
+          return new Response(response.body, {
+            status: response.statusCode,
+            headers: response.headers,
+          })
+        },
+        {
+          params: t.Object({
+            functionId: t.String(),
+            '*': t.String(),
+          }),
+        },
+      )
+      .delete(
+        '/:functionId/http/*',
+        async ({ params, request, set }) => {
+          let fn = runtime.getFunction(params.functionId)
+
+          // If not found in memory, try to load from SQLit (on-demand for multi-pod)
+          if (!fn) {
+            const loadedFn = await loadWorkerById(runtime, params.functionId)
+            if (loadedFn) fn = loadedFn
+          }
+
+          if (!fn && isIPFSCid(params.functionId)) {
+            try {
+              const deployed = await deployFromCid(runtime, backend, params.functionId)
+              fn = deployed
+            } catch (err) {
+              console.error(`[Workers] Failed to deploy from CID: ${err instanceof Error ? err.message : String(err)}`)
+            }
+          }
+
+          if (!fn) {
+            set.status = 404
+            return { error: 'Function not found' }
+          }
+
+          const url = new URL(request.url)
+          const path = url.pathname.replace(`/workers/${params.functionId}/http`, '') || '/'
+
+          const requestHeaders: Record<string, string> = {}
+          request.headers.forEach((value, key) => {
+            requestHeaders[key] = value
+          })
+
+          const event: HTTPEvent = {
+            method: request.method,
+            path,
+            headers: requestHeaders,
+            query: Object.fromEntries(url.searchParams),
+            body: await request.text(),
           }
 
           const response = await runtime.invokeHTTP(fn.id, event)

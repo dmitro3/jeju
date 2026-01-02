@@ -101,14 +101,24 @@ function getSQLitConfigFromEnv(): SQLitConfig {
 // SQLit HTTP Client
 // =============================================================================
 
+// Real SQLit API response format
 interface SQLitQueryResponse {
-  data?: {
-    rows: Record<string, unknown>[] | null
-  }
-  status: string
-  error?: string
+  success: boolean
+  // Query response
+  rows?: Record<string, unknown>[]
+  rowCount?: number
+  columns?: string[]
+  // Exec response
   rowsAffected?: number
-  lastInsertId?: string | number
+  lastInsertId?: string  // SQLit returns string, not number
+  txHash?: string
+  gasUsed?: string
+  // Common
+  executionTime?: number
+  blockHeight?: number
+  // Error case
+  error?: string
+  message?: string
 }
 
 class SQLitHttpClient {
@@ -174,12 +184,11 @@ class SQLitHttpClient {
 
     const response = await fetch(uri, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        assoc: true,
-        database: this.dbid,
-        query: sql,
-      }),
+      headers: {
+        'content-type': 'application/json',
+        'x-sqlit-database': this.dbid,
+      },
+      body: JSON.stringify({ sql }),
       signal: AbortSignal.timeout(this.timeout),
     })
 
@@ -189,11 +198,11 @@ class SQLitHttpClient {
 
     const result: SQLitQueryResponse = await response.json()
 
-    if (result.error) {
-      throw new ERR_SQLITE_ERROR(result.error)
+    if (!result.success) {
+      throw new ERR_SQLITE_ERROR(result.error ?? result.message ?? 'Unknown SQLit error')
     }
 
-    return (result.data?.rows as SQLiteRow[]) ?? []
+    return (result.rows as SQLiteRow[]) ?? []
   }
 
   private async fetchExec(
@@ -207,12 +216,11 @@ class SQLitHttpClient {
 
     const response = await fetch(uri, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        assoc: true,
-        database: this.dbid,
-        query: sql,
-      }),
+      headers: {
+        'content-type': 'application/json',
+        'x-sqlit-database': this.dbid,
+      },
+      body: JSON.stringify({ sql }),
       signal: AbortSignal.timeout(this.timeout),
     })
 
@@ -222,17 +230,13 @@ class SQLitHttpClient {
 
     const result: SQLitQueryResponse = await response.json()
 
-    if (result.error) {
-      throw new ERR_SQLITE_ERROR(result.error)
+    if (!result.success) {
+      throw new ERR_SQLITE_ERROR(result.error ?? result.message ?? 'Unknown SQLit error')
     }
 
-    // Parse actual response values from SQLit server
+    // Real SQLit returns: { success, rowsAffected, lastInsertId (string), txHash, ... }
     const rowsAffected = result.rowsAffected ?? 0
-    const lastInsertId = result.lastInsertId !== undefined
-      ? typeof result.lastInsertId === 'string'
-        ? BigInt(result.lastInsertId)
-        : result.lastInsertId
-      : 0
+    const lastInsertId = result.lastInsertId ? BigInt(result.lastInsertId) : 0n
 
     return { rowsAffected, lastInsertId }
   }
@@ -853,8 +857,17 @@ export class Database {
       let config: SQLitConfig
 
       if (filename.startsWith('sqlit://')) {
-        const dbid = filename.slice(8) // Remove 'sqlit://'
-        config = { ...getSQLitConfigFromEnv(), dbid }
+        // Parse sqlit://dbid or sqlit://dbid?endpoint=http://...
+        const urlPart = filename.slice(8) // Remove 'sqlit://'
+        const [dbidPart, queryString] = urlPart.split('?')
+        const params = new URLSearchParams(queryString ?? '')
+        const endpointOverride = params.get('endpoint')
+
+        config = {
+          ...getSQLitConfigFromEnv(),
+          dbid: dbidPart,
+          ...(endpointOverride && { endpoint: endpointOverride }),
+        }
       } else {
         // Direct HTTP URL
         const url = new URL(filename)

@@ -639,6 +639,33 @@ const app = new Elysia()
     stats: getRateLimitStats(),
     note: 'Stake tokens to increase rate limits',
   }))
+  // GraphQL playground - serve HTML interface
+  .get('/graphql', async () => {
+    const playgroundPath = `${import.meta.dir}/../public/playground.html`
+    const file = Bun.file(playgroundPath)
+    if (await file.exists()) {
+      const html = await file.text()
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html' },
+      })
+    }
+    // Fallback: redirect to the Subsquid GraphQL server
+    const graphqlPort = process.env.GQL_PORT ?? '4350'
+    return Response.redirect(`http://localhost:${graphqlPort}/graphql`, 302)
+  })
+  // Playground alias
+  .get('/playground', async () => {
+    const playgroundPath = `${import.meta.dir}/../public/playground.html`
+    const file = Bun.file(playgroundPath)
+    if (await file.exists()) {
+      const html = await file.text()
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html' },
+      })
+    }
+    // Fallback: redirect to /graphql
+    return Response.redirect('/graphql', 302)
+  })
   // GraphQL proxy with CORS - forwards to Subsquid GraphQL server
   .post('/graphql', async (ctx: Context) => {
     const graphqlPort = process.env.GQL_PORT ?? '4350'

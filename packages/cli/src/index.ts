@@ -777,6 +777,7 @@ program.action(() => {
   )
 
   console.log(chalk.dim(`Run \`${cliName} <command> --help\` for details.\n`))
+  process.exit(0)
 })
 
 program.exitOverride()

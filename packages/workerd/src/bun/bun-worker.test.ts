@@ -6,7 +6,7 @@ import { describe, test, expect, beforeAll, afterAll } from 'bun:test'
 import { spawn, type Subprocess } from 'bun'
 import path from 'path'
 
-const WORKERD_URL = 'http://localhost:9124'
+const WORKERD_URL = 'http://127.0.0.1:9124'
 const WORKERD_CONFIG = path.resolve(__dirname, '../../samples/bun-bundle/config.capnp')
 const STARTUP_TIMEOUT = 10000
 const REQUEST_TIMEOUT = 5000
@@ -50,17 +50,13 @@ describe('Bun Worker Integration Tests', () => {
   beforeAll(async () => {
     // Check if workerd is already running
     try {
-      console.log(`Checking for workerd at ${WORKERD_URL}/health...`)
       const response = await fetch(`${WORKERD_URL}/health`, {
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT)
       })
-      console.log(`Health check response: ${response.status} ${response.statusText}`)
       if (response.ok) {
-        console.log('Workerd already running, using existing instance')
-        return
+        return // Use existing instance
       }
-    } catch (error) {
-      console.log(`Health check failed: ${error}`)
+    } catch {
       // Not running, start it
     }
 
@@ -324,7 +320,7 @@ describe('Bun Worker Integration Tests', () => {
   describe('Edge Cases - escapeHTML', () => {
     test('escapes all special HTML characters', async () => {
       const data = await fetchJSON<{ escaped: string }>('/escape-html?html=' + encodeURIComponent('<>"\'&'))
-      expect(data.escaped).toBe('&lt;&gt;&quot;&#39;&amp;')
+      expect(data.escaped).toBe('&lt;&gt;&quot;&#039;&amp;')
     })
 
     test('preserves safe characters', async () => {
@@ -334,10 +330,12 @@ describe('Bun Worker Integration Tests', () => {
   })
 
   describe('Edge Cases - File Operations', () => {
-    test('file operations are isolated per request', async () => {
-      // Each request should have its own virtual filesystem state
+    test('file operations persist across requests within same worker', async () => {
+      // Virtual filesystem is SHARED across requests (global Map)
+      // Data persists within worker lifetime but is lost on restart
       const data1 = await fetchJSON<{ content: string }>('/file-ops')
       const data2 = await fetchJSON<{ content: string }>('/file-ops')
+      // Both see the same content because virtualFS is shared
       expect(data1.content).toBe('Hello from Bun file API.')
       expect(data2.content).toBe('Hello from Bun file API.')
     })

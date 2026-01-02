@@ -1,7 +1,21 @@
 // Bun Runtime Compatibility Layer for Workerd
+//
+// This provides REAL Bun API implementations for workerd, not polyfills.
+// - File operations: DWS Storage (IPFS-based) or in-memory
+// - Password hashing: Real bcrypt via bcryptjs
+// - DNS: Real DNS-over-HTTPS (DoH)
+// - SQLite: Real SQLit HTTP client or in-memory
 
 import { ERR_FS_FILE_NOT_FOUND, ERR_WORKERD_UNAVAILABLE } from 'bun-internal:errors'
 import { isArrayBuffer, isString, isUint8Array } from 'bun-internal:types'
+
+// Import and re-export DNS module
+import * as dns from './dns'
+export { dns }
+
+// Import and re-export Storage module  
+import * as storage from './storage'
+export { storage }
 
 // Types
 export interface BunFile {
@@ -236,10 +250,34 @@ export async function write(
 // Server
 let currentServeOptions: ServeOptions | null = null
 
+/**
+ * Bun.serve - HTTP Server
+ *
+ * In workerd: This creates a virtual server for testing. For production workerd,
+ * use the native export default { fetch(request) { ... } } pattern instead.
+ *
+ * The returned server object can be used to test fetch handlers:
+ * ```
+ * const server = Bun.serve({ fetch: (req) => new Response('OK') })
+ * const response = await server.fetch(new Request('http://localhost/'))
+ * ```
+ */
 export function serve(options: ServeOptions): Server {
   currentServeOptions = options
   const port = options.port ?? 3000
   const hostname = options.hostname ?? 'localhost'
+
+  // Check if we're in actual workerd (navigator.userAgent contains 'Cloudflare-Workers')
+  const isWorkerd =
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent?.includes('Cloudflare-Workers')
+
+  if (isWorkerd && !options.development) {
+    console.warn(
+      '[Bun.serve] Running in workerd. For production, use the native fetch handler:\n' +
+        '  export default { fetch(request) { return new Response("OK") } }',
+    )
+  }
 
   return {
     port,
@@ -412,12 +450,18 @@ function inspectValue(value: unknown, depth: number, seen: Set<unknown>): string
 }
 
 // Hashing
-export function hash(data: string | ArrayBuffer | Uint8Array, algorithm?: HashAlgorithm): number | bigint {
-  const bytes = isString(data)
+type HashInput = string | ArrayBuffer | Uint8Array
+
+function toBytes(data: HashInput): Uint8Array {
+  return isString(data)
     ? new TextEncoder().encode(data)
     : isArrayBuffer(data)
       ? new Uint8Array(data)
       : data
+}
+
+function hashImpl(data: HashInput, algorithm?: HashAlgorithm): number | bigint {
+  const bytes = toBytes(data)
 
   switch (algorithm ?? 'wyhash') {
     case 'wyhash':
@@ -436,6 +480,17 @@ export function hash(data: string | ArrayBuffer | Uint8Array, algorithm?: HashAl
       return murmur64v2(bytes)
   }
 }
+
+// Hash with method aliases matching Bun API
+export const hash = Object.assign(hashImpl, {
+  wyhash: (data: HashInput, seed?: number) => wyhash(toBytes(data), seed),
+  crc32: (data: HashInput) => crc32(toBytes(data)),
+  adler32: (data: HashInput) => adler32(toBytes(data)),
+  cityhash32: (data: HashInput) => cityhash32(toBytes(data)),
+  cityhash64: (data: HashInput) => cityhash64(toBytes(data)),
+  murmur32v3: (data: HashInput, seed?: number) => murmur32v3(toBytes(data), seed),
+  murmur64v2: (data: HashInput, seed?: number) => murmur64v2(toBytes(data), seed),
+})
 
 function wyhash(data: Uint8Array, seed = 0): bigint {
   let h = BigInt(seed)
@@ -543,7 +598,14 @@ function murmur64v2(data: Uint8Array, seed = 0): bigint {
 }
 
 // Password hashing (PBKDF2-based for workerd)
+// Real bcrypt password hashing using bcryptjs (pure JS, works in all environments)
+import bcrypt from 'bcryptjs'
+
 export const password = {
+  /**
+   * Hash a password using bcrypt (real implementation, not polyfill)
+   * Output is compatible with standard bcrypt implementations
+   */
   async hash(
     password: string,
     options?: { algorithm?: 'bcrypt' | 'argon2id' | 'argon2d' | 'argon2i'; cost?: number },
@@ -551,55 +613,66 @@ export const password = {
     const algorithm = options?.algorithm ?? 'bcrypt'
     const cost = options?.cost ?? 10
 
-    const passwordData = new TextEncoder().encode(password)
-    const salt = crypto.getRandomValues(new Uint8Array(16))
-    const keyMaterial = await crypto.subtle.importKey('raw', passwordData, 'PBKDF2', false, ['deriveBits'])
-    const iterations = 2 ** cost * 100
+    if (algorithm !== 'bcrypt') {
+      // Argon2 requires native code or WASM - not available in workerd
+      // For now, throw a clear error rather than silently falling back
+      throw new Error(
+        `Algorithm '${algorithm}' is not available in workerd. Use 'bcrypt' instead.`,
+      )
+    }
 
-    const derivedBits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
-      keyMaterial,
-      256,
-    )
-
-    const toHex = (arr: Uint8Array) => Array.from(arr).map((b) => b.toString(16).padStart(2, '0')).join('')
-    return `$workerd$${algorithm}$${cost}$${toHex(salt)}$${toHex(new Uint8Array(derivedBits))}`
+    // Use real bcrypt via bcryptjs
+    const salt = await bcrypt.genSalt(cost)
+    return bcrypt.hash(password, salt)
   },
 
+  /**
+   * Verify a password against a bcrypt hash
+   * Works with any standard bcrypt hash ($2a$, $2b$, $2y$)
+   */
   async verify(password: string, hash: string): Promise<boolean> {
-    if (!hash.startsWith('$workerd$')) {
-      const data = new TextEncoder().encode(password)
-      const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-      const computed = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('')
-      return computed === hash
+    // bcryptjs handles all bcrypt hash formats
+    if (hash.startsWith('$2')) {
+      return bcrypt.compare(password, hash)
     }
 
-    const parts = hash.split('$')
-    if (parts.length !== 6) return false
-
-    const [, , , costStr, saltHex, expectedHashHex] = parts
-    const cost = parseInt(costStr, 10)
-    const passwordData = new TextEncoder().encode(password)
-    const salt = new Uint8Array(saltHex.match(/.{2}/g)?.map((byte) => parseInt(byte, 16)) ?? [])
-    const keyMaterial = await crypto.subtle.importKey('raw', passwordData, 'PBKDF2', false, ['deriveBits'])
-    const iterations = 2 ** cost * 100
-
-    const derivedBits = await crypto.subtle.deriveBits(
-      { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
-      keyMaterial,
-      256,
-    )
-
-    const computedHashHex = Array.from(new Uint8Array(derivedBits)).map((b) => b.toString(16).padStart(2, '0')).join('')
-
-    // Constant-time comparison
-    if (computedHashHex.length !== expectedHashHex.length) return false
-    let result = 0
-    for (let i = 0; i < computedHashHex.length; i++) {
-      result |= computedHashHex.charCodeAt(i) ^ expectedHashHex.charCodeAt(i)
+    // Legacy: Support old PBKDF2 hashes from previous workerd implementation
+    if (hash.startsWith('$workerd$')) {
+      return verifyLegacyWorkerdHash(password, hash)
     }
-    return result === 0
+
+    // Reject unknown hash formats
+    throw new Error('Unknown hash format. Expected bcrypt ($2a$, $2b$, $2y$) or legacy workerd format.')
   },
+}
+
+// Legacy verification for old PBKDF2 hashes (backwards compatibility only)
+async function verifyLegacyWorkerdHash(password: string, hash: string): Promise<boolean> {
+  const parts = hash.split('$')
+  if (parts.length !== 6) return false
+
+  const [, , , costStr, saltHex, expectedHashHex] = parts
+  const cost = parseInt(costStr, 10)
+  const passwordData = new TextEncoder().encode(password)
+  const salt = new Uint8Array(saltHex.match(/.{2}/g)?.map((byte) => parseInt(byte, 16)) ?? [])
+  const keyMaterial = await crypto.subtle.importKey('raw', passwordData, 'PBKDF2', false, ['deriveBits'])
+  const iterations = 2 ** cost * 100
+
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    keyMaterial,
+    256,
+  )
+
+  const computedHashHex = Array.from(new Uint8Array(derivedBits)).map((b) => b.toString(16).padStart(2, '0')).join('')
+
+  // Constant-time comparison
+  if (computedHashHex.length !== expectedHashHex.length) return false
+  let result = 0
+  for (let i = 0; i < computedHashHex.length; i++) {
+    result |= computedHashHex.charCodeAt(i) ^ expectedHashHex.charCodeAt(i)
+  }
+  return result === 0
 }
 
 // Stream utilities
@@ -674,18 +747,7 @@ export class ArrayBufferSink {
   }
 }
 
-// DNS (unavailable)
-export const dns = {
-  async lookup(hostname: string): Promise<never> {
-    throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.lookup', `DNS lookups for '${hostname}' not available`)
-  },
-  async reverse(ip: string): Promise<never> {
-    throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.reverse', `Reverse DNS for '${ip}' not available`)
-  },
-  async resolve(hostname: string): Promise<never> {
-    throw new ERR_WORKERD_UNAVAILABLE('Bun.dns.resolve', `DNS resolution for '${hostname}' not available`)
-  },
-}
+// DNS is now provided by './dns' module via re-export (DNS-over-HTTPS)
 
 // Misc
 export const main = (() => {

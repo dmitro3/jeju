@@ -55,8 +55,8 @@ async function registerDomain(
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    logger.error(`Failed to register domain: ${error.error || response.statusText}`)
+    const error = await response.json().catch(() => ({}))
+    logger.error(`Failed to register domain: ${(error as { error?: string }).error || response.statusText}`)
     process.exit(1)
   }
 
@@ -94,8 +94,8 @@ async function setContent(
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    logger.error(`Failed to set content: ${error.error || response.statusText}`)
+    const error = await response.json().catch(() => ({}))
+    logger.error(`Failed to set content: ${(error as { error?: string }).error || response.statusText}`)
     process.exit(1)
   }
 
@@ -115,7 +115,7 @@ async function linkWorker(
 
   logger.step(`Linking ${chalk.cyan(name)} to worker ${chalk.yellow(workerId)}...`)
 
-  const response = await fetch(`${dwsUrl}/jns/register`, {
+  const response = await fetch(`${dwsUrl}/jns/link-worker`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -128,8 +128,8 @@ async function linkWorker(
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    logger.error(`Failed to link worker: ${error.error || response.statusText}`)
+    const error = await response.json().catch(() => ({}))
+    logger.error(`Failed to link worker: ${(error as { error?: string }).error || response.statusText}`)
     process.exit(1)
   }
 
@@ -147,7 +147,7 @@ async function resolveDomain(
 
   logger.step(`Resolving ${chalk.cyan(name)}...`)
 
-  const response = await fetch(`${dwsUrl}/registry/apps/${encodeURIComponent(name)}`)
+  const response = await fetch(`${dwsUrl}/jns/resolve/${encodeURIComponent(name)}`)
 
   if (!response.ok) {
     if (response.status === 404) {
@@ -159,6 +159,11 @@ async function resolveDomain(
   }
 
   const result = await response.json()
+
+  if (!result.resolved) {
+    logger.error(`Domain ${name} not found`)
+    process.exit(1)
+  }
 
   console.log()
   console.log(chalk.bold('Domain Info:'))
@@ -190,7 +195,7 @@ async function listDomains(options: { network: string }): Promise<void> {
 
   const dwsUrl = getDWSUrl(options.network)
 
-  const response = await fetch(`${dwsUrl}/registry/apps`, {
+  const response = await fetch(`${dwsUrl}/jns/list`, {
     headers: {
       Authorization: `Bearer ${credentials.authToken}`,
     },
@@ -202,7 +207,7 @@ async function listDomains(options: { network: string }): Promise<void> {
   }
 
   const result = await response.json()
-  const domains = result.apps || []
+  const domains = result.domains || []
 
   if (domains.length === 0) {
     logger.info('You have no registered domains.')
@@ -254,8 +259,8 @@ async function transferDomain(
   })
 
   if (!response.ok) {
-    const error = await response.json()
-    logger.error(`Failed to transfer: ${error.error || response.statusText}`)
+    const error = await response.json().catch(() => ({}))
+    logger.error(`Failed to transfer: ${(error as { error?: string }).error || response.statusText}`)
     process.exit(1)
   }
 
@@ -269,21 +274,24 @@ async function checkAvailability(
 ): Promise<void> {
   const dwsUrl = getDWSUrl(options.network)
 
-  const response = await fetch(`${dwsUrl}/registry/apps/${encodeURIComponent(name)}`)
+  const response = await fetch(`${dwsUrl}/jns/check/${encodeURIComponent(name)}`)
 
-  if (response.status === 404) {
+  if (!response.ok) {
+    logger.error(`Failed to check availability: ${response.statusText}`)
+    process.exit(1)
+  }
+
+  const result = await response.json()
+
+  if (result.available) {
     console.log(`${chalk.green('✓')} ${chalk.cyan(name)} is ${chalk.green('available')}`)
     console.log()
     console.log(`Register with: ${chalk.cyan(`jeju domain register ${name}`)}`)
-  } else if (response.ok) {
-    const result = await response.json()
+  } else {
     console.log(`${chalk.red('✗')} ${chalk.cyan(name)} is ${chalk.red('taken')}`)
     if (result.owner) {
       console.log(`  Owner: ${chalk.dim(result.owner)}`)
     }
-  } else {
-    logger.error(`Failed to check availability: ${response.statusText}`)
-    process.exit(1)
   }
 }
 

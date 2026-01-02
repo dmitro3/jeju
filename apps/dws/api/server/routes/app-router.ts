@@ -694,13 +694,12 @@ export async function proxyToBackend(
     // Direct endpoint (container or external service)
     targetUrl = `${app.backendEndpoint}${pathname}`
   } else if (app.backendWorkerId) {
-    // DWS worker - route through workers runtime
-    // Pass the CID/functionId directly - workers router handles lazy deployment
-    // This ensures each pod can deploy the worker on-demand from IPFS
+    // DWS worker - route through workers runtime (Bun-based)
+    // Pass the workerId directly - workers router handles execution
+    // Note: Workers router also supports on-demand deployment from CIDs
     const host = getLocalhostHost()
     
-    // Use the CID directly - workers router will lazy-deploy from IPFS if needed
-    // This is stateless and works across any pod without shared memory
+    // Route to the workers HTTP handler (Bun runtime, supports auto-deploy from CID)
     targetUrl = `http://${host}:4030/workers/${app.backendWorkerId}/http${pathname}`
   } else {
     return new Response(JSON.stringify({ error: 'No backend configured' }), {
@@ -853,10 +852,11 @@ export function createAppRouter() {
           return undefined
         }
 
-        // Route to backend for API paths
-        const shouldProxyToBackend = isApiPath(pathname, app.apiPaths)
+        // Route to backend for API paths (use defaults if not configured)
+        const apiPaths = app.apiPaths ?? DEFAULT_API_PATHS
+        const shouldProxyToBackend = isApiPath(pathname, apiPaths)
         console.log(
-          `[AppRouter] pathname=${pathname}, apiPaths=${JSON.stringify(app.apiPaths)}, shouldProxy=${shouldProxyToBackend}`,
+          `[AppRouter] pathname=${pathname}, apiPaths=${JSON.stringify(apiPaths)}, shouldProxy=${shouldProxyToBackend}`,
         )
         if (shouldProxyToBackend) {
           console.log(
@@ -872,8 +872,27 @@ export function createAppRouter() {
           return serveFrontendFromStorage(app, pathname)
         }
 
-        // Serve from local CDN (devnet)
-        return serveFrontendFromLocalCDN(app.name, pathname)
+        // If no frontend configured but backend exists, proxy all to backend
+        if (app.backendEndpoint || app.backendWorkerId) {
+          console.log(`[AppRouter] No frontend configured for ${appName}, proxying to backend: ${pathname}`)
+          return proxyToBackend(request, app, pathname)
+        }
+
+        // Serve from local CDN (devnet) only for local development
+        const network = NETWORK
+        if (network === 'localnet') {
+          return serveFrontendFromLocalCDN(app.name, pathname)
+        }
+
+        // App is registered but has no frontend or backend - return 503
+        console.log(`[AppRouter] App ${appName} has no frontend or backend configured`)
+        return new Response(JSON.stringify({ 
+          error: 'Service unavailable', 
+          message: `App ${appName} is registered but has no frontend assets deployed` 
+        }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
       })
 
       // Management endpoints for app deployments
@@ -888,6 +907,8 @@ export function createAppRouter() {
             staticFiles: app.staticFiles,
             backendWorkerId: app.backendWorkerId,
             backendEndpoint: app.backendEndpoint,
+            apiPaths: app.apiPaths,
+            spa: app.spa,
             enabled: app.enabled,
             deployedAt: app.deployedAt,
             updatedAt: app.updatedAt,
