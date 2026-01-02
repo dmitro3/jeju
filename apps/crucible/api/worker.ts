@@ -334,18 +334,28 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
 }
 
 /**
- * Default export for workerd
+ * Create the app instance
  */
 const app = createCrucibleApp()
 
-export default {
-  fetch: app.fetch,
-}
+/**
+ * Named export for the fetch handler (workerd compatibility)
+ */
+export const fetch = app.fetch
 
 /**
- * Bun server entry point (for local development and DWS workerd)
+ * Default export - the Elysia app instance
+ * Using the app directly (not { fetch }) to avoid Bun auto-serve behavior
  */
-if (typeof Bun !== 'undefined') {
+export default app
+
+/**
+ * Bun server entry point - only runs when executed directly
+ * When imported as a module (by DWS bootstrap or test), this won't run
+ */
+const isMainModule = typeof Bun !== 'undefined' && Bun.main === import.meta.path
+
+if (isMainModule) {
   const port = Number(
     process.env.PORT ??
       process.env.CRUCIBLE_PORT ??
@@ -356,9 +366,7 @@ if (typeof Bun !== 'undefined') {
 
   console.log(`[Crucible Worker] Starting on http://${host}:${port}`)
   console.log(`[Crucible Worker] Network: ${network}`)
-  console.log(
-    `[Crucible Worker] Runtime: ${typeof Bun !== 'undefined' ? 'bun' : 'workerd'}`,
-  )
+  console.log(`[Crucible Worker] Runtime: bun (direct)`)
 
   Bun.serve({
     port,

@@ -21,10 +21,9 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { foundry } from 'viem/chains'
 
-// Contract addresses - v0.6 stack
-const ENTRY_POINT = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
-const SIMPLE_PAYMASTER = '0x2c8ED11fd7A058096F2e5828799c68BE88744E2F'
-const SIMPLE_ACCOUNT_FACTORY = '0x975Ab64F4901Af5f0C96636deA0b9de3419D0c2F'
+// Contract addresses - v0.7 stack from DeployFullLocalnet
+const ENTRY_POINT = '0x922D6956C99E12DFeB3224DEA977D0939758A1Fe'
+const CROSS_CHAIN_PAYMASTER = '0x4C4a2f8c81640e47606d3fd77B353E87Ba015584'
 
 // URLs
 const RPC_URL = 'http://127.0.0.1:6546'
