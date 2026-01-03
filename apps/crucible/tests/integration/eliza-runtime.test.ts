@@ -11,45 +11,27 @@ import {
   runtimeManager,
 } from '../../api/sdk/eliza-runtime'
 
-let inferenceAvailable = false
-
-// Check if infrastructure is available before running tests
+// DWS is required infrastructure - tests must fail if it's not running
 beforeAll(async () => {
   const dwsAvailable = await checkDWSHealth()
   if (!dwsAvailable) {
-    console.warn(
-      '[Eliza Runtime Tests] DWS not available - inference tests will be skipped',
+    throw new Error(
+      'DWS is required but not running. Start with: jeju dev',
     )
-    console.warn('[Eliza Runtime Tests] Start services with: jeju dev')
-    return
   }
 
-  // Check if inference nodes are available
+  // Verify inference nodes are available
   const inference = await checkDWSInferenceAvailable()
   if (!inference.available) {
-    console.warn(
-      '[Eliza Runtime Tests] No inference nodes available - inference tests will be skipped',
+    throw new Error(
+      'DWS inference nodes required but not available. Check DWS compute service.',
     )
-    console.warn(
-      '[Eliza Runtime Tests] Start inference with: bun run inference',
-    )
-    return
   }
 
-  inferenceAvailable = true
   console.log(
-    `[Eliza Runtime Tests] Infrastructure available: DWS + ${inference.nodes} inference nodes`,
+    `[Eliza Runtime Tests] DWS ready with ${inference.nodes} inference nodes`,
   )
 })
-
-// Helper to skip test if inference not available
-function skipIfNoInference() {
-  if (!inferenceAvailable) {
-    console.log('[Skipped] Inference not available')
-    return true
-  }
-  return false
-}
 
 describe('Crucible Agent Runtime', () => {
   describe('Runtime Creation', () => {
@@ -69,9 +51,6 @@ describe('Crucible Agent Runtime', () => {
     })
 
     test('should initialize runtime with jejuPlugin actions', async () => {
-      // Runtime initialization requires DWS for health check
-      if (skipIfNoInference()) return
-
       const character = getCharacter('community-manager')
       expect(character).toBeDefined()
       if (!character) throw new Error('character not found')
@@ -89,8 +68,6 @@ describe('Crucible Agent Runtime', () => {
 
   describe('Message Processing', () => {
     test('should process message through ElizaOS', async () => {
-      if (skipIfNoInference()) return
-
       const character = getCharacter('project-manager')
       if (!character) throw new Error('character not found')
       const runtime = createCrucibleRuntime({
@@ -122,8 +99,6 @@ describe('Crucible Agent Runtime', () => {
     }, 60000)
 
     test('should handle action responses', async () => {
-      if (skipIfNoInference()) return
-
       const character = getCharacter('project-manager')
       if (!character) throw new Error('character not found')
       const runtime = createCrucibleRuntime({
@@ -153,9 +128,6 @@ describe('Crucible Agent Runtime', () => {
 
   describe('Runtime Manager', () => {
     test('should create and track runtimes', async () => {
-      // runtimeManager.createRuntime calls initialize which requires DWS
-      if (skipIfNoInference()) return
-
       const character = getCharacter('devrel')
       expect(character).toBeDefined()
       if (!character) throw new Error('character not found')
@@ -175,9 +147,6 @@ describe('Crucible Agent Runtime', () => {
     })
 
     test('should not duplicate runtimes', async () => {
-      // runtimeManager.createRuntime calls initialize which requires DWS
-      if (skipIfNoInference()) return
-
       const character = getCharacter('liaison')
       expect(character).toBeDefined()
       if (!character) throw new Error('character not found')
@@ -239,9 +208,6 @@ describe('Crucible Agent Runtime', () => {
 
   describe('Plugin Integration', () => {
     test('should load jeju plugin actions', async () => {
-      // runtime.initialize() requires DWS health check
-      if (skipIfNoInference()) return
-
       const character = getCharacter('community-manager')
       if (!character) throw new Error('character not found')
       const runtime = createCrucibleRuntime({

@@ -18,30 +18,33 @@ import { createCrucibleRuntime, runtimeManager, type RuntimeMessage } from '../.
 const CRUCIBLE_URL = process.env.CRUCIBLE_URL ?? 'http://localhost:4021'
 const DWS_URL = process.env.DWS_URL ?? 'http://localhost:4030'
 
-let dwsAvailable = false
-let crucibleAvailable = false
 let crucibleAutonomousAvailable = false
 
+// DWS is required infrastructure - tests must fail if it's not running
 beforeAll(async () => {
-  // Check DWS
-  dwsAvailable = await checkDWSHealth()
+  // Check DWS - required
+  const dwsAvailable = await checkDWSHealth()
   if (!dwsAvailable) {
-    console.warn('[Autonomous Tests] DWS not available')
+    throw new Error(
+      'DWS is required but not running. Start with: jeju dev',
+    )
   }
+  console.log('[Autonomous Tests] DWS ready')
 
-  // Check Crucible health
+  // Check Crucible health - required
   const crucibleHealth = await fetch(`${CRUCIBLE_URL}/health`).catch(() => null)
-  crucibleAvailable = crucibleHealth?.ok ?? false
-  if (!crucibleAvailable) {
-    console.warn('[Autonomous Tests] Crucible not running')
-    return
+  if (!crucibleHealth?.ok) {
+    throw new Error(
+      'Crucible is required but not running. Start with: cd apps/crucible && bun run dev',
+    )
   }
+  console.log('[Autonomous Tests] Crucible ready')
 
   // Check if autonomous endpoints are available (they're only in full server mode)
   const autonomousStatus = await fetch(`${CRUCIBLE_URL}/api/v1/autonomous/status`).catch(() => null)
   crucibleAutonomousAvailable = autonomousStatus?.ok ?? false
   if (!crucibleAutonomousAvailable) {
-    console.warn('[Autonomous Tests] Crucible autonomous mode not enabled (worker mode)')
+    console.log('[Autonomous Tests] Crucible running in worker mode - autonomous endpoints disabled')
   }
 })
 
@@ -85,11 +88,6 @@ describe('Agent Character Validation', () => {
 
 describe('Agent Runtime Initialization', () => {
   test('should initialize all agent runtimes with 80 actions', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const testAgents = ['project-manager', 'red-team', 'blue-team']
     
     for (const id of testAgents) {
@@ -122,11 +120,6 @@ describe('Agent Runtime Initialization', () => {
 
 describe('DWS Inference Integration', () => {
   test('should generate responses via DWS inference', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
     
@@ -204,11 +197,6 @@ describe('Autonomous Agent API', () => {
 
 describe('Agent Chat API', () => {
   test('should chat with all character types', async () => {
-    if (!crucibleAvailable) {
-      console.log('[Skipped] Crucible required')
-      return
-    }
-
     // Initialize all agents first
     await fetch(`${CRUCIBLE_URL}/api/v1/chat/init`, { method: 'POST' })
 
@@ -235,11 +223,6 @@ describe('Agent Chat API', () => {
 
 describe('Action Execution', () => {
   test('should have handlers for key actions', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
     
@@ -273,11 +256,6 @@ describe('Action Execution', () => {
 
 describe('Multi-Agent Coordination', () => {
   test('should run multiple agents concurrently', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const agents = ['project-manager', 'red-team', 'blue-team']
     const runtimes = await Promise.all(
       agents.map(async (id) => {
@@ -300,11 +278,6 @@ describe('Multi-Agent Coordination', () => {
   })
 
   test('should produce different responses for same prompt', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const prompt = 'Should we launch a new feature this week?'
     const responses = new Map<string, string>()
 
@@ -342,11 +315,6 @@ describe('Multi-Agent Coordination', () => {
 
 describe('Capability Coverage', () => {
   test('should cover all action categories', async () => {
-    if (!dwsAvailable) {
-      console.log('[Skipped] DWS required')
-      return
-    }
-
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
     
