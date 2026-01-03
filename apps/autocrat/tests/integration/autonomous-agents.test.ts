@@ -10,20 +10,16 @@
  * 6. Full governance flow with localnet
  */
 
-import { beforeAll, afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { getLocalhostHost } from '@jejunetwork/config'
 import {
+  type AgentVote,
   autocratAgentRuntime,
   checkDWSCompute,
-  dwsGenerate,
   type DeliberationRequest,
-  type AgentVote,
+  dwsGenerate,
 } from '../../api/agents/runtime'
-import {
-  autocratAgentTemplates,
-  directorAgent,
-  getAgentByRole,
-} from '../../api/agents/templates'
+import { directorAgent, getAgentByRole } from '../../api/agents/templates'
 import { ensureServices } from '../setup'
 
 // Test state
@@ -103,9 +99,13 @@ beforeAll(async () => {
   try {
     dwsAvailable = await checkDWSCompute()
     setCriteria('initialization', 'dwsComputeAvailable', dwsAvailable)
-    console.log(`DWS Compute: ${dwsAvailable ? '✅ Available' : '❌ Not available'}`)
+    console.log(
+      `DWS Compute: ${dwsAvailable ? '✅ Available' : '❌ Not available'}`,
+    )
   } catch (err) {
-    console.log(`DWS Compute: ❌ Error - ${err instanceof Error ? err.message : 'Unknown'}`)
+    console.log(
+      `DWS Compute: ❌ Error - ${err instanceof Error ? err.message : 'Unknown'}`,
+    )
   }
 
   if (!dwsAvailable) {
@@ -119,9 +119,13 @@ beforeAll(async () => {
   try {
     const env = await ensureServices({ dws: true, contracts: true })
     servicesReady = env.contractsDeployed
-    console.log(`Contracts: ${servicesReady ? '✅ Deployed' : '⚠️ Not deployed'}`)
+    console.log(
+      `Contracts: ${servicesReady ? '✅ Deployed' : '⚠️ Not deployed'}`,
+    )
   } catch (err) {
-    console.log(`Services: ⚠️ ${err instanceof Error ? err.message : 'Setup error'}`)
+    console.log(
+      `Services: ⚠️ ${err instanceof Error ? err.message : 'Setup error'}`,
+    )
   }
 
   autocratApiUrl = `http://${host}:4040`
@@ -300,7 +304,10 @@ describe('2. Board Agent Deliberation', () => {
       return
     }
 
-    const vote = await autocratAgentRuntime.deliberate('community', testProposal)
+    const vote = await autocratAgentRuntime.deliberate(
+      'community',
+      testProposal,
+    )
 
     expect(vote).toBeDefined()
     expect(vote.agentId).toBe('community')
@@ -435,8 +442,16 @@ describe('3. Director Decision-Making', () => {
     expect(Array.isArray(decision.recommendations)).toBe(true)
 
     setCriteria('director', 'canMakeDecision', true)
-    setCriteria('director', 'hasPersonaResponse', decision.personaResponse.length > 0)
-    setCriteria('director', 'hasRecommendations', decision.recommendations.length > 0)
+    setCriteria(
+      'director',
+      'hasPersonaResponse',
+      decision.personaResponse.length > 0,
+    )
+    setCriteria(
+      'director',
+      'hasRecommendations',
+      decision.recommendations.length > 0,
+    )
     setCriteria('director', 'hasConfidenceScore', decision.confidence > 0)
 
     console.log('')
@@ -495,7 +510,9 @@ describe('3. Director Decision-Making', () => {
 
     expect(decision).toBeDefined()
     expect(decision.approved).toBe(false)
-    console.log(`Rejection scenario: ${decision.approved ? 'APPROVED' : 'REJECTED'} as expected`)
+    console.log(
+      `Rejection scenario: ${decision.approved ? 'APPROVED' : 'REJECTED'} as expected`,
+    )
   }, 60000)
 })
 
@@ -595,7 +612,9 @@ describe('5. A2A Actions via API', () => {
       setCriteria('a2a', 'getDirectorStatusWorks', true)
       console.log('A2A get-director-status works')
     } catch (err) {
-      console.log(`A2A test failed: ${err instanceof Error ? err.message : 'Unknown'}`)
+      console.log(
+        `A2A test failed: ${err instanceof Error ? err.message : 'Unknown'}`,
+      )
     }
   }, 15000)
 
@@ -624,7 +643,8 @@ describe('5. A2A Actions via API', () => {
                     skillId: 'assess-proposal',
                     title: 'Test Proposal',
                     summary: 'A test proposal for validation',
-                    description: 'This is a detailed description of the test proposal.',
+                    description:
+                      'This is a detailed description of the test proposal.',
                   },
                 },
               ],
@@ -641,7 +661,9 @@ describe('5. A2A Actions via API', () => {
       setCriteria('a2a', 'assessProposalWorks', true)
       console.log('A2A assess-proposal works')
     } catch (err) {
-      console.log(`A2A assess-proposal test failed: ${err instanceof Error ? err.message : 'Unknown'}`)
+      console.log(
+        `A2A assess-proposal test failed: ${err instanceof Error ? err.message : 'Unknown'}`,
+      )
     }
   }, 35000)
 
@@ -686,7 +708,9 @@ describe('5. A2A Actions via API', () => {
       setCriteria('a2a', 'chatWorks', true)
       console.log('A2A chat works')
     } catch (err) {
-      console.log(`A2A chat test failed: ${err instanceof Error ? err.message : 'Unknown'}`)
+      console.log(
+        `A2A chat test failed: ${err instanceof Error ? err.message : 'Unknown'}`,
+      )
     }
   }, 35000)
 })
@@ -699,17 +723,25 @@ describe('6. Orchestrator Loop', () => {
     }
 
     try {
-      const response = await fetch(`${autocratApiUrl}/api/v1/orchestrator/status`, {
-        signal: AbortSignal.timeout(5000),
-      })
+      const response = await fetch(
+        `${autocratApiUrl}/api/v1/orchestrator/status`,
+        {
+          signal: AbortSignal.timeout(5000),
+        },
+      )
 
       if (response.ok) {
         const status = await response.json()
         setCriteria('orchestrator', 'canStart', status.running || true)
-        console.log('Orchestrator status:', status.running ? 'Running' : 'Stopped')
+        console.log(
+          'Orchestrator status:',
+          status.running ? 'Running' : 'Stopped',
+        )
       }
     } catch (err) {
-      console.log(`Orchestrator test skipped: ${err instanceof Error ? err.message : 'Unknown'}`)
+      console.log(
+        `Orchestrator test skipped: ${err instanceof Error ? err.message : 'Unknown'}`,
+      )
     }
   }, 10000)
 })
@@ -722,9 +754,15 @@ describe('7. Full Governance Flow', () => {
     }
 
     console.log('')
-    console.log('╔════════════════════════════════════════════════════════════╗')
-    console.log('║           FULL GOVERNANCE FLOW SIMULATION                  ║')
-    console.log('╚════════════════════════════════════════════════════════════╝')
+    console.log(
+      '╔════════════════════════════════════════════════════════════╗',
+    )
+    console.log(
+      '║           FULL GOVERNANCE FLOW SIMULATION                  ║',
+    )
+    console.log(
+      '╚════════════════════════════════════════════════════════════╝',
+    )
     console.log('')
 
     // Step 1: Create proposal
@@ -784,9 +822,14 @@ describe('7. Full Governance Flow', () => {
     }
     console.log('')
 
-    console.log('╔════════════════════════════════════════════════════════════╗')
-    console.log('║               GOVERNANCE FLOW COMPLETE                      ║')
-    console.log('╚════════════════════════════════════════════════════════════╝')
+    console.log(
+      '╔════════════════════════════════════════════════════════════╗',
+    )
+    console.log(
+      '║               GOVERNANCE FLOW COMPLETE                      ║',
+    )
+    console.log(
+      '╚════════════════════════════════════════════════════════════╝',
+    )
   }, 600000) // 10 minutes
 })
-

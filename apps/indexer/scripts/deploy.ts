@@ -311,8 +311,8 @@ async function registerApp(
     staticFilesRecord[path] = cid
   }
 
-  // Construct backend endpoint from worker ID
-  const backendEndpoint = `${config.dwsUrl}/workers/${workerInfo.functionId}`
+  // Construct backend endpoint from worker ID - /http suffix required for invoke
+  const backendEndpoint = `${config.dwsUrl}/workers/${workerInfo.functionId}/http`
 
   // App registration data for DWS app router
   const appConfig = {
