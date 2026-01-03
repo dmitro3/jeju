@@ -2,17 +2,17 @@
 pragma solidity ^0.8.33;
 
 /**
- * @title ICouncilGovernance
- * @notice Interface for Jeju Autocrat Council governance
+ * @title IBoardGovernance
+ * @notice Interface for Jeju Autocrat Board governance
  * @dev Used by governed contracts to verify proposal approval
  */
-interface ICouncilGovernance {
+interface IBoardGovernance {
     enum ProposalStatus {
         SUBMITTED,
         AUTOCRAT_REVIEW,
         RESEARCH_PENDING,
         AUTOCRAT_FINAL,
-        CEO_QUEUE,
+        DIRECTOR_QUEUE,
         APPROVED,
         EXECUTING,
         COMPLETED,
@@ -41,8 +41,8 @@ interface ICouncilGovernance {
         uint256 backerCount;
         bool hasResearch;
         bytes32 researchHash;
-        bool ceoApproved;
-        bytes32 ceoDecisionHash;
+        bool directorApproved;
+        bytes32 directorDecisionHash;
     }
 
     function isProposalApproved(bytes32 proposalId) external view returns (bool);

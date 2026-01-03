@@ -1044,7 +1044,7 @@ deployCommand
   .option('--fund-treasury <amount>', 'Fund treasury with ETH (wei)')
   .option('--fund-matching <amount>', 'Fund matching pool with ETH (wei)')
   .option('--dry-run', 'Simulate without making changes')
-  .option('--skip-council', 'Skip council member setup')
+  .option('--skip-board', 'Skip board member setup')
   .option('--skip-funding-config', 'Skip funding configuration')
   .option('--list', 'List all discoverable DAOs')
   .option('-v, --verbose', 'Verbose output')
@@ -1061,7 +1061,7 @@ deployCommand
         return
       }
       for (const m of manifests) {
-        logger.keyValue(m.displayName ?? m.name, m.governance.ceo.name)
+        logger.keyValue(m.displayName ?? m.name, m.governance.director.name)
       }
       return
     }
@@ -1112,7 +1112,7 @@ deployCommand
       fundTreasury: options.fundTreasury,
       fundMatching: options.fundMatching,
       dryRun: options.dryRun ?? false,
-      skipCouncil: options.skipCouncil ?? false,
+      skipBoard: options.skipBoard ?? false,
       skipFundingConfig: options.skipFundingConfig ?? false,
       verbose: options.verbose ?? false,
     })
@@ -1144,6 +1144,18 @@ deployCommand
     logger.error('Council deployment has been consolidated.')
     logger.info('Use: jeju deploy security-council --network <network>')
     process.exit(1)
+  })
+
+deployCommand
+  .command('board')
+  .description('Deploy Board contracts')
+  .option(
+    '--network <network>',
+    'Network: localnet | testnet | mainnet',
+    'localnet',
+  )
+  .action(async (options) => {
+    await runDeployScript('board', options.network, options)
   })
 
 deployCommand
@@ -1392,7 +1404,7 @@ deployCommand
       fundTreasury: undefined,
       fundMatching: undefined,
       dryRun: options.dryRun ?? false,
-      skipCouncil: false,
+      skipBoard: false,
       skipFundingConfig: false,
       verbose: options.verbose ?? false,
       all: true,
@@ -1674,8 +1686,8 @@ deployCommand
   })
 
 deployCommand
-  .command('security-council')
-  .description('Deploy Security Council multisig')
+  .command('security-board')
+  .description('Deploy Security Board multisig')
   .option(
     '--network <network>',
     'Network: localnet | testnet | mainnet',
@@ -1685,11 +1697,11 @@ deployCommand
     const rootDir = findMonorepoRoot()
     const scriptPath = join(
       rootDir,
-      'packages/deployment/scripts/deploy/deploy-security-council.ts',
+      'packages/deployment/scripts/deploy/deploy-security-board.ts',
     )
 
     if (!existsSync(scriptPath)) {
-      logger.error('Security council deploy script not found')
+      logger.error('Security board deploy script not found')
       return
     }
 
@@ -1817,7 +1829,10 @@ deployCommand
     'Network: localnet | testnet | mainnet',
     'localnet',
   )
-  .option('--app <name>', 'Deploy only a specific app (otto, vpn, wallet, node)')
+  .option(
+    '--app <name>',
+    'Deploy only a specific app (otto, vpn, wallet, node)',
+  )
   .option('--skip-build', 'Skip building apps')
   .option('--skip-jns', 'Skip JNS registration')
   .option('--dry-run', 'Simulate without making changes')

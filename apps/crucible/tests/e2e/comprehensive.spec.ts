@@ -97,6 +97,27 @@ const ROUTES = [
     description:
       'Chat page with New Room button, agent selector sidebar, and chat interface area.',
   },
+  {
+    path: '/rooms',
+    name: 'Rooms',
+    expectedContent: 'Rooms',
+    description:
+      'Rooms list page with Create Room button, room type filters, and room cards grid.',
+  },
+  {
+    path: '/autonomous',
+    name: 'Autonomous',
+    expectedContent: 'Autonomous',
+    description:
+      'Autonomous agents dashboard showing runner status, registered agents, and configuration.',
+  },
+  {
+    path: '/bots',
+    name: 'Bots',
+    expectedContent: 'Trading',
+    description:
+      'Trading bots dashboard with bot metrics, profit/loss tracking, and bot controls.',
+  },
 ]
 
 test.beforeAll(async () => {
@@ -110,6 +131,13 @@ test.beforeAll(async () => {
   } catch {
     console.log('⚠️ AI not available')
   }
+})
+
+// Dismiss onboarding modal before each test by setting localStorage
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('crucible-onboarding-complete', 'true')
+  })
 })
 
 function setupErrorCapture(page: import('@playwright/test').Page): {
@@ -382,9 +410,8 @@ test.describe('Crucible - Chat Page Components', () => {
     const roomNameInput = page.locator('input#room-name')
     await expect(roomNameInput).toBeVisible({ timeout: 5000 })
 
-    // Description textarea
-    const descriptionInput = page.locator('textarea#room-description')
-    await expect(descriptionInput).toBeVisible()
+    // Room type selection should be visible
+    await expect(page.locator('legend:has-text("Type")')).toBeVisible()
 
     // Create button (text is just "Create")
     await expect(

@@ -1149,13 +1149,13 @@ class CompleteBootstrapper {
     contracts: Partial<BootstrapResult['contracts']>,
   ): Promise<string> {
     try {
-      // Constructor: (identityRegistry, treasury, ceoAgent, initialOwner)
+      // Constructor: (identityRegistry, treasury, directorAgent, initialOwner)
       const securityBountyRegistry = this.deployContractFromPackages(
         'src/security/SecurityBountyRegistry.sol:SecurityBountyRegistry',
         [
           contracts.identityRegistry || this.deployerAddress,
           this.deployerAddress, // treasury
-          this.deployerAddress, // ceoAgent (will be updated to AI CEO later)
+          this.deployerAddress, // directorAgent (will be updated to AI Director later)
           this.deployerAddress, // initialOwner
         ],
         'SecurityBountyRegistry (Bug Bounty)',
@@ -1487,7 +1487,7 @@ class CompleteBootstrapper {
       console.log(`  📋 Registering ${oauth3Apps.length} OAuth3 apps`)
       for (const appName of oauth3Apps) {
         // Register each app with default config
-        // Args: name, description, council, config tuple
+        // Args: name, description, board, config tuple
         // Config tuple: (redirectUris, allowedProviders, requireTEEAttestation, sessionDuration, maxSessionsPerUser)
         const host = getLocalhostHost()
         const configTuple = `(["http://${host}:3000/auth/callback","http://${host}:5173/auth/callback"],[0,1,2,3,4,5,6],false,86400,10)`
@@ -1675,11 +1675,13 @@ class CompleteBootstrapper {
         'L1StakeManager',
       )
 
-      // Deploy MockL1L2Messenger for local testing
+      // Deploy L2CrossDomainMessenger for local testing
+      // Note: For single-chain localnet, we use L2CrossDomainMessenger on the same chain
+      // For proper dual-chain testing, use deploy-crosschain.ts instead
       const messenger = this.deployContractFromPackages(
-        'src/bridge/eil/MockL1L2Messenger.sol:MockL1L2Messenger',
+        'src/bridge/eil/L2CrossDomainMessenger.sol:L2CrossDomainMessenger',
         [],
-        'MockL1L2Messenger',
+        'L2CrossDomainMessenger',
       )
 
       // Configure L1StakeManager with messenger

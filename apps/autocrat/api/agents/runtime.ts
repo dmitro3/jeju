@@ -100,10 +100,6 @@ interface DirectorPersonaConfig {
   decisionStyle: string
 }
 
-// Legacy type aliases for backwards compatibility
-export type CEODecisionRequest = DirectorDecisionRequest
-export type CEODecision = DirectorDecision
-
 // DWS URL is resolved from network config (handles env overrides)
 function getDWSEndpoint(): string {
   return getDWSComputeUrl()
@@ -270,7 +266,7 @@ export class AutocratAgentRuntimeManager {
       )
     }
 
-    // Initialize default council agents with character definitions
+    // Initialize default board agents with character definitions
     for (const template of autocratAgentTemplates) {
       const runtime = await this.createRuntime(template)
       this.runtimes.set(template.id, runtime)
@@ -562,13 +558,6 @@ Keep it concise (2-4 sentences) but impactful.`
     decision.personaResponse = personaResponse.trim()
 
     return decision
-  }
-
-  // Legacy method alias
-  async ceoDecision(
-    request: DirectorDecisionRequest,
-  ): Promise<DirectorDecision> {
-    return this.directorDecision(request)
   }
 
   private getDefaultPersona(): DirectorPersona {

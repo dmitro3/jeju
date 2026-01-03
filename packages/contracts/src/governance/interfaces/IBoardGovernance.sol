@@ -7,8 +7,8 @@ pragma solidity ^0.8.33;
  * @dev Used by governed contracts to verify proposal approval
  *
  * Terminology:
- * - Director: The AI or human executive decision maker (formerly CEO)
- * - Board: The advisory/oversight body (formerly Council)
+ * - Director: The AI or human executive decision maker (formerly Director)
+ * - Board: The advisory/oversight body (formerly Board)
  */
 interface IBoardGovernance {
     enum ProposalStatus {

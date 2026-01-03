@@ -22,7 +22,7 @@ import { a2aRoutes } from './routes/a2a'
 import { agentsRoutes } from './routes/agents'
 import { bugBountyRoutes } from './routes/bug-bounty'
 import { casualRoutes } from './routes/casual'
-import { daoRoutes } from './routes/dao'
+import { daoRoutes, directorRoutes } from './routes/dao'
 import { feesRoutes } from './routes/fees'
 import { fundingRoutes } from './routes/funding'
 import { futarchyRoutes } from './routes/futarchy'
@@ -34,6 +34,7 @@ import { proposalsRoutes } from './routes/proposals'
 import { registryRoutes } from './routes/registry'
 import { researchRoutes } from './routes/research'
 import { rlaifRoutes } from './routes/rlaif'
+import { safeRoutes } from './routes/safe'
 import { triggersRoutes } from './routes/triggers'
 import { securityMiddleware } from './security'
 import {
@@ -107,6 +108,7 @@ const app = new Elysia()
   .use(healthRoutes)
   .use(proposalsRoutes)
   .use(daoRoutes)
+  .use(directorRoutes)
   .use(futarchyRoutes)
   .use(agentsRoutes)
   .use(moderationRoutes)
@@ -121,6 +123,7 @@ const app = new Elysia()
   .use(mcpRoutes)
   .use(rlaifRoutes)
   .use(bugBountyRoutes)
+  .use(safeRoutes)
   // Root route - serve SPA if static files exist, otherwise return API info
   .get('/', () => {
     // If static files exist, serve index.html for the root
@@ -134,10 +137,11 @@ const app = new Elysia()
     return {
       name: `${getNetworkName()} Autocrat`,
       version: '3.0.0',
-      description: 'Multi-tenant DAO governance with AI CEOs and deep funding',
+      description:
+        'Multi-tenant DAO governance with AI Directors and deep funding',
       features: [
         'Multi-DAO support (Jeju DAO, custom DAOs)',
-        'CEO personas with unique personalities',
+        'Director personas with unique personalities',
         'Casual proposal flow (opinions, suggestions, applications)',
         'Deep funding with quadratic matching',
         'Package and repo funding integration',
@@ -157,7 +161,7 @@ const app = new Elysia()
         futarchy: '/api/v1/futarchy',
         moderation: '/api/v1/moderation',
         registry: '/api/v1/registry',
-        ceo: '/api/v1/agents/ceo',
+        director: '/api/v1/agents/director',
         bugBounty: '/api/v1/bug-bounty',
         rlaif: '/rlaif',
         health: '/health',
@@ -207,7 +211,19 @@ const app = new Elysia()
     metricsData.errors++
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[Error] ${path}:`, message)
-    return { error: message }
+
+    // Determine proper status code based on error type
+    if (code === 'NOT_FOUND') {
+      set.status = 404
+    } else if (code === 'VALIDATION') {
+      set.status = 422
+    } else if (code === 'PARSE') {
+      set.status = 400
+    } else {
+      set.status = 500
+    }
+
+    return { error: message, path, code }
   })
 
 async function start() {
@@ -227,11 +243,11 @@ async function start() {
   const host = getLocalhostHost()
   app.listen(PORT, () => {
     console.log(
-      `[Council] port=${PORT} tee=${getTEEMode()} trigger=${triggerMode}`,
+      `[Board] port=${PORT} tee=${getTEEMode()} trigger=${triggerMode}`,
     )
-    console.log(`[Council] API: http://${host}:${PORT}`)
+    console.log(`[Board] API: http://${host}:${PORT}`)
     if (hasStaticFiles) {
-      console.log(`[Council] Serving static files from ${STATIC_DIR}`)
+      console.log(`[Board] Serving static files from ${STATIC_DIR}`)
     }
   })
 
@@ -241,7 +257,7 @@ async function start() {
 
   // Only start orchestrator if services are available
   const servicesAvailable = true // Services checked elsewhere
-  if (servicesAvailable && blockchain.councilDeployed && hasDAOContracts) {
+  if (servicesAvailable && blockchain.boardDeployed && hasDAOContracts) {
     const orchestratorConfig = {
       rpcUrl: config.rpcUrl,
       daoRegistry: config.contracts.daoRegistry,

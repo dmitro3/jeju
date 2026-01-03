@@ -135,7 +135,7 @@ export const CreateRoomRequestSchema = z.object({
   name: NonEmptyStringSchema,
   description: z.string().optional(),
   roomType: z
-    .enum(['collaboration', 'adversarial', 'debate', 'council'])
+    .enum(['collaboration', 'adversarial', 'debate', 'board'])
     .default('collaboration'),
   config: z
     .object({
@@ -168,6 +168,16 @@ export const PostMessageRequestSchema = z.object({
 
 export const SetPhaseRequestSchema = z.object({
   phase: z.enum(['setup', 'active', 'paused', 'completed', 'archived']),
+})
+
+export const RoomSearchQuerySchema = z.object({
+  name: z.string().optional(),
+  roomType: z
+    .enum(['collaboration', 'adversarial', 'debate', 'board'])
+    .optional(),
+  active: z.coerce.boolean().optional(),
+  limit: z.coerce.number().int().positive().max(100).default(20),
+  offset: z.coerce.number().int().nonnegative().default(0),
 })
 
 // Response Schemas
@@ -338,6 +348,7 @@ export type JoinRoomRequest = z.infer<typeof JoinRoomRequestSchema>
 export type LeaveRoomRequest = z.infer<typeof LeaveRoomRequestSchema>
 export type PostMessageRequest = z.infer<typeof PostMessageRequestSchema>
 export type SetPhaseRequest = z.infer<typeof SetPhaseRequestSchema>
+export type RoomSearchQuery = z.infer<typeof RoomSearchQuerySchema>
 export type ChatApiResponse = z.infer<typeof ChatApiResponseSchema>
 export type AgentCharacter = z.infer<typeof AgentCharacterSchema>
 export type StorageUploadResponse = z.infer<typeof StorageUploadResponseSchema>

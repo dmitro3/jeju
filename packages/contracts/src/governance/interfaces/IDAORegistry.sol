@@ -7,8 +7,8 @@ pragma solidity ^0.8.33;
  * @notice Interface for multi-tenant DAO management
  *
  * Terminology:
- * - Director: The AI or human executive decision maker (formerly CEO)
- * - Board: The advisory/oversight body (formerly Council)
+ * - Director: The AI or human executive decision maker (formerly Director)
+ * - Board: The advisory/oversight body (formerly Board)
  */
 interface IDAORegistry {
     // ============ Enums ============
@@ -70,10 +70,10 @@ interface IDAORegistry {
         string displayName;
         string description;
         address treasury;
-        address board; // Board governance contract (formerly council)
-        address directorAgent; // Director agent contract (formerly ceoAgent)
+        address board; // Board governance contract (formerly board)
+        address directorAgent; // Director agent contract (formerly directorAgent)
         address feeConfig;
-        bytes32 directorModelId; // AI model ID (formerly ceoModelId)
+        bytes32 directorModelId; // AI model ID (formerly directorModelId)
         string manifestCid;
         DAOStatus status;
         uint256 createdAt;
@@ -107,11 +107,9 @@ interface IDAORegistry {
     event GovernanceParamsUpdated(bytes32 indexed daoId);
 
     // ============ Legacy Events (for backwards compatibility) ============
-    event CEOPersonaUpdated(bytes32 indexed daoId, string name, string pfpCid);
-    event CEOModelChanged(bytes32 indexed daoId, bytes32 oldModel, bytes32 newModel);
-    event CouncilMemberAdded(bytes32 indexed daoId, address indexed member, string role, uint256 weight);
-    event CouncilMemberRemoved(bytes32 indexed daoId, address indexed member);
-    event CouncilMemberUpdated(bytes32 indexed daoId, address indexed member, uint256 newWeight);
+    event BoardMemberAdded(bytes32 indexed daoId, address indexed member, string role, uint256 weight);
+    event BoardMemberRemoved(bytes32 indexed daoId, address indexed member);
+    event BoardMemberUpdated(bytes32 indexed daoId, address indexed member, uint256 newWeight);
 
     // ============ DAO Management ============
 
@@ -213,9 +211,7 @@ interface IDAORegistry {
 
     // ============ Legacy View Functions (backwards compatibility) ============
 
-    function getCEOPersona(bytes32 daoId) external view returns (DirectorPersona memory);
+    function getBoardMembers(bytes32 daoId) external view returns (BoardMember[] memory);
 
-    function getCouncilMembers(bytes32 daoId) external view returns (BoardMember[] memory);
-
-    function isCouncilMember(bytes32 daoId, address member) external view returns (bool);
+    function isBoardMember(bytes32 daoId, address member) external view returns (bool);
 }

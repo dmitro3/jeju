@@ -59,7 +59,7 @@
       "registry": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
       "resolver": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
       "registrar": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
-      "reverseRegistrar": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9"
+      "reverseRegistrar": "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
     },
     "oauth3": {
       "teeVerifier": "0x0000000000000000000000000000000000000000",
@@ -77,12 +77,15 @@
       "gitRegistry": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
       "cacheManager": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
       "cronOrchestrator": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
-      "containerRegistry": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9"
+      "containerRegistry": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+      "storageProviderRegistry": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
+      "identityRegistry": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
     },
     "payments": {
       "creditManager": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933",
       "universalPaymaster": "0x84eA74d481Ee0A5332c457a4d796187F6Ba67fEB",
-      "paymasterFactory": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f"
+      "paymasterFactory": "0xa85233C63b9Ee964Add6F2cffe00Fd84eb32338f",
+      "feeConfig": "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
     },
     "commerce": {
       "authCaptureEscrow": "",
@@ -113,7 +116,9 @@
       "timelock": "",
       "futarchyGovernor": "",
       "registryGovernance": "0x7E6C94173C264aaE66Bf36ce047b0Aef585C2181",
-      "autocrat": ""
+      "autocrat": "",
+      "daoRegistry": "0x1291Be112d480055DaFd8a610b7d1e203891C274",
+      "daoFunding": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154"
     },
     "oif": {
       "solverRegistry": "0x13D5bd265A9FC5454e81bC05a5643fa4809A584b",
@@ -168,7 +173,7 @@
       "rewards": "",
       "modelRegistry": "",
       "teeRegistry": "",
-      "aiCeo": ""
+      "aiDirector": ""
     },
     "agents": {
       "agent0Registry": ""
@@ -176,6 +181,11 @@
     "cloud": {
       "serviceRegistry": "0x0B306BF915C4d645ff596e518fAf3F9669b97016",
       "creditManager": "0x67d269191c92Caf3cD7723F116c85e6E9bf55933"
+    },
+    "autocrat": {
+      "daoRegistry": "0x1291Be112d480055DaFd8a610b7d1e203891C274",
+      "daoFunding": "0x5f3f1dBD7B74C6B46e8c44f98792A1dAf8d69154",
+      "feeConfig": "0x4c5859f0F772848b2D91F1D83E2Fe57935348029"
     }
   },
   "testnet": {
@@ -320,7 +330,7 @@
       "rewards": "",
       "modelRegistry": "",
       "teeRegistry": "",
-      "aiCeo": ""
+      "aiDirector": ""
     },
     "agents": {
       "agent0Registry": ""
@@ -460,7 +470,7 @@
       "rewards": "",
       "modelRegistry": "",
       "teeRegistry": "",
-      "aiCeo": ""
+      "aiDirector": ""
     },
     "agents": {
       "agent0Registry": ""

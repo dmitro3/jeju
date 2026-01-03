@@ -160,7 +160,9 @@ export function getContract<
   abi: TAbi
   client: unknown
 }): GetContractReturnType<TAbi> {
-  return viemGetContract(params as Parameters<typeof viemGetContract>[0]) as GetContractReturnType<TAbi>
+  return viemGetContract(
+    params as Parameters<typeof viemGetContract>[0],
+  ) as GetContractReturnType<TAbi>
 }
 
 /**

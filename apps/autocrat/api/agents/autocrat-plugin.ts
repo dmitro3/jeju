@@ -110,13 +110,13 @@ const discoverServicesAction: Action = {
     const services = [
       { name: 'Autocrat A2A', url: getA2AEndpoint(), type: 'a2a' },
       {
-        name: 'CEO A2A',
+        name: 'Director A2A',
         url: `${getCoreAppUrl('AUTOCRAT_AGENT')}/a2a`,
         type: 'a2a',
       },
       { name: 'Autocrat MCP', url: getMCPEndpoint(), type: 'mcp' },
       {
-        name: 'CEO MCP',
+        name: 'Director MCP',
         url: `${getCoreAppUrl('AUTOCRAT_AGENT')}/mcp`,
         type: 'mcp',
       },
@@ -229,20 +229,32 @@ Status: ${success ? 'Recorded' : 'Failed'}`,
 
 /**
  * Action: Request Research
- * Request deep research on a proposal
+ * Request deep research on a proposal using DWS compute
  */
 const requestResearchAction: Action = {
   name: 'REQUEST_RESEARCH',
-  description: 'Request deep research on a proposal',
-  similes: ['research proposal', 'investigate', 'analyze'],
-  examples: [],
+  description: 'Request deep research on a proposal using AI analysis',
+  similes: ['research proposal', 'investigate', 'analyze', 'deep dive'],
+  examples: [
+    [
+      { name: 'user', content: { text: 'Research proposal 0x1234...' } },
+      {
+        name: 'agent',
+        content: { text: 'Conducting deep research on the proposal...' },
+      },
+    ],
+  ],
 
   validate: async (
     _runtime: IAgentRuntime,
     message: Memory,
   ): Promise<boolean> => {
     const content = message.content.text?.toLowerCase() ?? ''
-    return content.includes('research') || content.includes('investigate')
+    return (
+      content.includes('research') ||
+      content.includes('investigate') ||
+      content.includes('analyze')
+    )
   },
 
   handler: async (
@@ -255,20 +267,71 @@ const requestResearchAction: Action = {
     const content = message.content.text ?? ''
     const proposalMatch = content.match(/0x[a-fA-F0-9]{64}/)
 
-    if (callback) {
-      await callback({
-        text: `🔬 RESEARCH REQUEST
+    if (!proposalMatch) {
+      if (callback) {
+        await callback({
+          text: 'Please specify a proposal ID (0x...) to research.',
+          action: 'REQUEST_RESEARCH',
+        })
+      }
+      return
+    }
 
-${proposalMatch ? `Proposal: ${proposalMatch[0].slice(0, 12)}...` : 'No proposal specified'}
-Status: Request submitted
+    const proposalId = proposalMatch[0]
 
-Research will include:
-• Technical feasibility
-• Market analysis
-• Risk assessment
-• Community sentiment`,
-        action: 'REQUEST_RESEARCH',
+    // Import dynamically to avoid circular deps
+    const { generateResearchReport } = await import('../research-agent')
+
+    try {
+      // Extract title and description from message if available
+      const titleMatch = content.match(/title[:\s]+["']?([^"'\n]+)["']?/i)
+      const title = titleMatch?.[1] ?? `Proposal ${proposalId.slice(0, 12)}`
+
+      const report = await generateResearchReport({
+        proposalId,
+        title,
+        description: content,
+        depth: 'standard',
       })
+
+      if (callback) {
+        await callback({
+          text: `🔬 RESEARCH REPORT
+
+**Proposal:** ${proposalId.slice(0, 12)}...
+**Model:** ${report.model}
+**Execution Time:** ${report.executionTime}ms
+
+## Summary
+${report.summary}
+
+## Recommendation: ${report.recommendation.toUpperCase()}
+- Confidence: ${report.confidenceLevel}%
+- Risk Level: ${report.riskLevel}
+
+## Key Findings
+${report.keyFindings.map((f) => `• ${f}`).join('\n')}
+
+## Concerns
+${report.concerns.map((c) => `• ${c}`).join('\n')}
+
+${report.alternatives.length > 0 ? `## Alternatives\n${report.alternatives.map((a) => `• ${a}`).join('\n')}` : ''}`,
+          action: 'REQUEST_RESEARCH',
+        })
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err)
+      if (callback) {
+        await callback({
+          text: `🔬 RESEARCH REQUEST FAILED
+
+Proposal: ${proposalId.slice(0, 12)}...
+Error: ${errorMessage}
+
+Please ensure DWS compute is available and try again.`,
+          action: 'REQUEST_RESEARCH',
+        })
+      }
     }
   },
 }
@@ -279,8 +342,8 @@ Research will include:
  */
 const queryA2AAction: Action = {
   name: 'QUERY_A2A',
-  description: 'Query an A2A skill on the autocrat or CEO agent',
-  similes: ['call skill', 'query agent', 'ask council', 'ask ceo'],
+  description: 'Query an A2A skill on the autocrat or Director agent',
+  similes: ['call skill', 'query agent', 'ask board', 'ask director'],
   examples: [],
 
   validate: async (
@@ -329,7 +392,7 @@ ${JSON.stringify(result, null, 2).slice(0, 500)}`,
  */
 const callMCPToolAction: Action = {
   name: 'CALL_MCP_TOOL',
-  description: 'Call an MCP tool on the autocrat or CEO server',
+  description: 'Call an MCP tool on the autocrat or Director server',
   similes: ['use tool', 'call tool', 'mcp'],
   examples: [],
 

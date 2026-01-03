@@ -128,14 +128,14 @@ export interface AuthSig {
 }
 
 // Lazy configuration getters to avoid initialization errors in tests
-let _councilAddress: string | null = null
+let _boardAddress: string | null = null
 let _chainId: string | null = null
 
-function getCouncilAddress(): string {
-  if (!_councilAddress) {
-    _councilAddress = getContract('governance', 'council')
+function getBoardAddress(): string {
+  if (!_boardAddress) {
+    _boardAddress = getContract('governance', 'board')
   }
-  return _councilAddress
+  return _boardAddress
 }
 
 function getChainIdString(): string {
@@ -168,12 +168,12 @@ function isInitialized(): boolean {
 }
 
 function reset(): void {
-  _councilAddress = null
+  _boardAddress = null
   _chainId = null
 }
 
 /**
- * Create access control conditions for CEO decision
+ * Create access control conditions for Director decision
  * Decision can be decrypted if:
  * 1. Proposal status is COMPLETED (status = 7), or
  * 2. 30 days have passed since encryption
@@ -187,7 +187,7 @@ function createAccessConditions(
   return [
     // Condition 1: Proposal is completed
     {
-      contractAddress: getCouncilAddress(),
+      contractAddress: getBoardAddress(),
       standardContractType: 'Custom',
       chain: getChainIdString(),
       method: 'proposals',
@@ -286,7 +286,7 @@ async function decrypt(
 }
 
 /**
- * Encrypt CEO decision data
+ * Encrypt Director decision data
  */
 export async function encryptDecision(
   decision: DecisionData,
@@ -314,7 +314,7 @@ export async function encryptDecision(
 }
 
 /**
- * Decrypt CEO decision data
+ * Decrypt Director decision data
  */
 export async function decryptDecision(
   encryptedData: EncryptedData,
@@ -351,7 +351,7 @@ export async function backupToDA(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       data: JSON.stringify({
-        type: 'ceo_decision',
+        type: 'director_decision',
         proposalId,
         encryptedData,
         timestamp: Date.now(),
@@ -367,8 +367,8 @@ export async function backupToDA(
         ],
         operator: 'or',
       },
-      owner: getCouncilAddress(),
-      metadata: { type: 'ceo_decision', proposalId },
+      owner: getBoardAddress(),
+      metadata: { type: 'director_decision', proposalId },
     }),
   })
 
@@ -392,8 +392,8 @@ export async function retrieveFromDA(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      metadata: { type: 'ceo_decision', proposalId },
-      accessor: getCouncilAddress(),
+      metadata: { type: 'director_decision', proposalId },
+      accessor: getBoardAddress(),
     }),
   })
 
@@ -419,7 +419,7 @@ export async function retrieveFromDA(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         keyId: latest.keyId,
-        accessor: getCouncilAddress(),
+        accessor: getBoardAddress(),
       }),
     },
   )
@@ -462,7 +462,7 @@ export async function canDecrypt(
   }
 
   const proposalId = proposalCondition.parameters[0]
-  const councilAddress = proposalCondition.contractAddress
+  const boardAddress = proposalCondition.contractAddress
   const rpc = rpcUrl ?? getRpcUrl()
 
   const callData = `0x013cf08b${proposalId.slice(2).padStart(64, '0')}` // proposals(uint256)
@@ -474,7 +474,7 @@ export async function canDecrypt(
       jsonrpc: '2.0',
       id: 1,
       method: 'eth_call',
-      params: [{ to: councilAddress, data: callData }, 'latest'],
+      params: [{ to: boardAddress, data: callData }, 'latest'],
     }),
   })
 

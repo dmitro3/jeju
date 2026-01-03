@@ -329,6 +329,7 @@ export function listBounties(filter?: {
   status?: string
   skill?: string
   creator?: string
+  search?: string
   page?: number
   limit?: number
 }): { bounties: BountyRow[]; total: number } {
@@ -347,6 +348,10 @@ export function listBounties(filter?: {
   if (filter?.skill) {
     conditions.push('skills LIKE ?')
     params.push(`%${filter.skill}%`)
+  }
+  if (filter?.search) {
+    conditions.push('(title LIKE ? OR description LIKE ?)')
+    params.push(`%${filter.search}%`, `%${filter.search}%`)
   }
 
   const whereClause =
@@ -431,11 +436,50 @@ export function updateBountyStatus(id: string, status: string): boolean {
   return result.changes > 0
 }
 
+export function getBountyStats(): {
+  openBounties: number
+  totalValue: number
+  completed: number
+  avgPayout: number
+} {
+  const db = getDB()
+  const stats = db
+    .query<
+      {
+        total: number
+        open: number
+        completed: number
+        total_reward_value: number | null
+      },
+      []
+    >(`
+      SELECT
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CAST(reward AS REAL)) as total_reward_value
+      FROM bounties
+    `)
+    .get()
+
+  const totalValue = stats?.total_reward_value ?? 0
+  const completedBounties = stats?.completed ?? 0
+  const avgPayout = completedBounties > 0 ? totalValue / completedBounties : 0
+
+  return {
+    openBounties: stats?.open ?? 0,
+    totalValue: totalValue,
+    completed: completedBounties,
+    avgPayout: avgPayout,
+  }
+}
+
 // Jobs
 export function listJobs(filter?: {
   type?: string
   remote?: boolean
   status?: string
+  search?: string
   page?: number
   limit?: number
 }): { jobs: JobRow[]; total: number } {
@@ -450,6 +494,14 @@ export function listJobs(filter?: {
   if (filter?.remote !== undefined) {
     conditions.push('remote = ?')
     params.push(filter.remote ? 1 : 0)
+  }
+  if (filter?.search) {
+    conditions.push('(title LIKE ? OR description LIKE ? OR company LIKE ?)')
+    params.push(
+      `%${filter.search}%`,
+      `%${filter.search}%`,
+      `%${filter.search}%`,
+    )
   }
 
   const whereClause = `WHERE ${conditions.join(' AND ')}`
@@ -563,6 +615,7 @@ export function getJobStats(): {
 export function listProjects(filter?: {
   status?: string
   owner?: string
+  search?: string
   page?: number
   limit?: number
 }): { projects: ProjectRow[]; total: number } {
@@ -577,6 +630,10 @@ export function listProjects(filter?: {
   if (filter?.owner) {
     conditions.push('owner = ?')
     params.push(filter.owner)
+  }
+  if (filter?.search) {
+    conditions.push('(name LIKE ? OR description LIKE ?)')
+    params.push(`%${filter.search}%`, `%${filter.search}%`)
   }
 
   const whereClause =

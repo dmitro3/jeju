@@ -100,6 +100,7 @@ const app = new Elysia()
       return {
         success: false,
         status: message,
+        error: message,
         data: null,
       }
     }
@@ -137,6 +138,7 @@ const app = new Elysia()
       return {
         success: false,
         status: message,
+        error: message,
         data: null,
       }
     }

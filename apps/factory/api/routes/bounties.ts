@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 import {
   type BountyRow,
   createBounty as dbCreateBounty,
+  getBountyStats as dbGetBountyStats,
   listBounties as dbListBounties,
   getBounty,
 } from '../db/client'
@@ -71,6 +72,7 @@ export const bountiesRoutes = new Elysia({ prefix: '/api/bounties' })
       const result = dbListBounties({
         status: validated.status,
         skill: validated.skill,
+        search: validated.q,
         page,
         limit,
       })
@@ -90,6 +92,25 @@ export const bountiesRoutes = new Elysia({ prefix: '/api/bounties' })
         tags: ['bounties'],
         summary: 'List bounties',
         description: 'Get a list of all bounties with optional filtering',
+      },
+    },
+  )
+  .get(
+    '/stats',
+    () => {
+      const stats = dbGetBountyStats()
+      return {
+        openBounties: stats.openBounties,
+        totalValue: `${stats.totalValue.toFixed(2)} ETH`,
+        completed: stats.completed,
+        avgPayout: `${stats.avgPayout.toFixed(2)} ETH`,
+      }
+    },
+    {
+      detail: {
+        tags: ['bounties'],
+        summary: 'Get bounty stats',
+        description: 'Get aggregated bounty statistics',
       },
     },
   )

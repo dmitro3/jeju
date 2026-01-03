@@ -12,14 +12,26 @@ interface Agent {
   agentId: string
   owner: string
   name: string
+  description?: string
   botType: 'ai_agent' | 'trading_bot' | 'org_tool'
   characterCid?: string
   stateCid: string
   vaultAddress: string
+  vaultBalance?: string
   active: boolean
   registeredAt: number
   lastExecutedAt: number
   executionCount: number
+  tickIntervalMs?: number
+  capabilities?: {
+    canChat?: boolean
+    canTrade?: boolean
+    canVote?: boolean
+    canPropose?: boolean
+    canStake?: boolean
+    a2a?: boolean
+    compute?: boolean
+  }
 }
 
 interface AgentsSearchResponse {
@@ -94,7 +106,7 @@ function useAuthHeaders() {
     if (isAuthenticated && smartAccountAddress) {
       headers['X-Jeju-Address'] = smartAccountAddress
       if (session?.sessionId) {
-        headers['Authorization'] = `Bearer ${session.sessionId}`
+        headers.Authorization = `Bearer ${session.sessionId}`
       }
     }
 
@@ -149,7 +161,8 @@ export function useMyAgents() {
   const { smartAccountAddress, isAuthenticated } = useOAuth3()
 
   return useAgents({
-    owner: isAuthenticated && smartAccountAddress ? smartAccountAddress : undefined,
+    owner:
+      isAuthenticated && smartAccountAddress ? smartAccountAddress : undefined,
   })
 }
 
