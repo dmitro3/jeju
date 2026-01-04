@@ -118,8 +118,8 @@
       "futarchyGovernor": "",
       "registryGovernance": "0x7E6C94173C264aaE66Bf36ce047b0Aef585C2181",
       "autocrat": "",
-      "daoRegistry": "0x0DCd1Bf9A1b36cE34237eEaFef220932846BCD82",
-      "daoFunding": "0x9A676e781A523b5d0C0e43731313A708CB607508"
+      "daoRegistry": "0x998abeb3E57409262aE5b751f60747921B33613E",
+      "daoFunding": "0x70e0bA845a1A0F2DA3359C97E0285013525FFC49"
     },
     "oif": {
       "solverRegistry": "0x13D5bd265A9FC5454e81bC05a5643fa4809A584b",
