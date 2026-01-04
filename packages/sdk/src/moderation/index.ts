@@ -780,23 +780,23 @@ export function createModerationModule(
 ): ModerationModule {
   const evidenceRegistryAddress = requireContract(
     'moderation',
-    'EvidenceRegistry',
+    'evidenceRegistry',
     network,
   )
   const moderationMarketplaceAddress = requireContract(
     'moderation',
-    'ModerationMarketplace',
+    'moderationMarketplace',
     network,
   )
   const reputationLabelManagerAddress = requireContract(
     'moderation',
-    'ReputationLabelManager',
+    'reputationLabelManager',
     network,
   )
-  const banManagerAddress = requireContract('moderation', 'BanManager', network)
+  const banManagerAddress = requireContract('moderation', 'banManager', network)
   const reportingSystemAddress = requireContract(
     'moderation',
-    'ReportingSystem',
+    'reportingSystem',
     network,
   )
 

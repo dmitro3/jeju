@@ -190,7 +190,9 @@ describe('Network KMS Encryption', () => {
 
   test('canDecrypt returns false for recent decisions', async () => {
     if (!env.chainRunning || !env.contractsDeployed || SKIP_KMS_TESTS) {
-      console.log('⏭️  Skipping: Chain/contracts not available or KMS secret not set')
+      console.log(
+        '⏭️  Skipping: Chain/contracts not available or KMS secret not set',
+      )
       return
     }
     const encrypted = await encryption.encryptDecision(

@@ -1,4 +1,4 @@
-please doimport type { JsonValue } from '@jejunetwork/types'
+import type { JsonValue } from '@jejunetwork/types'
 import type { AgentCharacter } from '../../lib/types'
 
 export interface AutonomousAgentConfig {
@@ -21,6 +21,7 @@ export interface AutonomousCapabilities {
   canBridge: boolean
   a2a?: boolean
   compute?: boolean
+  canModerate?: boolean
 }
 
 export interface AgentGoal {

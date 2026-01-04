@@ -876,6 +876,11 @@ app.get('/metrics', ({ set }) => {
   const avgLatency =
     metrics.latency.count > 0 ? metrics.latency.sum / metrics.latency.count : 0
 
+  // Get autonomous agent metrics
+  const autonomousStatus = autonomousRunner?.getStatus()
+  const autonomousAgents = autonomousStatus?.agents ?? []
+  const totalTicks = autonomousAgents.reduce((sum, a) => sum + a.tickCount, 0)
+
   const lines = [
     '# HELP crucible_requests_total Total HTTP requests',
     '# TYPE crucible_requests_total counter',
@@ -906,11 +911,36 @@ app.get('/metrics', ({ set }) => {
     '# TYPE crucible_uptime_seconds gauge',
     `crucible_uptime_seconds ${uptimeSeconds}`,
     '',
+    '# HELP crucible_autonomous_enabled Whether autonomous mode is enabled',
+    '# TYPE crucible_autonomous_enabled gauge',
+    `crucible_autonomous_enabled ${autonomousRunner ? 1 : 0}`,
+    '',
+    '# HELP crucible_autonomous_agents_count Number of autonomous agents',
+    '# TYPE crucible_autonomous_agents_count gauge',
+    `crucible_autonomous_agents_count ${autonomousAgents.length}`,
+    '',
+    '# HELP crucible_autonomous_ticks_total Total autonomous agent ticks',
+    '# TYPE crucible_autonomous_ticks_total counter',
+    `crucible_autonomous_ticks_total ${totalTicks}`,
+    '',
+  ]
+
+  // Add per-agent tick metrics
+  for (const agent of autonomousAgents) {
+    lines.push(
+      `crucible_autonomous_agent_ticks{agent="${agent.id}",character="${agent.character}"} ${agent.tickCount}`,
+    )
+  }
+  if (autonomousAgents.length > 0) {
+    lines.push('')
+  }
+
+  lines.push(
     '# HELP crucible_info Service info',
     '# TYPE crucible_info gauge',
     `crucible_info{version="1.0.0",network="${config.network}"} 1`,
     '',
-  ]
+  )
 
   set.headers['Content-Type'] = 'text/plain; version=0.0.4; charset=utf-8'
   return lines.join('\n')
@@ -1471,7 +1501,7 @@ if (crucibleConfig.autonomousEnabled) {
     .start()
     .then(async () => {
       log.info('Autonomous agent runner started')
-      
+
       // Auto-register key agents for autonomous operation
       const autoStartAgents = [
         'project-manager',
@@ -1480,11 +1510,11 @@ if (crucibleConfig.autonomousEnabled) {
         'moderator',
         'community-manager',
       ]
-      
+
       for (const agentId of autoStartAgents) {
         const character = getCharacter(agentId)
         if (!character) continue
-        
+
         try {
           await autonomousRunner?.registerAgent({
             agentId: `autonomous-${agentId}`,
@@ -1503,9 +1533,9 @@ if (crucibleConfig.autonomousEnabled) {
           })
           log.info('Auto-registered autonomous agent', { agentId })
         } catch (err) {
-          log.warn('Failed to auto-register agent', { 
-            agentId, 
-            error: err instanceof Error ? err.message : String(err) 
+          log.warn('Failed to auto-register agent', {
+            agentId,
+            error: err instanceof Error ? err.message : String(err),
           })
         }
       }
@@ -1527,6 +1557,50 @@ app.get('/api/v1/autonomous/status', () => {
   return {
     enabled: true,
     ...autonomousRunner.getStatus(),
+  }
+})
+
+// Get detailed autonomous agent activity
+app.get('/api/v1/autonomous/activity', () => {
+  if (!autonomousRunner) {
+    return {
+      enabled: false,
+      agents: [],
+      summary: {
+        totalAgents: 0,
+        totalTicks: 0,
+        totalErrors: 0,
+        uptime: 0,
+      },
+    }
+  }
+
+  const status = autonomousRunner.getStatus()
+  const uptimeMs = Date.now() - metrics.startTime
+
+  return {
+    enabled: true,
+    summary: {
+      totalAgents: status.agentCount,
+      totalTicks: status.agents.reduce((sum, a) => sum + a.tickCount, 0),
+      avgTicksPerAgent:
+        status.agentCount > 0
+          ? status.agents.reduce((sum, a) => sum + a.tickCount, 0) /
+            status.agentCount
+          : 0,
+      uptimeMs,
+      uptimeHours: Math.round((uptimeMs / (1000 * 60 * 60)) * 100) / 100,
+    },
+    agents: status.agents.map((agent) => ({
+      ...agent,
+      lastTickAgo: agent.lastTick > 0 ? Date.now() - agent.lastTick : null,
+      tickRate:
+        agent.lastTick > 0 && uptimeMs > 0
+          ? Math.round((agent.tickCount / (uptimeMs / 1000 / 60)) * 100) / 100 // ticks per minute
+          : 0,
+    })),
+    network: config.network,
+    actionsToday: actionCounter.getTodayCount(),
   }
 })
 

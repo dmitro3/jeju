@@ -124,7 +124,11 @@ const discoverServicesAction: Action = {
       },
       // Cross-app A2A discovery
       { name: 'Bazaar A2A', url: `${servicesConfig.bazaar}/a2a`, type: 'a2a' },
-      { name: 'Crucible A2A', url: `${servicesConfig.crucible.api}/a2a`, type: 'a2a' },
+      {
+        name: 'Crucible A2A',
+        url: `${servicesConfig.crucible.api}/a2a`,
+        type: 'a2a',
+      },
     ]
 
     const results: string[] = []

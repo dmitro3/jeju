@@ -68,8 +68,12 @@ const MAX_BACKOFF_MS = 300000 // 5 minutes max
 export class AutonomousAgentRunner {
   private agents: Map<string, RegisteredAgent> = new Map()
   private running = false
-  private config: Required<Omit<ExtendedRunnerConfig, 'onBatchFlushed'>> & {
+  private config: Required<
+    Omit<ExtendedRunnerConfig, 'onBatchFlushed' | 'privateKey' | 'network'>
+  > & {
     onBatchFlushed?: (batch: TrajectoryBatchReference) => Promise<void>
+    privateKey?: `0x${string}`
+    network?: 'localnet' | 'testnet' | 'mainnet'
   }
   private trajectoryRecorder: TrajectoryRecorder
   private storage: StaticTrajectoryStorage

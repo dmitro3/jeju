@@ -45,6 +45,15 @@ export { LockManager, withTestLock } from './lock-manager'
 // Preflight checks
 export { quickHealthCheck, runPreflightChecks, waitForChain } from './preflight'
 
+// Contracts required - FAIL-FAST contract verification
+export {
+  assertContractsDeployedSync,
+  type DeployedContracts,
+  getContractsIfDeployed,
+  getRequiredContract,
+  requireContracts,
+} from './contracts-required'
+
 // App warmup
 export { discoverAppsForWarmup, quickWarmup, warmupApps } from './warmup'
 

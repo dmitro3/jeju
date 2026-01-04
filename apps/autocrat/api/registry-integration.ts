@@ -858,9 +858,9 @@ export class RegistryIntegrationClient {
           functionName: 'getTopAgents',
           args: [BigInt(count)],
         })
-        return (profiles as Array<Parameters<typeof this._parseProfile>[0]>).map(
-          (p) => this._parseProfile(p),
-        )
+        return (
+          profiles as Array<Parameters<typeof this._parseProfile>[0]>
+        ).map((p) => this._parseProfile(p))
       }
 
       const allAgents = (await readContract(this.client, {
@@ -920,7 +920,8 @@ export class RegistryIntegrationClient {
 
       const profile = await this.getAgentProfile(agentId)
       if (!profile) return { eligible: false, reason: 'Agent does not exist' }
-      if (profile.isBanned) return { eligible: false, reason: 'Agent is banned' }
+      if (profile.isBanned)
+        return { eligible: false, reason: 'Agent is banned' }
       if (profile.compositeScore < 50)
         return { eligible: false, reason: 'Composite score too low' }
       return { eligible: true, reason: '' }
@@ -943,7 +944,8 @@ export class RegistryIntegrationClient {
 
       const profile = await this.getAgentProfile(agentId)
       if (!profile) return { eligible: false, reason: 'Agent does not exist' }
-      if (profile.isBanned) return { eligible: false, reason: 'Agent is banned' }
+      if (profile.isBanned)
+        return { eligible: false, reason: 'Agent is banned' }
       if (profile.compositeScore < 30)
         return { eligible: false, reason: 'Composite score too low' }
       return { eligible: true, reason: '' }
@@ -966,7 +968,8 @@ export class RegistryIntegrationClient {
 
       const profile = await this.getAgentProfile(agentId)
       if (!profile) return { eligible: false, reason: 'Agent does not exist' }
-      if (profile.isBanned) return { eligible: false, reason: 'Agent is banned' }
+      if (profile.isBanned)
+        return { eligible: false, reason: 'Agent is banned' }
       if (profile.stakeTier < 2)
         return { eligible: false, reason: 'Insufficient stake tier' }
       if (profile.compositeScore < 70)

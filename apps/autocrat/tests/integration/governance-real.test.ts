@@ -63,7 +63,7 @@ beforeAll(async () => {
   const res = await fetch(`${API_URL}/health`, {
     signal: AbortSignal.timeout(5000),
   }).catch(() => null)
-  
+
   if (!res?.ok) {
     throw new Error(
       `Autocrat API is required but not running at ${API_URL}. Start with: cd apps/autocrat && bun run dev`,

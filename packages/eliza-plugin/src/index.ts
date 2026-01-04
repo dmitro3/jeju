@@ -261,8 +261,8 @@ export {
 export {
   getJejuService,
   initJejuService,
-  JejuService,
   JEJU_SERVICE_NAME,
-  StandaloneJejuService,
+  JejuService,
   type StandaloneConfig,
+  StandaloneJejuService,
 } from './service'

@@ -97,18 +97,19 @@ async function generateResponse(
  */
 class JejuServiceWrapper {
   static serviceType = JEJU_SERVICE_NAME
-  capabilityDescription = 'Jeju Network access - compute, storage, DeFi, governance'
-  
+  capabilityDescription =
+    'Jeju Network access - compute, storage, DeFi, governance'
+
   private service: StandaloneJejuService
-  
+
   constructor(service: StandaloneJejuService) {
     this.service = service
   }
-  
+
   getClient(): JejuClient {
     return this.service.sdk
   }
-  
+
   async stop(): Promise<void> {
     // Cleanup if needed
   }
@@ -125,24 +126,24 @@ export class CrucibleAgentRuntime {
   private config: RuntimeConfig
   private log: Logger
   private initialized = false
-  
+
   // Service management for Eliza compatibility
   private services: Map<string, Service | JejuServiceWrapper> = new Map()
   private settings: Map<string, string> = new Map()
   private cache: Map<string, JsonValue> = new Map()
-  
+
   // Jeju service instance
   private jejuService: StandaloneJejuService | null = null
 
   constructor(config: RuntimeConfig) {
     this.config = config
     this.log = config.logger ?? createLogger(`Runtime:${config.agentId}`)
-    
+
     // Initialize settings from config and env
     const network = config.network ?? (getCurrentNetwork() as NetworkType)
     this.settings.set('NETWORK_TYPE', network)
     this.settings.set('JEJU_NETWORK', network)
-    
+
     if (config.privateKey) {
       this.settings.set('NETWORK_PRIVATE_KEY', config.privateKey)
       this.settings.set('JEJU_PRIVATE_KEY', config.privateKey)
@@ -155,30 +156,35 @@ export class CrucibleAgentRuntime {
     this.log.info('Initializing agent runtime', {
       agentId: this.config.agentId,
     })
-    
+
     // Initialize Jeju service if we have credentials
-    const privateKey = this.config.privateKey ?? process.env.PRIVATE_KEY as Hex | undefined
+    const privateKey =
+      this.config.privateKey ?? (process.env.PRIVATE_KEY as Hex | undefined)
     if (privateKey) {
       try {
-        const network = this.config.network ?? (getCurrentNetwork() as NetworkType)
+        const network =
+          this.config.network ?? (getCurrentNetwork() as NetworkType)
         this.jejuService = await initJejuService({
           privateKey,
           network,
           smartAccount: false, // Use EOA for agents
         })
-        
+
         // Wrap and register service
         const wrapper = new JejuServiceWrapper(this.jejuService)
         this.services.set(JEJU_SERVICE_NAME, wrapper)
-        
+
         this.log.info('Jeju service initialized', {
           address: this.jejuService.sdk.address,
           network,
         })
       } catch (err) {
-        this.log.warn('Failed to initialize Jeju service - on-chain actions disabled', {
-          error: err instanceof Error ? err.message : String(err),
-        })
+        this.log.warn(
+          'Failed to initialize Jeju service - on-chain actions disabled',
+          {
+            error: err instanceof Error ? err.message : String(err),
+          },
+        )
       }
     } else {
       this.log.warn('No private key configured - on-chain actions disabled')
@@ -484,12 +490,12 @@ export class CrucibleAgentRuntime {
   getPlugin(): Plugin | null {
     return jejuPlugin
   }
-  
+
   // ============================================
   // Eliza IAgentRuntime compatibility methods
   // Required for action handlers to work
   // ============================================
-  
+
   /**
    * Get a registered service by name
    * Used by Eliza action handlers to access JejuService
@@ -497,17 +503,18 @@ export class CrucibleAgentRuntime {
   getService(name: string): Service | JejuServiceWrapper | undefined {
     return this.services.get(name.toLowerCase())
   }
-  
+
   /**
    * Register a service
    */
   registerService(service: Service): void {
-    const serviceType = (service.constructor as { serviceType?: string }).serviceType
+    const serviceType = (service.constructor as { serviceType?: string })
+      .serviceType
     if (serviceType) {
       this.services.set(serviceType.toLowerCase(), service)
     }
   }
-  
+
   /**
    * Get a setting value
    * Used by Eliza handlers to get configuration
@@ -516,32 +523,32 @@ export class CrucibleAgentRuntime {
     // Check runtime settings first
     const value = this.settings.get(key)
     if (value !== undefined) return value
-    
+
     // Fall back to environment variables
     return process.env[key]
   }
-  
+
   /**
    * Get cached data
    */
   async getCache<T>(key: string): Promise<T | undefined> {
     return this.cache.get(key) as T | undefined
   }
-  
+
   /**
    * Set cached data
    */
   async setCache(key: string, value: JsonValue): Promise<void> {
     this.cache.set(key, value)
   }
-  
+
   /**
    * Check if we have an active signer for on-chain actions
    */
   hasSigner(): boolean {
     return this.jejuService !== null
   }
-  
+
   /**
    * Get the Jeju SDK client directly
    */

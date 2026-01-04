@@ -265,9 +265,7 @@ export async function ensureServices(
 
   // Contracts MUST be deployed
   if (!env.contractsDeployed) {
-    throw new Error(
-      'Contracts not deployed. Run: bun run jeju dev',
-    )
+    throw new Error('Contracts not deployed. Run: bun run jeju dev')
   }
 
   return env

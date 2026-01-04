@@ -317,6 +317,8 @@ async function startWorkerProcess(config: StartConfig): Promise<void> {
         SQLIT_URL: config.sqlitUrl,
         DWS_URL: config.dwsUrl,
         JEJU_NETWORK: config.network,
+        // Enable autonomous agents by default on dev/start
+        AUTONOMOUS_ENABLED: process.env.AUTONOMOUS_ENABLED ?? 'true',
       },
       stdout: 'inherit',
       stderr: 'inherit',

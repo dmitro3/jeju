@@ -89,75 +89,70 @@ describe('Crucible Agent Runtime', () => {
   })
 
   describe('Message Processing', () => {
-    test(
-      'should process message through ElizaOS',
-      async () => {
-        const character = getCharacter('project-manager')
-        if (!character) throw new Error('character not found')
-        const runtime = createCrucibleRuntime({
-          agentId: 'test-pm-msg',
-          character: character,
-        })
+    test('should process message through ElizaOS', async () => {
+      const character = getCharacter('project-manager')
+      if (!character) throw new Error('character not found')
+      const runtime = createCrucibleRuntime({
+        agentId: 'test-pm-msg',
+        character: character,
+      })
 
-        await runtime.initialize()
+      await runtime.initialize()
 
-        const message: RuntimeMessage = {
-          id: crypto.randomUUID(),
-          userId: 'test-user',
-          roomId: 'test-room',
-          content: {
-            text: 'Create a todo for reviewing the documentation',
-            source: 'test',
-          },
-          createdAt: Date.now(),
-        }
+      const message: RuntimeMessage = {
+        id: crypto.randomUUID(),
+        userId: 'test-user',
+        roomId: 'test-room',
+        content: {
+          text: 'Create a todo for reviewing the documentation',
+          source: 'test',
+        },
+        createdAt: Date.now(),
+      }
 
-        const response = await runtime.processMessage(message)
+      const response = await runtime.processMessage(message)
 
-        expect(response).toBeDefined()
-        expect(typeof response.text).toBe('string')
-        // Response should have either text content OR an action
-        const hasContent = response.text.length > 0 || response.action !== null
-        expect(hasContent).toBe(true)
+      expect(response).toBeDefined()
+      expect(typeof response.text).toBe('string')
+      // Response should have either text content OR an action
+      const hasContent = response.text.length > 0 || response.action !== null
+      expect(hasContent).toBe(true)
 
-        console.log('[Test] Response:', response.text.slice(0, 200) || '(action only)')
-        console.log('[Test] Action:', response.action)
-      },
-      60000,
-    )
+      console.log(
+        '[Test] Response:',
+        response.text.slice(0, 200) || '(action only)',
+      )
+      console.log('[Test] Action:', response.action)
+    }, 60000)
 
-    test(
-      'should handle action responses',
-      async () => {
-        const character = getCharacter('project-manager')
-        if (!character) throw new Error('character not found')
-        const runtime = createCrucibleRuntime({
-          agentId: 'test-pm-action',
-          character: character,
-        })
+    test('should handle action responses', async () => {
+      const character = getCharacter('project-manager')
+      if (!character) throw new Error('character not found')
+      const runtime = createCrucibleRuntime({
+        agentId: 'test-pm-action',
+        character: character,
+      })
 
-        await runtime.initialize()
+      await runtime.initialize()
 
-        const message: RuntimeMessage = {
-          id: crypto.randomUUID(),
-          userId: 'test-user',
-          roomId: 'test-room',
-          content: { text: 'Schedule a daily standup at 9am', source: 'test' },
-          createdAt: Date.now(),
-        }
+      const message: RuntimeMessage = {
+        id: crypto.randomUUID(),
+        userId: 'test-user',
+        roomId: 'test-room',
+        content: { text: 'Schedule a daily standup at 9am', source: 'test' },
+        createdAt: Date.now(),
+      }
 
-        const response = await runtime.processMessage(message)
+      const response = await runtime.processMessage(message)
 
-        console.log('[Test] Response:', response.text || '(action only)')
-        console.log('[Test] Action:', response.action)
-        console.log('[Test] Actions:', response.actions)
+      console.log('[Test] Response:', response.text || '(action only)')
+      console.log('[Test] Action:', response.action)
+      console.log('[Test] Actions:', response.actions)
 
-        // Response should have either text content OR an action
-        const hasContent = response.text.length > 0 || response.action !== null
-        expect(hasContent).toBe(true)
-      },
-      60000,
-    )
+      // Response should have either text content OR an action
+      const hasContent = response.text.length > 0 || response.action !== null
+      expect(hasContent).toBe(true)
+    }, 60000)
   })
 
   describe('Runtime Manager', () => {

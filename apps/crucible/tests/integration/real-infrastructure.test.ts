@@ -107,9 +107,11 @@ describe('Real Infrastructure E2E', () => {
 
   describe('IPFS Storage', () => {
     test('should upload and retrieve content from IPFS', async () => {
+      // Use the storage API from DWS (port 4030), not the compute endpoint
+      const storageApi = 'http://127.0.0.1:4030/storage'
       const storage = createStorage({
-        apiUrl: getDWSEndpoint(),
-        ipfsGateway: `${getDWSEndpoint()}/storage`,
+        apiUrl: storageApi,
+        ipfsGateway: 'http://127.0.0.1:4030/cdn',
         enableCache: false, // Test raw IPFS without cache
       })
 
@@ -138,7 +140,7 @@ describe('Real Infrastructure E2E', () => {
 
       expect(retrieved.id).toBe(testContent.id)
       expect(retrieved.name).toBe(testContent.name)
-    }, 30000)
+    }, 120000) // Increase timeout for IPFS operations
   })
 
   describe('Full Runtime Flow', () => {
