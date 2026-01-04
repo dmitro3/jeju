@@ -18,9 +18,7 @@ import {
 beforeAll(async () => {
   const dwsAvailable = await checkDWSHealth()
   if (!dwsAvailable) {
-    throw new Error(
-      'DWS is required but not running. Start with: jeju dev',
-    )
+    throw new Error('DWS is required but not running. Start with: jeju dev')
   }
   console.log('[Agent Seeding Tests] DWS ready')
 })

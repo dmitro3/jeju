@@ -158,8 +158,9 @@ describe('1. Agent Initialization', () => {
   })
 
   test('should verify DWS can generate responses', async () => {
-    // DWS verified in beforeAll
-      console.log('⏭️  Skipping: DWS not available')
+    const dwsAvailable = await checkDWSCompute()
+    if (!dwsAvailable) {
+      console.log('Skipping: DWS not available')
       return
     }
 
@@ -269,7 +270,10 @@ describe('2. Board Agent Deliberation', () => {
   }, 60000)
 
   test('Community agent should deliberate', async () => {
-    const vote = await autocratAgentRuntime.deliberate('community', testProposal)
+    const vote = await autocratAgentRuntime.deliberate(
+      'community',
+      testProposal,
+    )
 
     expect(vote).toBeDefined()
     expect(vote.agentId).toBe('community')

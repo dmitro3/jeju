@@ -63,7 +63,7 @@ beforeAll(async () => {
   const res = await fetch(`${API_URL}/api/health`, {
     signal: AbortSignal.timeout(5000),
   }).catch(() => null)
-  
+
   if (!res?.ok) {
     throw new Error(
       `Autocrat API is required but not running at ${API_URL}. Start with: cd apps/autocrat && bun run dev`,
@@ -78,7 +78,9 @@ beforeAll(async () => {
     ctx.existingDaoId = data.daos[0].daoId
   }
 
-  console.log(`API: ✅ ${ctx.existingDaoId ? `(DAO: ${ctx.existingDaoId})` : ''}`)
+  console.log(
+    `API: ✅ ${ctx.existingDaoId ? `(DAO: ${ctx.existingDaoId})` : ''}`,
+  )
 })
 
 afterAll(() => console.log(`Run: ${ctx.testsRun}`))

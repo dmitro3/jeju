@@ -3,7 +3,7 @@
  *
  * Tests governance agent initialization, seeding, and verification.
  * Verifies the deliberation and decision-making flow.
- * 
+ *
  * DWS is required infrastructure - tests will fail if it's not running.
  */
 
@@ -29,7 +29,7 @@ beforeAll(async () => {
     )
   }
   console.log('[Autocrat Agent Tests] DWS compute ready')
-  
+
   // Initialize runtime for subsequent tests
   await autocratAgentRuntime.initialize()
 })

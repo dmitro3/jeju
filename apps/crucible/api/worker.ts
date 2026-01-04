@@ -232,7 +232,8 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           const database = getDatabase()
           const agentId = crypto.randomUUID()
           const owner = parsed.data.owner ?? 'anonymous'
-          const name = parsed.data.name ?? parsed.data.character?.name ?? 'Unnamed Agent'
+          const name =
+            parsed.data.name ?? parsed.data.character?.name ?? 'Unnamed Agent'
 
           const agent = await database.createAgent({
             agentId,
@@ -302,13 +303,15 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             .object({
               name: z.string(),
               description: z.string().optional(),
-              roomType: z.enum([
-                'collaboration',
-                'adversarial',
-                'debate',
-                'board',
-                'chat',
-              ]).optional(),
+              roomType: z
+                .enum([
+                  'collaboration',
+                  'adversarial',
+                  'debate',
+                  'board',
+                  'chat',
+                ])
+                .optional(),
             })
             .safeParse(body)
 
@@ -422,10 +425,13 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
       // This is a simplified response - full AI requires ElizaOS runtime
       const styleHints = character.style?.chat?.slice(0, 2) ?? []
       const greeting = character.bio?.[0] ?? character.description ?? 'Hello.'
-      
+
       // Create a contextual response
       let responseText: string
-      if (messageText.toLowerCase().includes('hello') || messageText.toLowerCase().includes('hi')) {
+      if (
+        messageText.toLowerCase().includes('hello') ||
+        messageText.toLowerCase().includes('hi')
+      ) {
         responseText = `${greeting} How can I help you today?`
       } else if (messageText.toLowerCase().includes('help')) {
         responseText = `I'm ${character.name}. ${character.description} What would you like to know?`

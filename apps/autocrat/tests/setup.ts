@@ -231,7 +231,7 @@ export async function getTestEnv(): Promise<TestEnv> {
 export async function ensureServices(
   options: { api?: boolean; chain?: boolean } = {},
 ): Promise<TestEnv> {
-  const { api = false, chain = false } = options
+  const { api = false } = options
 
   console.log('\n🔧 Autocrat test setup...')
 

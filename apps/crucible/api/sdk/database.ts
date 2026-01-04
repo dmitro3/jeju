@@ -137,7 +137,9 @@ export class CrucibleDatabase {
    */
   private async initSchema(): Promise<void> {
     // Use fetchQuery directly since we're called from connect() before state is 'connected'
-    await this.fetchQuery('exec', `
+    await this.fetchQuery(
+      'exec',
+      `
       CREATE TABLE IF NOT EXISTS agents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         agent_id TEXT NOT NULL UNIQUE,
@@ -148,9 +150,12 @@ export class CrucibleDatabase {
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
       )
-    `)
+    `,
+    )
 
-    await this.fetchQuery('exec', `
+    await this.fetchQuery(
+      'exec',
+      `
       CREATE TABLE IF NOT EXISTS rooms (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         room_id TEXT NOT NULL UNIQUE,
@@ -159,9 +164,12 @@ export class CrucibleDatabase {
         state_cid TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
       )
-    `)
+    `,
+    )
 
-    await this.fetchQuery('exec', `
+    await this.fetchQuery(
+      'exec',
+      `
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         room_id TEXT NOT NULL,
@@ -170,9 +178,12 @@ export class CrucibleDatabase {
         action TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
       )
-    `)
+    `,
+    )
 
-    await this.fetchQuery('exec', `
+    await this.fetchQuery(
+      'exec',
+      `
       CREATE TABLE IF NOT EXISTS triggers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         trigger_id TEXT NOT NULL UNIQUE,
@@ -182,16 +193,20 @@ export class CrucibleDatabase {
         enabled INTEGER NOT NULL DEFAULT 1,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
       )
-    `)
+    `,
+    )
 
     // Create indices
-    await this.fetchQuery('exec',
+    await this.fetchQuery(
+      'exec',
       `CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id)`,
     )
-    await this.fetchQuery('exec',
+    await this.fetchQuery(
+      'exec',
       `CREATE INDEX IF NOT EXISTS idx_messages_agent ON messages(agent_id)`,
     )
-    await this.fetchQuery('exec',
+    await this.fetchQuery(
+      'exec',
       `CREATE INDEX IF NOT EXISTS idx_triggers_agent ON triggers(agent_id)`,
     )
   }

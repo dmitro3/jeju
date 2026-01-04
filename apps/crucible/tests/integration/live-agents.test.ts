@@ -67,9 +67,7 @@ describe('Live Agent E2E Tests', () => {
   beforeAll(async () => {
     const dwsAvailable = await checkDWSHealth()
     if (!dwsAvailable) {
-      throw new Error(
-        'DWS is required but not running. Start with: jeju dev',
-      )
+      throw new Error('DWS is required but not running. Start with: jeju dev')
     }
 
     const inference = await checkDWSInferenceAvailable()
@@ -79,9 +77,7 @@ describe('Live Agent E2E Tests', () => {
       )
     }
 
-    console.log(
-      `[LiveTest] DWS ready with ${inference.nodes} inference nodes`,
-    )
+    console.log(`[LiveTest] DWS ready with ${inference.nodes} inference nodes`)
   })
 
   afterAll(async () => {

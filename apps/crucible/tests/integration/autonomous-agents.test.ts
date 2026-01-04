@@ -1,6 +1,6 @@
 /**
  * Autonomous Agent Integration Tests
- * 
+ *
  * Tests that Crucible agents:
  * 1. Start up correctly with all characters
  * 2. Run autonomously in tick loops
@@ -10,13 +10,16 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { AutonomousCapabilities } from '../../api/autonomous/types'
 import { characters, getCharacter, listCharacters } from '../../api/characters'
-import { checkDWSHealth, getSharedDWSClient } from '../../api/client/dws'
-import { createCrucibleRuntime, runtimeManager, type RuntimeMessage } from '../../api/sdk/eliza-runtime'
+import { checkDWSHealth } from '../../api/client/dws'
+import {
+  createCrucibleRuntime,
+  type RuntimeMessage,
+  runtimeManager,
+} from '../../api/sdk/eliza-runtime'
 
 const CRUCIBLE_URL = process.env.CRUCIBLE_URL ?? 'http://localhost:4021'
-const DWS_URL = process.env.DWS_URL ?? 'http://localhost:4030'
+const _DWS_URL = process.env.DWS_URL ?? 'http://localhost:4030'
 
 let crucibleAutonomousAvailable = false
 
@@ -25,9 +28,7 @@ beforeAll(async () => {
   // Check DWS - required
   const dwsAvailable = await checkDWSHealth()
   if (!dwsAvailable) {
-    throw new Error(
-      'DWS is required but not running. Start with: jeju dev',
-    )
+    throw new Error('DWS is required but not running. Start with: jeju dev')
   }
   console.log('[Autonomous Tests] DWS ready')
 
@@ -41,10 +42,14 @@ beforeAll(async () => {
   console.log('[Autonomous Tests] Crucible ready')
 
   // Check if autonomous endpoints are available (they're only in full server mode)
-  const autonomousStatus = await fetch(`${CRUCIBLE_URL}/api/v1/autonomous/status`).catch(() => null)
+  const autonomousStatus = await fetch(
+    `${CRUCIBLE_URL}/api/v1/autonomous/status`,
+  ).catch(() => null)
   crucibleAutonomousAvailable = autonomousStatus?.ok ?? false
   if (!crucibleAutonomousAvailable) {
-    console.log('[Autonomous Tests] Crucible running in worker mode - autonomous endpoints disabled')
+    console.log(
+      '[Autonomous Tests] Crucible running in worker mode - autonomous endpoints disabled',
+    )
   }
 })
 
@@ -58,16 +63,30 @@ describe('Agent Character Validation', () => {
     expect(allChars.length).toBe(14)
 
     const expectedCharacters = [
-      'project-manager', 'community-manager', 'devrel', 'liaison', 'social-media-manager',
-      'red-team', 'scammer', 'security-researcher', 'contracts-expert', 'fuzz-tester',
-      'blue-team', 'moderator', 'network-guardian', 'contracts-auditor'
+      'project-manager',
+      'community-manager',
+      'devrel',
+      'liaison',
+      'social-media-manager',
+      'red-team',
+      'scammer',
+      'security-researcher',
+      'contracts-expert',
+      'fuzz-tester',
+      'blue-team',
+      'moderator',
+      'network-guardian',
+      'contracts-auditor',
     ]
 
     for (const id of expectedCharacters) {
       const char = getCharacter(id)
       expect(char, `Character ${id} should exist`).toBeDefined()
       expect(char?.name, `Character ${id} should have a name`).toBeTruthy()
-      expect(char?.system, `Character ${id} should have system prompt`).toBeTruthy()
+      expect(
+        char?.system,
+        `Character ${id} should have system prompt`,
+      ).toBeTruthy()
     }
   })
 
@@ -89,7 +108,7 @@ describe('Agent Character Validation', () => {
 describe('Agent Runtime Initialization', () => {
   test('should initialize all agent runtimes with 80 actions', async () => {
     const testAgents = ['project-manager', 'red-team', 'blue-team']
-    
+
     for (const id of testAgents) {
       const char = getCharacter(id)
       expect(char).toBeDefined()
@@ -103,10 +122,10 @@ describe('Agent Runtime Initialization', () => {
       await runtime.initialize()
       expect(runtime.isInitialized()).toBe(true)
       expect(runtime.hasActions()).toBe(true)
-      
+
       const actions = runtime.getAvailableActions()
       expect(actions.length).toBeGreaterThanOrEqual(70) // Should have 80
-      
+
       // Verify key action categories
       const actionList = actions.join(',').toLowerCase()
       expect(actionList).toContain('inference')
@@ -122,7 +141,7 @@ describe('DWS Inference Integration', () => {
   test('should generate responses via DWS inference', async () => {
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
-    
+
     const runtime = createCrucibleRuntime({
       agentId: 'inference-test',
       character: char,
@@ -134,7 +153,10 @@ describe('DWS Inference Integration', () => {
       id: crypto.randomUUID(),
       userId: 'test-user',
       roomId: 'test-room',
-      content: { text: 'What tasks should I prioritize this week?', source: 'test' },
+      content: {
+        text: 'What tasks should I prioritize this week?',
+        source: 'test',
+      },
       createdAt: Date.now(),
     }
 
@@ -147,14 +169,16 @@ describe('DWS Inference Integration', () => {
 describe('Autonomous Agent API', () => {
   test('should check autonomous status via API', async () => {
     if (!crucibleAutonomousAvailable) {
-      console.log('[Skipped] Crucible autonomous mode required (run full server)')
+      console.log(
+        '[Skipped] Crucible autonomous mode required (run full server)',
+      )
       return
     }
 
     const response = await fetch(`${CRUCIBLE_URL}/api/v1/autonomous/status`)
     expect(response.ok).toBe(true)
 
-    const status = await response.json() as {
+    const status = (await response.json()) as {
       enabled: boolean
       running: boolean
       agentCount: number
@@ -165,7 +189,9 @@ describe('Autonomous Agent API', () => {
 
   test('should register agent for autonomous mode', async () => {
     if (!crucibleAutonomousAvailable) {
-      console.log('[Skipped] Crucible autonomous mode required (run full server)')
+      console.log(
+        '[Skipped] Crucible autonomous mode required (run full server)',
+      )
       return
     }
 
@@ -184,7 +210,10 @@ describe('Autonomous Agent API', () => {
     })
 
     expect(response.ok).toBe(true)
-    const result = await response.json() as { success: boolean; agentId: string }
+    const result = (await response.json()) as {
+      success: boolean
+      agentId: string
+    }
     expect(result.success).toBe(true)
     expect(result.agentId).toContain('devrel')
 
@@ -201,7 +230,7 @@ describe('Agent Chat API', () => {
     await fetch(`${CRUCIBLE_URL}/api/v1/chat/init`, { method: 'POST' })
 
     const testChars = ['project-manager', 'red-team', 'blue-team', 'moderator']
-    
+
     for (const charId of testChars) {
       const response = await fetch(`${CRUCIBLE_URL}/api/v1/chat/${charId}`, {
         method: 'POST',
@@ -214,7 +243,10 @@ describe('Agent Chat API', () => {
       })
 
       expect(response.ok, `Chat with ${charId} should succeed`).toBe(true)
-      const data = await response.json() as { text: string; character: string }
+      const data = (await response.json()) as {
+        text: string
+        character: string
+      }
       expect(data.text.length).toBeGreaterThan(10)
       expect(data.character).toBe(charId)
     }
@@ -225,7 +257,7 @@ describe('Action Execution', () => {
   test('should have handlers for key actions', async () => {
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
-    
+
     const runtime = createCrucibleRuntime({
       agentId: 'action-test',
       character: char,
@@ -236,7 +268,7 @@ describe('Action Execution', () => {
     // Check key actions have handlers
     const criticalActions = [
       'RUN_INFERENCE',
-      'UPLOAD_FILE', 
+      'UPLOAD_FILE',
       'SWAP_TOKENS',
       'CREATE_PROPOSAL',
       'CALL_AGENT',
@@ -248,7 +280,7 @@ describe('Action Execution', () => {
     for (const action of criticalActions) {
       expect(
         runtime.actionHasHandler(action),
-        `Action ${action} should have a handler`
+        `Action ${action} should have a handler`,
       ).toBe(true)
     }
   })
@@ -265,7 +297,7 @@ describe('Multi-Agent Coordination', () => {
           agentId: `multi-${id}`,
           character: char,
         })
-      })
+      }),
     )
 
     expect(runtimes.length).toBe(3)
@@ -308,7 +340,10 @@ describe('Multi-Agent Coordination', () => {
 
     // Each should be substantive
     for (const [id, text] of responses) {
-      expect(text.length, `${id} response should be substantive`).toBeGreaterThan(50)
+      expect(
+        text.length,
+        `${id} response should be substantive`,
+      ).toBeGreaterThan(50)
     }
   }, 180000)
 })
@@ -317,7 +352,7 @@ describe('Capability Coverage', () => {
   test('should cover all action categories', async () => {
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
-    
+
     const runtime = createCrucibleRuntime({
       agentId: 'capability-test',
       character: char,
@@ -344,7 +379,7 @@ describe('Capability Coverage', () => {
       for (const action of expectedActions) {
         expect(
           actions.includes(action),
-          `${category} category should have ${action}`
+          `${category} category should have ${action}`,
         ).toBe(true)
       }
     }
@@ -355,7 +390,7 @@ describe('Error Handling', () => {
   test('should handle missing DWS gracefully', async () => {
     const char = getCharacter('project-manager')
     if (!char) throw new Error('character not found')
-    
+
     const runtime = createCrucibleRuntime({
       agentId: 'error-test',
       character: char,
@@ -372,5 +407,3 @@ describe('Error Handling', () => {
 })
 
 console.log('Autonomous Agent Tests loaded')
-
-
