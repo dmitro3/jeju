@@ -32,7 +32,7 @@ import {
   isProductionEnv,
   tryGetContract,
 } from '@jejunetwork/config'
-import { type Context, Elysia } from 'elysia'
+import { Elysia, type Context } from 'elysia'
 import type { Address, Hex } from 'viem'
 import {
   getLocalCDNServer,
@@ -182,6 +182,39 @@ const RATE_LIMIT_MAX =
     ? 100000
     : 1000
 const SKIP_RATE_LIMIT_PATHS = ['/health', '/.well-known/']
+
+/**
+ * Get MIME type from file path extension
+ */
+function getMimeType(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+  const mimeTypes: Record<string, string> = {
+    html: 'text/html; charset=utf-8',
+    js: 'application/javascript',
+    mjs: 'application/javascript',
+    css: 'text/css',
+    json: 'application/json',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    svg: 'image/svg+xml',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    eot: 'application/vnd.ms-fontobject',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    pdf: 'application/pdf',
+    txt: 'text/plain',
+    xml: 'application/xml',
+  }
+  return mimeTypes[ext] ?? 'application/octet-stream'
+}
 
 let rateLimitCache: CacheClient | null = null
 
@@ -1465,10 +1498,9 @@ if (import.meta.main) {
   }
 
   // Adapter to convert Bun's ServerWebSocket to SubscribableWebSocket
-  function toSubscribableWebSocket(ws: {
-    readonly readyState: number
-    send(data: string): number
-  }): SubscribableWebSocket {
+  function toSubscribableWebSocket(
+    ws: { readonly readyState: number; send(data: string): number },
+  ): SubscribableWebSocket {
     return {
       get readyState() {
         return ws.readyState
@@ -1525,7 +1557,7 @@ if (import.meta.main) {
     port: PORT,
     maxRequestBodySize: 500 * 1024 * 1024, // 500MB for large artifact uploads
     idleTimeout: 120, // 120 seconds - health checks can take time when external services are slow
-    async fetch(req, server) {
+    async fetch(req: Request, server: { upgrade(req: Request, options?: { data?: WebSocketData; headers?: HeadersInit }): boolean }) {
       // Handle WebSocket upgrades for price streaming
       const url = new URL(req.url)
       if (
@@ -1582,12 +1614,12 @@ if (import.meta.main) {
       }
 
       // Check if this is a deployed app (not dws itself)
-      // Note: hostname may include port (e.g., localhost:4030), so use startsWith
-      const hostnameWithoutPort = hostname.split(':')[0]
+      // Skip internal IPs and localhost for health checks
+      const isInternalIp = hostname.match(/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.|127\.)/)
       if (
-        !hostnameWithoutPort.startsWith('dws.') &&
-        !hostnameWithoutPort.startsWith('127.') &&
-        hostnameWithoutPort !== 'localhost'
+        !hostname.startsWith('dws.') &&
+        !isInternalIp &&
+        hostname !== 'localhost'
       ) {
         const appName = hostname.split('.')[0]
         const deployedApp = getDeployedApp(appName)
@@ -1644,13 +1676,7 @@ if (import.meta.main) {
                 )
                 const resp = await fetch(storageUrl).catch(() => null)
                 if (resp?.ok) {
-                  const contentType = filePathWithoutSlash.endsWith('.js')
-                    ? 'application/javascript'
-                    : filePathWithoutSlash.endsWith('.css')
-                      ? 'text/css'
-                      : filePathWithoutSlash.endsWith('.html')
-                        ? 'text/html'
-                        : 'application/octet-stream'
+                  const contentType = getMimeType(filePathWithoutSlash)
                   return new Response(resp.body, {
                     headers: {
                       'Content-Type': contentType,
@@ -1721,12 +1747,7 @@ if (import.meta.main) {
       return app.handle(req)
     },
     websocket: {
-      open(ws: {
-        data: WebSocketData
-        readyState: number
-        send(data: string): number
-        close(): void
-      }) {
+      open(ws: { data: WebSocketData; readyState: number; send(data: string): number; close(): void }) {
         const data = ws.data
         if (data.type === 'prices') {
           // Set up price subscription service
@@ -1794,12 +1815,7 @@ if (import.meta.main) {
     if (dwsPrivateKey) {
       const infra = createInfrastructure(
         {
-          network:
-            NETWORK === 'localnet' ||
-            NETWORK === 'testnet' ||
-            NETWORK === 'mainnet'
-              ? NETWORK
-              : 'localnet',
+          network: NETWORK === 'localnet' || NETWORK === 'testnet' || NETWORK === 'mainnet' ? NETWORK : 'localnet',
           privateKey: dwsPrivateKey,
           selfEndpoint: baseUrl,
         },
