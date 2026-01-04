@@ -24,25 +24,64 @@ import { z } from 'zod'
 const DeployedContractsSchema = z.object({
   // Core contracts
   jnsRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
-  jnsResolver: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  identityRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  reputationRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  validationRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  
+  jnsResolver: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  identityRegistry: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  reputationRegistry: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  validationRegistry: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+
   // DWS contracts
-  storageManager: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  workerRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  cdnRegistry: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  
+  storageManager: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  workerRegistry: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  cdnRegistry: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+
   // Token contracts
-  usdc: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  jeju: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  weth: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  
+  usdc: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  jeju: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  weth: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+
   // Payment contracts
-  creditManager: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  universalPaymaster: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
-  entryPoint: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
+  creditManager: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  universalPaymaster: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
+  entryPoint: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
 })
 
 export type DeployedContracts = z.infer<typeof DeployedContractsSchema>
@@ -61,7 +100,10 @@ const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 function findMonorepoRoot(): string {
   let dir = process.cwd()
   for (let i = 0; i < 15; i++) {
-    if (existsSync(join(dir, 'bun.lock')) && existsSync(join(dir, 'packages'))) {
+    if (
+      existsSync(join(dir, 'bun.lock')) &&
+      existsSync(join(dir, 'packages'))
+    ) {
       return dir
     }
     const parent = join(dir, '..')
@@ -75,39 +117,42 @@ function findMonorepoRoot(): string {
  * Load deployed contract addresses from the bootstrap file
  */
 function loadDeployedContracts(rootDir: string): DeployedContracts {
-  const bootstrapFile = join(rootDir, 'packages/contracts/deployments/localnet-complete.json')
-  
+  const bootstrapFile = join(
+    rootDir,
+    'packages/contracts/deployments/localnet-complete.json',
+  )
+
   if (!existsSync(bootstrapFile)) {
     throw new Error(
       `CONTRACTS NOT DEPLOYED: ${bootstrapFile} not found.\n\n` +
-      'Run one of:\n' +
-      '  bun run jeju dev          # Starts chain and deploys contracts\n' +
-      '  bun run jeju test         # Uses test orchestrator to deploy\n\n' +
-      'Tests CANNOT run without deployed contracts.'
+        'Run one of:\n' +
+        '  bun run jeju dev          # Starts chain and deploys contracts\n' +
+        '  bun run jeju test         # Uses test orchestrator to deploy\n\n' +
+        'Tests CANNOT run without deployed contracts.',
     )
   }
-  
+
   const data = JSON.parse(readFileSync(bootstrapFile, 'utf-8'))
   const contracts = data?.contracts
-  
+
   if (!contracts) {
     throw new Error(
       `CONTRACTS NOT DEPLOYED: ${bootstrapFile} has no contracts section.\n\n` +
-      'The bootstrap file exists but contains no contract addresses.\n' +
-      'Run: bun run jeju dev'
+        'The bootstrap file exists but contains no contract addresses.\n' +
+        'Run: bun run jeju dev',
     )
   }
-  
+
   // Validate at least one critical contract exists
   const jnsRegistry = contracts.jnsRegistry
   if (!jnsRegistry || jnsRegistry === ZERO_ADDRESS) {
     throw new Error(
       `CONTRACTS NOT DEPLOYED: JNS Registry not found in ${bootstrapFile}.\n\n` +
-      'The bootstrap file exists but JNS Registry is not deployed.\n' +
-      'Run: bun run jeju dev'
+        'The bootstrap file exists but JNS Registry is not deployed.\n' +
+        'Run: bun run jeju dev',
     )
   }
-  
+
   return contracts as DeployedContracts
 }
 
@@ -117,7 +162,7 @@ function loadDeployedContracts(rootDir: string): DeployedContracts {
 async function verifyContractOnChain(
   rpcUrl: string,
   address: string,
-  contractName: string
+  contractName: string,
 ): Promise<void> {
   try {
     const response = await fetch(rpcUrl, {
@@ -131,34 +176,37 @@ async function verifyContractOnChain(
       }),
       signal: AbortSignal.timeout(5000),
     })
-    
+
     if (!response.ok) {
       throw new Error(`RPC request failed: ${response.status}`)
     }
-    
+
     const data = await response.json()
     const code = data.result as string
-    
+
     if (!code || code === '0x' || code.length < 4) {
       throw new Error(
         `CONTRACT NOT DEPLOYED ON-CHAIN: ${contractName} at ${address}\n\n` +
-        'The bootstrap file has this address but there is no code on-chain.\n' +
-        'This usually means the chain was reset without re-deploying contracts.\n\n' +
-        'Run: bun run jeju dev\n\n' +
-        'Or if using existing chain:\n' +
-        '  bun run packages/deployment/scripts/bootstrap-localnet-complete.ts'
+          'The bootstrap file has this address but there is no code on-chain.\n' +
+          'This usually means the chain was reset without re-deploying contracts.\n\n' +
+          'Run: bun run jeju dev\n\n' +
+          'Or if using existing chain:\n' +
+          '  bun run packages/deployment/scripts/bootstrap-localnet-complete.ts',
       )
     }
   } catch (error) {
-    if (error instanceof Error && error.message.includes('CONTRACT NOT DEPLOYED')) {
+    if (
+      error instanceof Error &&
+      error.message.includes('CONTRACT NOT DEPLOYED')
+    ) {
       throw error
     }
     throw new Error(
       `CHAIN NOT AVAILABLE: Cannot verify ${contractName} at ${address}\n\n` +
-      `RPC URL: ${rpcUrl}\n` +
-      `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
-      'Make sure the chain is running:\n' +
-      '  bun run jeju dev'
+        `RPC URL: ${rpcUrl}\n` +
+        `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
+        'Make sure the chain is running:\n' +
+        '  bun run jeju dev',
     )
   }
 }
@@ -179,58 +227,65 @@ async function verifyChainRunning(rpcUrl: string): Promise<number> {
       }),
       signal: AbortSignal.timeout(5000),
     })
-    
+
     if (!response.ok) {
       throw new Error(`RPC request failed: ${response.status}`)
     }
-    
+
     const data = await response.json()
     if (data.error) {
       throw new Error(data.error.message)
     }
-    
+
     return parseInt(data.result, 16)
   } catch (error) {
     throw new Error(
       `CHAIN NOT RUNNING: Cannot connect to RPC at ${rpcUrl}\n\n` +
-      `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
-      'Start the chain first:\n' +
-      '  bun run jeju dev'
+        `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
+        'Start the chain first:\n' +
+        '  bun run jeju dev',
     )
   }
 }
 
 /**
  * REQUIRE contracts to be deployed - throws if not
- * 
+ *
  * This is the main entry point. Call this at the start of any test file
  * that needs contracts. It will throw a hard error if:
- * 
+ *
  * 1. Chain is not running
  * 2. Bootstrap file doesn't exist
  * 3. Contracts aren't actually deployed on-chain
- * 
+ *
  * Returns the contract addresses for use in tests.
  */
 export async function requireContracts(): Promise<RequireContractsResult> {
   const rootDir = findMonorepoRoot()
   const rpcUrl = getL2RpcUrl()
-  
+
   // Step 1: Verify chain is running
   const chainId = await verifyChainRunning(rpcUrl)
-  
+
   // Step 2: Load contract addresses from bootstrap file
   const contracts = loadDeployedContracts(rootDir)
-  
+
   // Step 3: Verify at least JNS Registry is deployed on-chain
   // This is the critical contract that proves the bootstrap ran successfully
   await verifyContractOnChain(rpcUrl, contracts.jnsRegistry, 'JNS Registry')
-  
+
   // Step 4: Optionally verify identity registry if present
-  if (contracts.identityRegistry && contracts.identityRegistry !== ZERO_ADDRESS) {
-    await verifyContractOnChain(rpcUrl, contracts.identityRegistry, 'Identity Registry')
+  if (
+    contracts.identityRegistry &&
+    contracts.identityRegistry !== ZERO_ADDRESS
+  ) {
+    await verifyContractOnChain(
+      rpcUrl,
+      contracts.identityRegistry,
+      'Identity Registry',
+    )
   }
-  
+
   return { contracts, rpcUrl, chainId }
 }
 
@@ -239,14 +294,14 @@ export async function requireContracts(): Promise<RequireContractsResult> {
  */
 export function getRequiredContract(
   contracts: DeployedContracts,
-  name: keyof DeployedContracts
+  name: keyof DeployedContracts,
 ): Address {
   const address = contracts[name]
   if (!address || address === ZERO_ADDRESS) {
     throw new Error(
       `REQUIRED CONTRACT NOT DEPLOYED: ${name}\n\n` +
-      'This contract is required for this test but was not deployed.\n' +
-      'Run: bun run jeju dev'
+        'This contract is required for this test but was not deployed.\n' +
+        'Run: bun run jeju dev',
     )
   }
   return address as Address
@@ -273,4 +328,3 @@ export function getContractsIfDeployed(): DeployedContracts | null {
     return null
   }
 }
-

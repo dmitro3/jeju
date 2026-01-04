@@ -5,13 +5,18 @@
  * Automatically starts Anvil for chain-dependent tests.
  */
 import { beforeAll, describe, expect, test } from 'bun:test'
+import { getCurrentNetwork } from '@jejunetwork/config'
 import { ensureServices, type TestEnv } from '../setup'
 
 const SKIP_TEE_TESTS =
   !process.env.TEE_PLATFORM || process.env.SKIP_TEE_TESTS === 'true'
 
+// For localnet, we have a default TEE secret in config
+// Only skip if explicitly set or on non-localnet without secret
+const isLocalnet = getCurrentNetwork() === 'localnet'
 const SKIP_KMS_TESTS =
-  !process.env.TEE_ENCRYPTION_SECRET || process.env.SKIP_KMS_TESTS === 'true'
+  process.env.SKIP_KMS_TESTS === 'true' ||
+  (!isLocalnet && !process.env.TEE_ENCRYPTION_SECRET)
 
 let env: TestEnv
 

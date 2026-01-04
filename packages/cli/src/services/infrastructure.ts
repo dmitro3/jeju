@@ -1019,7 +1019,10 @@ export class InfrastructureService {
       })
 
       if (!response.ok) {
-        return { verified: false, error: `RPC request failed: ${response.status}` }
+        return {
+          verified: false,
+          error: `RPC request failed: ${response.status}`,
+        }
       }
 
       const result = await response.json()

@@ -289,41 +289,28 @@ async function deployWorker(
 
 /**
  * Start worker process locally
- * Used for localnet development
+ * Uses full server.ts for localnet to include autonomous agent support
+ * Uses worker.ts for remote workerd deployments
  */
 async function startWorkerProcess(config: StartConfig): Promise<void> {
-  _workerProcess = Bun.spawn(
-    [
-      'bun',
-      '--no-install',
-      '-e',
-      `
-      const { createCrucibleApp } = await import('./api/worker.ts');
-      const app = createCrucibleApp();
-      Bun.serve({
-        port: ${config.apiPort},
-        hostname: '${host}',
-        fetch: app.fetch,
-      });
-      console.log('[Crucible Worker] Started on http://${host}:${config.apiPort}');
-      `,
-    ],
-    {
-      cwd: APP_DIR,
-      env: {
-        ...process.env,
-        PORT: String(config.apiPort),
-        NETWORK: config.network,
-        SQLIT_URL: config.sqlitUrl,
-        DWS_URL: config.dwsUrl,
-        JEJU_NETWORK: config.network,
-        // Enable autonomous agents by default on dev/start
-        AUTONOMOUS_ENABLED: process.env.AUTONOMOUS_ENABLED ?? 'true',
-      },
-      stdout: 'inherit',
-      stderr: 'inherit',
+  // Use full server for local development to include autonomous agents
+  // server.ts has all routes including /api/v1/autonomous/*
+  _workerProcess = Bun.spawn(['bun', 'run', 'api/server.ts'], {
+    cwd: APP_DIR,
+    env: {
+      ...process.env,
+      PORT: String(config.apiPort),
+      API_PORT: String(config.apiPort),
+      NETWORK: config.network,
+      SQLIT_URL: config.sqlitUrl,
+      DWS_URL: config.dwsUrl,
+      JEJU_NETWORK: config.network,
+      // Enable autonomous agents by default on dev/start
+      AUTONOMOUS_ENABLED: process.env.AUTONOMOUS_ENABLED ?? 'true',
     },
-  )
+    stdout: 'inherit',
+    stderr: 'inherit',
+  })
 
   // Wait for worker to be ready
   const workerReady = await waitForService(

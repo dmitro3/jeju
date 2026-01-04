@@ -413,7 +413,9 @@ class CompleteBootstrapper {
     console.log('🔄 Syncing to contracts.json...')
     console.log('-'.repeat(70))
     try {
-      execSync('bun run packages/deployment/scripts/sync-localnet-config.ts', { stdio: 'inherit' })
+      execSync('bun run packages/deployment/scripts/sync-localnet-config.ts', {
+        stdio: 'inherit',
+      })
     } catch (_error) {
       console.log('  ⚠️  Config sync skipped (script may not exist)')
     }
@@ -1015,7 +1017,7 @@ class CompleteBootstrapper {
     // The SDK moderation module can still work for ban/label operations.
     let moderationMarketplace: string
     let evidenceRegistry: string
-    
+
     try {
       // Try deploying - will fail if contract is too large
       moderationMarketplace = this.deployContract(
@@ -1043,7 +1045,9 @@ class CompleteBootstrapper {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
       if (msg.includes('CreateContractSizeLimit')) {
-        console.log('  ⚠️  ModerationMarketplace too large - using minimal setup')
+        console.log(
+          '  ⚠️  ModerationMarketplace too large - using minimal setup',
+        )
         moderationMarketplace = banManager // Use BanManager as placeholder
         evidenceRegistry = banManager // Use BanManager as placeholder
       } else {
@@ -1553,7 +1557,9 @@ class CompleteBootstrapper {
     )
 
     // Skip complex app registration - apps register themselves on first use
-    console.log('  ℹ️  App registration skipped - apps self-register on first use')
+    console.log(
+      '  ℹ️  App registration skipped - apps self-register on first use',
+    )
 
     console.log('  ✅ OAuth3 deployed')
     console.log(

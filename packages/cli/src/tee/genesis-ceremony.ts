@@ -400,8 +400,8 @@ export async function decryptCeremonyKeys(
   // Layout: salt (32) + iv (12) + tag (16) + ciphertext
   // encryptAesGcm uses 12-byte IV (GCM standard)
   const salt = encrypted.subarray(0, 32)
-  const iv = encrypted.subarray(32, 44)      // 12 bytes
-  const tag = encrypted.subarray(44, 60)     // 16 bytes
+  const iv = encrypted.subarray(32, 44) // 12 bytes
+  const tag = encrypted.subarray(44, 60) // 16 bytes
   const data = encrypted.subarray(60)
 
   const key = await deriveKeyScrypt(passwordHash, salt, { dkLen: 32 })

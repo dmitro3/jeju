@@ -1520,6 +1520,8 @@ if (crucibleConfig.autonomousEnabled) {
             agentId: `autonomous-${agentId}`,
             character,
             tickIntervalMs: crucibleConfig.defaultTickIntervalMs,
+            maxActionsPerTick: 3,
+            enabled: true,
             capabilities: {
               canChat: true,
               a2a: true,
@@ -1527,7 +1529,9 @@ if (crucibleConfig.autonomousEnabled) {
               canTrade: agentId === 'project-manager',
               canVote: true,
               canPropose: agentId === 'project-manager',
+              canDelegate: false,
               canStake: false,
+              canBridge: false,
               canModerate: agentId === 'moderator' || agentId === 'blue-team',
             },
           })

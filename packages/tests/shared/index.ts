@@ -33,18 +33,6 @@ export * from './constants'
 // Infrastructure & Setup
 // ============================================================================
 
-// Dev startup
-export { cleanup as devCleanup, ensureInfra } from './dev-startup'
-
-// Global setup
-export { default as globalSetup, setupTestEnvironment } from './global-setup'
-
-// Test infrastructure
-export { LockManager, withTestLock } from './lock-manager'
-
-// Preflight checks
-export { quickHealthCheck, runPreflightChecks, waitForChain } from './preflight'
-
 // Contracts required - FAIL-FAST contract verification
 export {
   assertContractsDeployedSync,
@@ -53,6 +41,14 @@ export {
   getRequiredContract,
   requireContracts,
 } from './contracts-required'
+// Dev startup
+export { cleanup as devCleanup, ensureInfra } from './dev-startup'
+// Global setup
+export { default as globalSetup, setupTestEnvironment } from './global-setup'
+// Test infrastructure
+export { LockManager, withTestLock } from './lock-manager'
+// Preflight checks
+export { quickHealthCheck, runPreflightChecks, waitForChain } from './preflight'
 
 // App warmup
 export { discoverAppsForWarmup, quickWarmup, warmupApps } from './warmup'

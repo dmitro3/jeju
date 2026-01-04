@@ -231,7 +231,7 @@ export function createGovernanceModule(
   network: NetworkType,
 ): GovernanceModule {
   const services = getServicesConfig(network)
-  
+
   // Lazy-load contract addresses - throw on method call if not deployed
   const getBoardAddress = (): Address => {
     const addr = requireContract('governance', 'board', network)
@@ -312,7 +312,11 @@ export function createGovernanceModule(
       args: [proposalId],
     })
 
-    return wallet.sendTransaction({ to: getBoardAddress(), data, value: amount })
+    return wallet.sendTransaction({
+      to: getBoardAddress(),
+      data,
+      value: amount,
+    })
   }
 
   async function vote(params: VoteParams): Promise<Hex> {

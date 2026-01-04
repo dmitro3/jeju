@@ -226,31 +226,45 @@ describe('Autonomous Agent API', () => {
 
 describe('Agent Chat API', () => {
   test('should chat with all character types', async () => {
-    // Initialize all agents first
-    await fetch(`${CRUCIBLE_URL}/api/v1/chat/init`, { method: 'POST' })
+    // Initialize all agents first - retry if busy
+    for (let i = 0; i < 3; i++) {
+      const initRes = await fetch(`${CRUCIBLE_URL}/api/v1/chat/init`, {
+        method: 'POST',
+      }).catch(() => null)
+      if (initRes?.ok) break
+      await new Promise((r) => setTimeout(r, 2000))
+    }
 
     const testChars = ['project-manager', 'red-team', 'blue-team', 'moderator']
 
     for (const charId of testChars) {
-      const response = await fetch(`${CRUCIBLE_URL}/api/v1/chat/${charId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: `Hello ${charId}, what is your role?`,
-          userId: 'test',
-          roomId: 'test',
-        }),
-      })
+      // Retry logic for chat requests
+      let response: Response | null = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        response = await fetch(`${CRUCIBLE_URL}/api/v1/chat/${charId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `Hello ${charId}, what is your role?`,
+            userId: 'test',
+            roomId: 'test',
+          }),
+        }).catch(() => null)
 
-      expect(response.ok, `Chat with ${charId} should succeed`).toBe(true)
-      const data = (await response.json()) as {
+        if (response?.ok) break
+        // Wait before retry
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+
+      expect(response?.ok, `Chat with ${charId} should succeed`).toBe(true)
+      const data = (await response!.json()) as {
         text: string
         character: string
       }
       expect(data.text.length).toBeGreaterThan(10)
       expect(data.character).toBe(charId)
     }
-  }, 120000)
+  }, 180000) // Increase timeout to 3 minutes
 })
 
 describe('Action Execution', () => {

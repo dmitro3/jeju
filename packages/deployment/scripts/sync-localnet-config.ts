@@ -2,10 +2,10 @@
 
 /**
  * Sync Localnet Config
- * 
+ *
  * Syncs deployed contract addresses from localnet-complete.json to contracts.json
  * This ensures the SDK and apps use the same contract addresses as the bootstrap.
- * 
+ *
  * Usage:
  *   bun run scripts/sync-localnet-config.ts
  */
@@ -14,7 +14,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const ROOT_DIR = join(import.meta.dir, '../../..')
-const DEPLOYMENT_FILE = join(ROOT_DIR, 'packages/contracts/deployments/localnet-complete.json')
+const DEPLOYMENT_FILE = join(
+  ROOT_DIR,
+  'packages/contracts/deployments/localnet-complete.json',
+)
 const CONFIG_FILE = join(ROOT_DIR, 'packages/config/contracts.json')
 
 interface DeploymentContracts {
@@ -193,7 +196,11 @@ interface ContractsConfig {
 }
 
 function isValidAddress(addr: string | undefined): boolean {
-  return !!addr && addr !== '0x0000000000000000000000000000000000000000' && addr.startsWith('0x')
+  return (
+    !!addr &&
+    addr !== '0x0000000000000000000000000000000000000000' &&
+    addr.startsWith('0x')
+  )
 }
 
 function syncConfig(): void {
@@ -202,7 +209,9 @@ function syncConfig(): void {
 
   if (!existsSync(DEPLOYMENT_FILE)) {
     console.error('❌ Deployment file not found:', DEPLOYMENT_FILE)
-    console.error('   Run bootstrap first: bun run scripts/bootstrap-localnet-complete.ts')
+    console.error(
+      '   Run bootstrap first: bun run scripts/bootstrap-localnet-complete.ts',
+    )
     process.exit(1)
   }
 
@@ -211,7 +220,9 @@ function syncConfig(): void {
     process.exit(1)
   }
 
-  const deployment: DeploymentResult = JSON.parse(readFileSync(DEPLOYMENT_FILE, 'utf-8'))
+  const deployment: DeploymentResult = JSON.parse(
+    readFileSync(DEPLOYMENT_FILE, 'utf-8'),
+  )
   const config: ContractsConfig = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'))
   const contracts = deployment.contracts
 
@@ -252,7 +263,8 @@ function syncConfig(): void {
     synced++
   }
   if (isValidAddress(contracts.reputationLabelManager)) {
-    config.localnet.moderation.reputationLabelManager = contracts.reputationLabelManager
+    config.localnet.moderation.reputationLabelManager =
+      contracts.reputationLabelManager
     synced++
   }
   if (isValidAddress(contracts.evidenceRegistry)) {
@@ -260,7 +272,8 @@ function syncConfig(): void {
     synced++
   }
   if (isValidAddress(contracts.moderationMarketplace)) {
-    config.localnet.moderation.moderationMarketplace = contracts.moderationMarketplace
+    config.localnet.moderation.moderationMarketplace =
+      contracts.moderationMarketplace
     synced++
   }
   if (isValidAddress(contracts.reportingSystem)) {
@@ -380,7 +393,8 @@ function syncConfig(): void {
     synced++
   }
   if (isValidAddress(contracts.nodePerformanceOracle)) {
-    config.localnet.nodeStaking.performanceOracle = contracts.nodePerformanceOracle
+    config.localnet.nodeStaking.performanceOracle =
+      contracts.nodePerformanceOracle
     synced++
   }
 
@@ -400,7 +414,8 @@ function syncConfig(): void {
     synced++
   }
   if (isValidAddress(contracts.multiServiceStakeManager)) {
-    config.localnet.liquidity.multiServiceStakeManager = contracts.multiServiceStakeManager
+    config.localnet.liquidity.multiServiceStakeManager =
+      contracts.multiServiceStakeManager
     synced++
   }
   if (isValidAddress(contracts.liquidityVault)) {
@@ -425,8 +440,8 @@ function syncConfig(): void {
   }
 
   // Write updated config
-  writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n')
-  
+  writeFileSync(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`)
+
   console.log(`✅ Synced ${synced} contract addresses to contracts.json`)
   console.log('')
   console.log('📁 Updated:', CONFIG_FILE)
@@ -434,4 +449,3 @@ function syncConfig(): void {
 
 // Run
 syncConfig()
-

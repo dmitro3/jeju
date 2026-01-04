@@ -98,16 +98,16 @@ export class TestOrchestrator {
   private async verifyContractsDeployed(): Promise<void> {
     const bootstrapFile = join(
       this.options.rootDir,
-      'packages/contracts/deployments/localnet-complete.json'
+      'packages/contracts/deployments/localnet-complete.json',
     )
 
     // Check 1: Bootstrap file must exist
     if (!existsSync(bootstrapFile)) {
       throw new Error(
         'FATAL: Contracts not deployed - bootstrap file not found.\n\n' +
-        `Expected: ${bootstrapFile}\n\n` +
-        'The test orchestrator requires contracts to be deployed.\n' +
-        'Run: bun run jeju dev (which bootstraps contracts automatically)'
+          `Expected: ${bootstrapFile}\n\n` +
+          'The test orchestrator requires contracts to be deployed.\n' +
+          'Run: bun run jeju dev (which bootstraps contracts automatically)',
       )
     }
 
@@ -116,11 +116,15 @@ export class TestOrchestrator {
     const contracts = data?.contracts
     const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-    if (!contracts || !contracts.jnsRegistry || contracts.jnsRegistry === ZERO_ADDRESS) {
+    if (
+      !contracts ||
+      !contracts.jnsRegistry ||
+      contracts.jnsRegistry === ZERO_ADDRESS
+    ) {
       throw new Error(
         'FATAL: Contracts not deployed - JNS Registry not found in bootstrap file.\n\n' +
-        'The bootstrap file exists but contracts are not properly configured.\n' +
-        'Run: bun run jeju dev'
+          'The bootstrap file exists but contracts are not properly configured.\n' +
+          'Run: bun run jeju dev',
       )
     }
 
@@ -151,9 +155,9 @@ export class TestOrchestrator {
       if (!code || code === '0x' || code.length < 4) {
         throw new Error(
           'FATAL: Contracts not deployed on-chain.\n\n' +
-          `JNS Registry at ${contractAddress} has no code.\n` +
-          'This usually means the chain was reset without re-deploying contracts.\n\n' +
-          'Run: bun run jeju dev (or use --no-bootstrap if contracts are known good)'
+            `JNS Registry at ${contractAddress} has no code.\n` +
+            'This usually means the chain was reset without re-deploying contracts.\n\n' +
+            'Run: bun run jeju dev (or use --no-bootstrap if contracts are known good)',
         )
       }
     } catch (error) {
@@ -162,9 +166,9 @@ export class TestOrchestrator {
       }
       throw new Error(
         'FATAL: Cannot verify contracts on-chain.\n\n' +
-        `RPC: ${rpcUrl}\n` +
-        `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
-        'Make sure the chain is running: bun run jeju dev'
+          `RPC: ${rpcUrl}\n` +
+          `Error: ${error instanceof Error ? error.message : String(error)}\n\n` +
+          'Make sure the chain is running: bun run jeju dev',
       )
     }
 
@@ -237,7 +241,7 @@ export class TestOrchestrator {
       // Bootstrap contracts (REQUIRED - no skip option)
       logger.step('Bootstrapping contracts...')
       await this.localnetOrchestrator.bootstrap()
-      
+
       // CRITICAL: Verify contracts are actually deployed on-chain
       // This catches cases where bootstrap ran but chain was reset
       logger.step('Verifying contracts on-chain...')

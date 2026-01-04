@@ -204,7 +204,11 @@ async function verifyContractsOnChain(
   // Check 2: Bootstrap file must have valid contracts
   const data = JSON.parse(readFileSync(bootstrapFile, 'utf-8'))
   const contracts = data?.contracts
-  if (!contracts || !contracts.jnsRegistry || contracts.jnsRegistry === ZERO_ADDRESS) {
+  if (
+    !contracts ||
+    !contracts.jnsRegistry ||
+    contracts.jnsRegistry === ZERO_ADDRESS
+  ) {
     return {
       verified: false,
       error: 'JNS Registry not found in bootstrap file',
@@ -227,7 +231,10 @@ async function verifyContractsOnChain(
     })
 
     if (!response.ok) {
-      return { verified: false, error: `RPC request failed: ${response.status}` }
+      return {
+        verified: false,
+        error: `RPC request failed: ${response.status}`,
+      }
     }
 
     const result = await response.json()
@@ -291,7 +298,10 @@ async function deployContractsIfNeeded(
     // Verify deployment ON-CHAIN
     const postDeployVerification = await verifyContractsOnChain(rootDir, rpcUrl)
     if (!postDeployVerification.verified) {
-      console.error('  Contract deployment verification failed:', postDeployVerification.error)
+      console.error(
+        '  Contract deployment verification failed:',
+        postDeployVerification.error,
+      )
       return false
     }
     return true

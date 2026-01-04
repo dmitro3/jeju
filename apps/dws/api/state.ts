@@ -118,7 +118,8 @@ function createMemorySQLitClient(): MinimalSQLitClient {
         tableData?.set(id, record)
         return {
           rowsAffected: 1,
-          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+          txHash:
+            '0x0000000000000000000000000000000000000000000000000000000000000000',
           blockHeight: 0,
           gasUsed: 0n,
         }
@@ -136,7 +137,8 @@ function createMemorySQLitClient(): MinimalSQLitClient {
         }
         return {
           rowsAffected: 1,
-          txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+          txHash:
+            '0x0000000000000000000000000000000000000000000000000000000000000000',
           blockHeight: 0,
           gasUsed: 0n,
         }
@@ -144,7 +146,8 @@ function createMemorySQLitClient(): MinimalSQLitClient {
 
       return {
         rowsAffected: 0,
-        txHash: '0x0000000000000000000000000000000000000000000000000000000000000000',
+        txHash:
+          '0x0000000000000000000000000000000000000000000000000000000000000000',
         blockHeight: 0,
         gasUsed: 0n,
       }

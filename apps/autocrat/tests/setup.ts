@@ -20,7 +20,7 @@ import { getL2RpcUrl, getLocalhostHost } from '@jejunetwork/config'
 import { createPublicClient, http } from 'viem'
 import { localhost } from 'viem/chains'
 
-const API_PORT = parseInt(process.env.API_PORT || '8010', 10)
+const API_PORT = parseInt(process.env.API_PORT || '4040', 10)
 
 // Track managed processes for cleanup
 const managedProcesses: ChildProcess[] = []
