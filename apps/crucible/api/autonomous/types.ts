@@ -1,4 +1,4 @@
-import type { JsonValue } from '@jejunetwork/types'
+please doimport type { JsonValue } from '@jejunetwork/types'
 import type { AgentCharacter } from '../../lib/types'
 
 export interface AutonomousAgentConfig {
@@ -105,6 +105,10 @@ export interface AutonomousRunnerConfig {
   enableBuiltinCharacters?: boolean
   defaultTickIntervalMs?: number
   maxConcurrentAgents?: number
+  /** Private key for agent on-chain actions */
+  privateKey?: `0x${string}`
+  /** Network to connect to */
+  network?: 'localnet' | 'testnet' | 'mainnet'
 }
 
 export interface AutonomousRunnerStatus {

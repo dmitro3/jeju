@@ -258,10 +258,17 @@ export async function ensureServices(
     `   Chain:     ${env.rpcUrl} ${env.chainRunning ? '✅' : '❌'}${env.chainId ? ` (chainId: ${env.chainId})` : ''}`,
   )
   console.log(
-    `   Contracts: ${env.contractsDeployed ? '✅ deployed' : '⚠️  not deployed (some tests may skip)'}`,
+    `   Contracts: ${env.contractsDeployed ? '✅ deployed' : '❌ not deployed'}`,
   )
   console.log(`   API:       ${env.apiUrl} ${env.apiRunning ? '✅' : '❌'}`)
   console.log('')
+
+  // Contracts MUST be deployed
+  if (!env.contractsDeployed) {
+    throw new Error(
+      'Contracts not deployed. Run: bun run jeju dev',
+    )
+  }
 
   return env
 }

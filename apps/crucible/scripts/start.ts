@@ -680,6 +680,11 @@ async function start(): Promise<void> {
 
   // Keep process running
   console.log('Press Ctrl+C to stop...')
+
+  // Block forever to keep the process alive
+  await new Promise<never>(() => {
+    // Never resolves - keeps the process running until SIGINT/SIGTERM
+  })
 }
 
 // Handle graceful shutdown

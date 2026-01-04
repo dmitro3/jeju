@@ -12,10 +12,8 @@ import {
 } from '../../api/sdk/eliza-runtime'
 import { createStorage } from '../../api/sdk/storage'
 
-// Skip E2E tests if RUN_E2E is not set
-const RUN_E2E = process.env.RUN_E2E === 'true'
-
-describe.skipIf(!RUN_E2E)('Real Infrastructure E2E', () => {
+// Infrastructure is REQUIRED - tests fail if not running
+describe('Real Infrastructure E2E', () => {
   beforeAll(async () => {
     // These tests REQUIRE infrastructure - fail fast if not available
     console.log(`[E2E] Testing against DWS at: ${getDWSEndpoint()}`)

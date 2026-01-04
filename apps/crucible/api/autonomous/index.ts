@@ -81,6 +81,8 @@ export class AutonomousAgentRunner {
       maxConcurrentAgents: config.maxConcurrentAgents ?? 10,
       enableTrajectoryRecording: config.enableTrajectoryRecording ?? true,
       onBatchFlushed: config.onBatchFlushed,
+      privateKey: config.privateKey,
+      network: config.network,
     }
 
     // Initialize static storage for trajectories
@@ -352,6 +354,8 @@ export class AutonomousAgentRunner {
     agent.runtime = createCrucibleRuntime({
       agentId: agent.config.agentId,
       character: agent.config.character,
+      privateKey: this.config.privateKey,
+      network: this.config.network,
     })
 
     await agent.runtime.initialize()

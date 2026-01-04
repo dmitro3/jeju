@@ -47,9 +47,13 @@ const config: CrucibleConfig = {
 }
 
 // Check if infrastructure is available (runs once before tests)
-const checkInfrastructure = async (): Promise<boolean> => {
-  const checks = await Promise.all([
-    fetch('http://127.0.0.1:6546', {
+const checkInfrastructure = async (): Promise<{
+  rpc: boolean
+  dws: boolean
+}> => {
+  const rpcUrl = config.rpcUrl
+  const [rpc, dws] = await Promise.all([
+    fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -66,15 +70,13 @@ const checkInfrastructure = async (): Promise<boolean> => {
       .then((r) => r.ok)
       .catch(() => false),
   ])
-  return checks.every((r) => r)
+  return { rpc, dws }
 }
-
-// Skip if infrastructure not available (unless INTEGRATION=true forces it)
-const SKIP = process.env.INTEGRATION !== 'true'
 
 const log = createLogger('IntegrationTest', { level: 'debug' })
 
-describe.skipIf(SKIP)('Integration Tests', () => {
+// Infrastructure is REQUIRED - tests fail if not running
+describe('Integration Tests', () => {
   const account = privateKeyToAccount(TEST_PRIVATE_KEY as `0x${string}`)
   const publicClient = createPublicClient({
     chain: localhost,
@@ -92,11 +94,15 @@ describe.skipIf(SKIP)('Integration Tests', () => {
   let roomSdk: ReturnType<typeof createRoomSDK>
 
   beforeAll(async () => {
-    // Verify infrastructure is available
-    const available = await checkInfrastructure()
-    if (!available) {
-      log.warn('Infrastructure not fully available - some tests may fail')
-      log.info('Run `jeju dev` to start all services')
+    // Verify infrastructure is available - REQUIRED
+    const infra = await checkInfrastructure()
+    if (!infra.rpc) {
+      throw new Error(
+        `RPC not available at ${config.rpcUrl}. Start with: jeju dev`,
+      )
+    }
+    if (!infra.dws) {
+      throw new Error(`DWS not available at ${DWS_URL}. Start with: jeju dev`)
     }
 
     log.info('Setting up integration test environment', {

@@ -258,4 +258,11 @@ export {
   sqlitDatabasePlugin,
 } from './db'
 
-export { JejuService } from './service'
+export {
+  getJejuService,
+  initJejuService,
+  JejuService,
+  JEJU_SERVICE_NAME,
+  StandaloneJejuService,
+  type StandaloneConfig,
+} from './service'

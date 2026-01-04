@@ -11,7 +11,7 @@
  *   preload = ["@jejunetwork/tests/bun-global-setup"]
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   CORE_PORTS,
@@ -25,6 +25,7 @@ import {
   INFRA_PORTS,
 } from '@jejunetwork/config'
 
+import { execa } from 'execa'
 import type { Subprocess } from 'bun'
 import type { InfraStatus } from './schemas'
 import {
@@ -33,6 +34,10 @@ import {
   isRpcAvailable,
   isServiceAvailable,
 } from './utils'
+
+// Well-known dev deployer private key (Anvil default)
+const DEPLOYER_KEY =
+  '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
 
 // Infrastructure state
 let jejuDevProcess: Subprocess | null = null
@@ -131,12 +136,26 @@ async function startJejuDev(rootDir: string): Promise<boolean> {
     if (await isRpcAvailable(l2RpcUrl)) {
       console.log('  ✅ Localnet ready')
 
-      // Also check if contracts are deployed
-      if (await checkContractsDeployed(l2RpcUrl)) {
+      // Wait for contracts to be deployed (jeju dev should handle this)
+      console.log('  Waiting for contracts...')
+      for (let j = 0; j < 60; j++) {
+        if (await checkContractsDeployed(l2RpcUrl)) {
+          console.log('  ✅ Contracts deployed')
+          return true
+        }
+        await Bun.sleep(1000)
+      }
+      console.log('  ⚠️  Contracts not deployed after 60s, will deploy now...')
+
+      // Deploy contracts ourselves if jeju dev didn't do it
+      const deployed = await deployContractsIfNeeded(rootDir, l2RpcUrl)
+      if (deployed) {
         console.log('  ✅ Contracts deployed')
+        return true
       }
 
-      return true
+      console.error('❌ Failed to deploy contracts')
+      return false
     }
     await Bun.sleep(1000)
   }
@@ -155,6 +174,127 @@ async function stopProcess(proc: Subprocess | null): Promise<void> {
   } catch {
     // Process may already be dead
   }
+}
+
+/**
+ * Deploy contracts if they aren't already deployed
+ */
+async function deployContractsIfNeeded(
+  rootDir: string,
+  rpcUrl: string,
+): Promise<boolean> {
+  // Check if already deployed
+  if (await checkContractsDeployed(rpcUrl)) {
+    return true
+  }
+
+  const bootstrapFile = join(
+    rootDir,
+    'packages/contracts/deployments/localnet-complete.json',
+  )
+  const bootstrapScript = join(
+    rootDir,
+    'packages/deployment/scripts/bootstrap-localnet-complete.ts',
+  )
+
+  // If bootstrap file exists with valid contracts, they should be deployed
+  if (existsSync(bootstrapFile)) {
+    const data = JSON.parse(readFileSync(bootstrapFile, 'utf-8'))
+    const contracts = data?.contracts ?? {}
+    const hasValidContracts =
+      contracts.jnsRegistry &&
+      contracts.jnsRegistry !== '0x0000000000000000000000000000000000000000'
+
+    if (hasValidContracts) {
+      // Contract file exists but not on chain - chain may have been reset
+      console.log('  Contract file exists but chain reset detected, redeploying...')
+    }
+  }
+
+  // Run bootstrap script
+  if (!existsSync(bootstrapScript)) {
+    console.error(`Bootstrap script not found: ${bootstrapScript}`)
+    return false
+  }
+
+  try {
+    console.log('  Running bootstrap script...')
+    await execa('bun', ['run', bootstrapScript], {
+      cwd: rootDir,
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        JEJU_RPC_URL: rpcUrl,
+        L2_RPC_URL: rpcUrl,
+        DEPLOYER_PRIVATE_KEY: DEPLOYER_KEY,
+      },
+      timeout: 300000, // 5 minute timeout
+    })
+
+    // Verify deployment
+    return await checkContractsDeployed(rpcUrl)
+  } catch (error) {
+    console.error('Contract deployment failed:', error)
+    return false
+  }
+}
+
+/**
+ * Get the identity registry address from deployment file
+ */
+function getDeployedIdentityRegistry(rootDir: string): string | null {
+  const bootstrapFile = join(
+    rootDir,
+    'packages/contracts/deployments/localnet-complete.json',
+  )
+  if (!existsSync(bootstrapFile)) return null
+  try {
+    const data = JSON.parse(readFileSync(bootstrapFile, 'utf-8'))
+    const addr = data?.contracts?.identityRegistry
+    if (addr && addr !== '0x0000000000000000000000000000000000000000') {
+      return addr
+    }
+  } catch {
+    // File parsing error
+  }
+  return null
+}
+
+/**
+ * Wait for contracts to be deployed, or deploy them
+ */
+async function ensureContractsDeployed(
+  rootDir: string,
+  rpcUrl: string,
+): Promise<boolean> {
+  // Get the actual deployed address to check
+  const identityRegistry = getDeployedIdentityRegistry(rootDir)
+  
+  // First check if already deployed using actual address
+  if (identityRegistry && await checkContractsDeployed(rpcUrl, identityRegistry)) {
+    return true
+  }
+  // Also check the default address
+  if (await checkContractsDeployed(rpcUrl)) {
+    return true
+  }
+
+  // Wait a bit for jeju dev to deploy them
+  console.log('Waiting for contracts to be deployed...')
+  for (let i = 0; i < 30; i++) {
+    const addr = getDeployedIdentityRegistry(rootDir)
+    if (addr && await checkContractsDeployed(rpcUrl, addr)) {
+      return true
+    }
+    if (await checkContractsDeployed(rpcUrl)) {
+      return true
+    }
+    await Bun.sleep(1000)
+  }
+
+  // Deploy ourselves
+  console.log('Contracts not deployed, deploying now...')
+  return await deployContractsIfNeeded(rootDir, rpcUrl)
 }
 
 /**
@@ -270,6 +410,41 @@ export async function setup(): Promise<void> {
       'Localnet RPC not available. Run: bun run jeju dev --minimal',
     )
   }
+
+  // Contracts MUST be deployed - enforce this
+  const contractsReady = await ensureContractsDeployed(rootDir, status.rpcUrl)
+  if (!contractsReady) {
+    console.error('')
+    console.error(
+      '╔══════════════════════════════════════════════════════════════╗',
+    )
+    console.error(
+      '║  ❌ TESTS CANNOT RUN: Contracts not deployed                 ║',
+    )
+    console.error(
+      '╠══════════════════════════════════════════════════════════════╣',
+    )
+    console.error(
+      '║  Contracts are required for tests to run.                    ║',
+    )
+    console.error(
+      '║                                                              ║',
+    )
+    console.error(
+      '║  Start with: bun run jeju dev                                ║',
+    )
+    console.error(
+      '║  Or deploy:  bun run packages/deployment/scripts/bootstrap-localnet-complete.ts ║',
+    )
+    console.error(
+      '╚══════════════════════════════════════════════════════════════╝',
+    )
+    console.error('')
+    throw new Error(
+      'Contracts not deployed. Run: bun run jeju dev',
+    )
+  }
+  console.log('✅ Contracts deployed and verified')
 
   setEnvVars(status)
 

@@ -10,6 +10,9 @@ import { ensureServices, type TestEnv } from '../setup'
 const SKIP_TEE_TESTS =
   !process.env.TEE_PLATFORM || process.env.SKIP_TEE_TESTS === 'true'
 
+const SKIP_KMS_TESTS =
+  !process.env.TEE_ENCRYPTION_SECRET || process.env.SKIP_KMS_TESTS === 'true'
+
 let env: TestEnv
 
 beforeAll(async () => {
@@ -145,8 +148,8 @@ describe('Network KMS Encryption', () => {
   })
 
   test('encryptDecision works', async () => {
-    if (!env.contractsDeployed) {
-      console.log('⏭️  Skipping: Contracts not deployed')
+    if (!env.contractsDeployed || SKIP_KMS_TESTS) {
+      console.log('⏭️  Skipping: Contracts not deployed or KMS secret not set')
       return
     }
     const encrypted = await encryption.encryptDecision(
@@ -158,8 +161,8 @@ describe('Network KMS Encryption', () => {
   })
 
   test('decryptDecision works', async () => {
-    if (!env.contractsDeployed) {
-      console.log('⏭️  Skipping: Contracts not deployed')
+    if (!env.contractsDeployed || SKIP_KMS_TESTS) {
+      console.log('⏭️  Skipping: Contracts not deployed or KMS secret not set')
       return
     }
     const encrypted = await encryption.encryptDecision(
@@ -173,8 +176,8 @@ describe('Network KMS Encryption', () => {
   })
 
   test('accessControlConditions reference proposal', async () => {
-    if (!env.contractsDeployed) {
-      console.log('⏭️  Skipping: Contracts not deployed')
+    if (!env.contractsDeployed || SKIP_KMS_TESTS) {
+      console.log('⏭️  Skipping: Contracts not deployed or KMS secret not set')
       return
     }
     const encrypted = await encryption.encryptDecision(makeDecision('test-acl'))
@@ -186,8 +189,8 @@ describe('Network KMS Encryption', () => {
   })
 
   test('canDecrypt returns false for recent decisions', async () => {
-    if (!env.chainRunning || !env.contractsDeployed) {
-      console.log('⏭️  Skipping: Chain/contracts not available')
+    if (!env.chainRunning || !env.contractsDeployed || SKIP_KMS_TESTS) {
+      console.log('⏭️  Skipping: Chain/contracts not available or KMS secret not set')
       return
     }
     const encrypted = await encryption.encryptDecision(

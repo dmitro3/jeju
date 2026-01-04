@@ -271,7 +271,23 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
       const limit = query.limit ? parseInt(query.limit as string, 10) : 20
       const offset = query.offset ? parseInt(query.offset as string, 10) : 0
 
-      const agents = await database.listAgents({ owner, limit, offset })
+      const dbAgents = await database.listAgents({ owner, limit, offset })
+
+      // Transform database format to frontend expected format
+      const agents = dbAgents.map((agent) => ({
+        agentId: agent.agent_id,
+        owner: agent.owner,
+        name: agent.name,
+        characterCid: agent.character_cid,
+        stateCid: agent.state_cid ?? '',
+        vaultAddress: '', // Not tracked in SQLit - would come from contract
+        botType: 'ai_agent' as const,
+        active: true,
+        registeredAt: agent.created_at * 1000,
+        lastExecutedAt: agent.updated_at * 1000,
+        executionCount: 0,
+      }))
+
       return {
         agents,
         total: agents.length,
@@ -286,8 +302,44 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
       rooms
         .get('/', async () => {
           const database = getDatabase()
-          const roomList = await database.listRooms(100)
-          return { rooms: roomList, total: roomList.length }
+          const dbRooms = await database.listRooms(100)
+
+          // Transform database format to frontend expected format
+          const validRoomTypes = [
+            'collaboration',
+            'adversarial',
+            'debate',
+            'board',
+          ] as const
+          type ValidRoomType = (typeof validRoomTypes)[number]
+
+          const roomList = dbRooms.map((room) => {
+            // Map invalid room types to collaboration
+            const roomType = validRoomTypes.includes(
+              room.room_type as ValidRoomType,
+            )
+              ? (room.room_type as ValidRoomType)
+              : 'collaboration'
+
+            return {
+              roomId: room.room_id,
+              name: room.name,
+              description: '',
+              owner: '',
+              stateCid: room.state_cid ?? '',
+              members: [],
+              roomType,
+              config: {
+                maxMembers: 10,
+                turnBased: false,
+                visibility: 'public' as const,
+              },
+              active: true,
+              createdAt: room.created_at * 1000,
+            }
+          })
+
+          return { rooms: roomList, total: roomList.length, hasMore: false }
         })
         .get('/:roomId', async ({ params, set }) => {
           const database = getDatabase()

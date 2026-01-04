@@ -88,7 +88,9 @@ export class CrucibleDatabase {
   constructor(config: DatabaseConfig = {}) {
     this.config = config
     this.log = config.logger ?? createLogger('Database')
-    this.endpoint = config.endpoint ?? getSQLitBlockProducerUrl()
+    // Check SQLIT_URL env var first, then use config, then fallback to default
+    this.endpoint =
+      config.endpoint ?? process.env.SQLIT_URL ?? getSQLitBlockProducerUrl()
     this.database = config.database ?? 'crucible'
     this.timeout = config.timeout ?? 30000
   }

@@ -14,8 +14,8 @@ const DWSHealthSchema = z.object({
 const ComputeNodeStatsSchema = z.object({
   inference: z
     .object({
-      totalNodes: z.number(),
-      activeNodes: z.number(),
+      totalNodes: z.number().optional(),
+      activeNodes: z.number().optional(),
       totalCapacity: z.number().optional(),
       currentLoad: z.number().optional(),
       providers: z.array(z.string()).optional(),
@@ -24,8 +24,8 @@ const ComputeNodeStatsSchema = z.object({
     .optional(),
   training: z
     .object({
-      totalNodes: z.number(),
-      activeNodes: z.number(),
+      totalNodes: z.number().optional(),
+      activeNodes: z.number().optional(),
       totalRuns: z.number().optional(),
       activeRuns: z.number().optional(),
     })

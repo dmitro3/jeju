@@ -144,17 +144,17 @@ export function AgentCard({ agent }: AgentCardProps) {
               className="text-xs whitespace-nowrap"
               style={{ color: 'var(--text-tertiary)' }}
             >
-              Owner
-            </span>
-            <code
+            Owner
+          </span>
+          <code
               className="text-xs font-mono px-2 py-1 rounded-lg truncate"
-              style={{
-                backgroundColor: 'var(--bg-secondary)',
-                color: 'var(--text-tertiary)',
-              }}
-            >
-              {agent.owner.slice(0, 6)}...{agent.owner.slice(-4)}
-            </code>
+            style={{
+              backgroundColor: 'var(--bg-secondary)',
+              color: 'var(--text-tertiary)',
+            }}
+          >
+            {agent.owner.slice(0, 6)}...{agent.owner.slice(-4)}
+          </code>
           </div>
           {agent.vaultBalance && BigInt(agent.vaultBalance) > 0n && (
             <span

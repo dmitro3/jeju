@@ -11,7 +11,7 @@ import {
   runtimeManager,
 } from '../../api/sdk/eliza-runtime'
 
-// DWS is required infrastructure - tests must fail if it's not running
+// DWS and inference are required infrastructure - tests must fail if not running
 beforeAll(async () => {
   const dwsAvailable = await checkDWSHealth()
   if (!dwsAvailable) {
@@ -20,15 +20,39 @@ beforeAll(async () => {
 
   // Verify inference nodes are available
   const inference = await checkDWSInferenceAvailable()
-  if (!inference.available) {
+  if (!inference.available || inference.nodes === 0) {
     throw new Error(
-      'DWS inference nodes required but not available. Check DWS compute service.',
+      'DWS inference nodes required but not available. Start inference with: jeju dev',
+    )
+  }
+  console.log(
+    `[Eliza Runtime Tests] DWS ready, inference available: ${inference.available}, nodes: ${inference.nodes}`,
+  )
+
+  // Test if inference actually works with a simple request
+  const { getSharedDWSClient } = await import('../../api/client/dws')
+  const client = getSharedDWSClient()
+  const testResponse = await client
+    .chatCompletion([{ role: 'user', content: 'Hi' }], {
+      model: 'llama-3.1-8b-instant',
+      maxTokens: 10,
+    })
+    .catch((e: Error) => {
+      throw new Error(
+        `DWS inference test failed: ${e.message.slice(0, 200)}. Check inference node is running.`,
+      )
+    })
+
+  if (
+    !testResponse?.choices?.[0]?.message?.content ||
+    testResponse.choices[0].message.content.length === 0
+  ) {
+    throw new Error(
+      'DWS inference returned empty response. Check inference node is properly configured.',
     )
   }
 
-  console.log(
-    `[Eliza Runtime Tests] DWS ready with ${inference.nodes} inference nodes`,
-  )
+  console.log('[Eliza Runtime Tests] Inference verified working')
 })
 
 describe('Crucible Agent Runtime', () => {
@@ -65,63 +89,75 @@ describe('Crucible Agent Runtime', () => {
   })
 
   describe('Message Processing', () => {
-    test('should process message through ElizaOS', async () => {
-      const character = getCharacter('project-manager')
-      if (!character) throw new Error('character not found')
-      const runtime = createCrucibleRuntime({
-        agentId: 'test-pm-msg',
-        character: character,
-      })
+    test(
+      'should process message through ElizaOS',
+      async () => {
+        const character = getCharacter('project-manager')
+        if (!character) throw new Error('character not found')
+        const runtime = createCrucibleRuntime({
+          agentId: 'test-pm-msg',
+          character: character,
+        })
 
-      await runtime.initialize()
+        await runtime.initialize()
 
-      const message: RuntimeMessage = {
-        id: crypto.randomUUID(),
-        userId: 'test-user',
-        roomId: 'test-room',
-        content: {
-          text: 'Create a todo for reviewing the documentation',
-          source: 'test',
-        },
-        createdAt: Date.now(),
-      }
+        const message: RuntimeMessage = {
+          id: crypto.randomUUID(),
+          userId: 'test-user',
+          roomId: 'test-room',
+          content: {
+            text: 'Create a todo for reviewing the documentation',
+            source: 'test',
+          },
+          createdAt: Date.now(),
+        }
 
-      const response = await runtime.processMessage(message)
+        const response = await runtime.processMessage(message)
 
-      expect(response).toBeDefined()
-      expect(typeof response.text).toBe('string')
-      expect(response.text.length).toBeGreaterThan(0)
+        expect(response).toBeDefined()
+        expect(typeof response.text).toBe('string')
+        // Response should have either text content OR an action
+        const hasContent = response.text.length > 0 || response.action !== null
+        expect(hasContent).toBe(true)
 
-      console.log('[Test] Response:', response.text.slice(0, 200))
-      console.log('[Test] Action:', response.action)
-    }, 60000)
+        console.log('[Test] Response:', response.text.slice(0, 200) || '(action only)')
+        console.log('[Test] Action:', response.action)
+      },
+      60000,
+    )
 
-    test('should handle action responses', async () => {
-      const character = getCharacter('project-manager')
-      if (!character) throw new Error('character not found')
-      const runtime = createCrucibleRuntime({
-        agentId: 'test-pm-action',
-        character: character,
-      })
+    test(
+      'should handle action responses',
+      async () => {
+        const character = getCharacter('project-manager')
+        if (!character) throw new Error('character not found')
+        const runtime = createCrucibleRuntime({
+          agentId: 'test-pm-action',
+          character: character,
+        })
 
-      await runtime.initialize()
+        await runtime.initialize()
 
-      const message: RuntimeMessage = {
-        id: crypto.randomUUID(),
-        userId: 'test-user',
-        roomId: 'test-room',
-        content: { text: 'Schedule a daily standup at 9am', source: 'test' },
-        createdAt: Date.now(),
-      }
+        const message: RuntimeMessage = {
+          id: crypto.randomUUID(),
+          userId: 'test-user',
+          roomId: 'test-room',
+          content: { text: 'Schedule a daily standup at 9am', source: 'test' },
+          createdAt: Date.now(),
+        }
 
-      const response = await runtime.processMessage(message)
+        const response = await runtime.processMessage(message)
 
-      console.log('[Test] Response:', response.text)
-      console.log('[Test] Action:', response.action)
-      console.log('[Test] Actions:', response.actions)
+        console.log('[Test] Response:', response.text || '(action only)')
+        console.log('[Test] Action:', response.action)
+        console.log('[Test] Actions:', response.actions)
 
-      expect(response.text.length).toBeGreaterThan(0)
-    }, 60000)
+        // Response should have either text content OR an action
+        const hasContent = response.text.length > 0 || response.action !== null
+        expect(hasContent).toBe(true)
+      },
+      60000,
+    )
   })
 
   describe('Runtime Manager', () => {

@@ -39,6 +39,8 @@ export interface ContractAddresses {
   // Governance contracts
   governor?: Address
   governorToken?: Address
+  governanceBoard?: Address
+  governanceDelegation?: Address
 
   // DeFi contracts
   routerV3?: Address
@@ -113,6 +115,8 @@ export function getContractAddresses(network: NetworkType): ContractAddresses {
     jnsResolver: safeGetContract('jns', 'resolver', network),
     governor: safeGetContract('governance', 'governor', network),
     governorToken: safeGetContract('tokens', 'jeju', network),
+    governanceBoard: safeGetContract('governance', 'board', network),
+    governanceDelegation: safeGetContract('governance', 'delegation', network),
 
     // DeFi
     routerV3: safeGetContract('defi', 'swapRouter', network),

@@ -329,6 +329,14 @@ const LOCALNET_DEFAULTS = {
   indexerGraphql: string
 }
 
+// Agent private key for on-chain actions (optional - from env or generated)
+const AGENT_PRIVATE_KEY = (process.env.PRIVATE_KEY ??
+  process.env.SQLIT_PRIVATE_KEY ??
+  // Default localnet key for development
+  (getCurrentNetwork() === 'localnet'
+    ? '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+    : undefined)) as `0x${string}` | undefined
+
 const config: CrucibleConfig = {
   rpcUrl: getRequiredEnv('RPC_URL', LOCALNET_DEFAULTS.rpcUrl),
   kmsKeyId: getRequiredEnv('KMS_KEY_ID', 'default'),
@@ -488,6 +496,8 @@ async function seedDefaultAgents(): Promise<void> {
       const _runtime = await runtimeManager.createRuntime({
         agentId,
         character,
+        privateKey: AGENT_PRIVATE_KEY,
+        network: config.network,
       })
       log.info('Agent runtime seeded', { agentId, name: character.name })
     } catch (err) {
@@ -792,6 +802,8 @@ app.post('/api/v1/chat/:characterId', async ({ params, body }) => {
     runtime = await runtimeManager.createRuntime({
       agentId: characterId,
       character,
+      privateKey: AGENT_PRIVATE_KEY,
+      network: config.network,
     })
   }
 
@@ -839,6 +851,8 @@ app.post('/api/v1/chat/init', async () => {
       await runtimeManager.createRuntime({
         agentId: id,
         character,
+        privateKey: AGENT_PRIVATE_KEY,
+        network: config.network,
       })
       results[id] = { success: true }
     } catch (e) {
@@ -1450,11 +1464,51 @@ if (crucibleConfig.autonomousEnabled) {
     enableBuiltinCharacters: crucibleConfig.enableBuiltinCharacters,
     defaultTickIntervalMs: crucibleConfig.defaultTickIntervalMs,
     maxConcurrentAgents: crucibleConfig.maxConcurrentAgents,
+    privateKey: AGENT_PRIVATE_KEY,
+    network: config.network,
   })
   autonomousRunner
     .start()
-    .then(() => {
+    .then(async () => {
       log.info('Autonomous agent runner started')
+      
+      // Auto-register key agents for autonomous operation
+      const autoStartAgents = [
+        'project-manager',
+        'red-team',
+        'blue-team',
+        'moderator',
+        'community-manager',
+      ]
+      
+      for (const agentId of autoStartAgents) {
+        const character = getCharacter(agentId)
+        if (!character) continue
+        
+        try {
+          await autonomousRunner?.registerAgent({
+            agentId: `autonomous-${agentId}`,
+            character,
+            tickIntervalMs: crucibleConfig.defaultTickIntervalMs,
+            capabilities: {
+              canChat: true,
+              a2a: true,
+              compute: true,
+              canTrade: agentId === 'project-manager',
+              canVote: true,
+              canPropose: agentId === 'project-manager',
+              canStake: false,
+              canModerate: agentId === 'moderator' || agentId === 'blue-team',
+            },
+          })
+          log.info('Auto-registered autonomous agent', { agentId })
+        } catch (err) {
+          log.warn('Failed to auto-register agent', { 
+            agentId, 
+            error: err instanceof Error ? err.message : String(err) 
+          })
+        }
+      }
     })
     .catch((err) => {
       log.error('Failed to start autonomous runner', { error: String(err) })
@@ -1479,7 +1533,10 @@ app.get('/api/v1/autonomous/status', () => {
 // Start autonomous runner (if not already running)
 app.post('/api/v1/autonomous/start', async () => {
   if (!autonomousRunner) {
-    autonomousRunner = createAgentRunner()
+    autonomousRunner = createAgentRunner({
+      privateKey: AGENT_PRIVATE_KEY,
+      network: config.network,
+    })
   }
   await autonomousRunner.start()
   return { success: true, status: autonomousRunner.getStatus() }

@@ -251,7 +251,11 @@ export async function createJejuClient(
   const compute = createComputeModule(wallet, network)
   const storage = createStorageModule(wallet, network)
   const defi = createDefiModule(wallet, network)
-  const governance = createGovernanceModule(wallet, network)
+  // Governance requires board + delegation contracts
+  const governance =
+    contractAddresses.governanceBoard && contractAddresses.governanceDelegation
+      ? createGovernanceModule(wallet, network)
+      : createStubGovernanceModule()
   const names = createNamesModule(wallet, network)
   const identity = createIdentityModule(wallet, network)
   const validation = createValidationModule(
@@ -437,5 +441,24 @@ function createStubFederationClient(): FederationClient {
     joinFederation: notAvailable,
     addStake: notAvailable,
     registerRegistry: notAvailable,
+  }
+}
+
+function createStubGovernanceModule(): GovernanceModule {
+  const notAvailable = (): never => {
+    throw new Error('Governance contracts (board/delegation) not deployed on this network')
+  }
+  return {
+    createProposal: notAvailable,
+    getProposal: notAvailable,
+    listProposals: notAvailable,
+    backProposal: notAvailable,
+    vote: notAvailable,
+    getVotingPower: notAvailable,
+    delegate: notAvailable,
+    undelegate: notAvailable,
+    listDelegates: notAvailable,
+    getMyDelegate: notAvailable,
+    getStats: notAvailable,
   }
 }
