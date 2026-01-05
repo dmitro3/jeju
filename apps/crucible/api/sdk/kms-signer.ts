@@ -39,7 +39,7 @@ import {
   toHex,
 } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
-import { localhost } from 'viem/chains'
+import { foundry } from 'viem/chains'
 import { z } from 'zod'
 import { createLogger } from './logger'
 
@@ -516,7 +516,7 @@ export class KMSSigner {
 
     const walletClient = createWalletClient({
       account: this.fallbackAccount,
-      chain: localhost,
+      chain: foundry, // Chain ID 31337 - matches Jeju localnet
       transport: http(this.config.rpcUrl),
     })
 

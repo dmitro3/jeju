@@ -67,9 +67,9 @@ function getRedirectUri(): string {
 
 // Chain IDs for Jeju networks
 const CHAIN_IDS = {
-  localnet: 420691,
+  localnet: 31337, // Anvil/Foundry default
   testnet: 420690,
-  mainnet: 420692,
+  mainnet: 420691,
 } as const
 
 /**

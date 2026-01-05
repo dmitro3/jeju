@@ -129,6 +129,37 @@ All fixes are on the `hellno/jeju` fork, branch `fix/onboarding-issues`.
 
 ---
 
+## 12. KMS Fallback Wallet Chain ID
+
+**File:** `apps/crucible/api/sdk/kms-signer.ts`
+
+**Issue:** Fallback wallet used `localhost` chain from viem (chain ID 1337), but Jeju localnet uses chain ID 31337.
+
+**Error:** `"Transaction creation failed. Details: invalid chain id for signer"`
+
+**Fix:** Changed `localhost` to `foundry` chain import, which has the correct chain ID 31337.
+
+---
+
+## 13. Crucible Frontend Chain IDs
+
+**File:** `apps/crucible/web/config/index.ts`
+
+**Issue:** The `CHAIN_IDS` constant had incorrect values:
+- `localnet: 420691` (should be 31337)
+- `mainnet: 420692` (should be 420691)
+
+**Fix:** Corrected chain IDs to match network configuration:
+```typescript
+const CHAIN_IDS = {
+  localnet: 31337, // Anvil/Foundry default
+  testnet: 420690,
+  mainnet: 420691,
+}
+```
+
+---
+
 ## Local Development Setup
 
 After these fixes, the setup process is:
