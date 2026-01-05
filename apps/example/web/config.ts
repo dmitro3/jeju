@@ -8,10 +8,11 @@ import type { OAuth3ProviderProps } from '@jejunetwork/auth/react'
 
 type Network = 'localnet' | 'testnet' | 'mainnet'
 
+// Chain IDs must match @jejunetwork/auth infrastructure config
 const CHAIN_IDS: Record<Network, number> = {
-  localnet: 31337,
-  testnet: 10242,
-  mainnet: 10241,
+  localnet: 31337, // anvil/hardhat
+  testnet: 420690, // Jeju testnet
+  mainnet: 420692, // Jeju mainnet
 }
 
 const SERVICES: Record<
@@ -39,14 +40,23 @@ const SERVICES: Record<
  * Detect network from hostname
  */
 export function getNetwork(): Network {
-  const hostname = window.location.hostname
+  if (typeof window === 'undefined') {
+    console.log('[Config] No window, defaulting to testnet')
+    return 'testnet'
+  }
+
+  const hostname = window.location?.hostname ?? ''
+  console.log('[Config] Detecting network from hostname:', hostname)
 
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    console.log('[Config] Detected localnet')
     return 'localnet'
   }
   if (hostname.includes('testnet')) {
+    console.log('[Config] Detected testnet')
     return 'testnet'
   }
+  console.log('[Config] Detected mainnet (default)')
   return 'mainnet'
 }
 

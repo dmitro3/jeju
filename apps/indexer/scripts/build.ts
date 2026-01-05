@@ -28,10 +28,16 @@ async function build() {
   console.log('[Indexer] Compiling TypeScript...')
   await $`bunx tsc 2>/dev/null || true`.cwd(APP_DIR)
 
-  // Setup model symlink
+  // Create lib/model symlink pointing to lib/src/model (subsquid expects lib/model)
   console.log('[Indexer] Setting up model symlink...')
   await rm(resolve(APP_DIR, 'lib/model'), { recursive: true, force: true })
-  await $`ln -s ${resolve(APP_DIR, 'src/model')} ${resolve(APP_DIR, 'lib/model')}`
+  const symlinkSource = resolve(APP_DIR, 'lib/src/model')
+  const symlinkTarget = resolve(APP_DIR, 'lib/model')
+  const { exitCode } = await $`ln -s ${symlinkSource} ${symlinkTarget}`.nothrow()
+  if (exitCode !== 0) {
+    throw new Error(`Failed to create symlink: ${symlinkSource} -> ${symlinkTarget}`)
+  }
+  console.log(`[Indexer] Created symlink: lib/model -> lib/src/model`)
 
   // Run post-build script
   console.log('[Indexer] Running post-build...')

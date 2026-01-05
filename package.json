@@ -125,6 +125,9 @@
     "gradient-string": "2.0.2",
     "progress": "2.0.3",
     "fs-extra": "11.2.0",
+    "setimmediate": "1.0.5",
+    "jszip": "3.10.1",
+    "yaku": "1.0.1",
     "viem": "^2.43.3",
     "zod": "^4.2.1",
     "zustand": "^5.0.9"
