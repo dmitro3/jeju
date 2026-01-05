@@ -73,6 +73,28 @@ const CHAIN_IDS = {
 } as const
 
 /**
+ * Get the OAuth3 TEE agent URL based on environment
+ * In browser on localnet, use the proxy domain to avoid CORS issues
+ */
+function getOAuth3TeeUrl(): string {
+  const services = getServicesConfig()
+  const network = getNetwork()
+
+  // In browser on localnet, use the proxy domain to avoid CORS
+  if (
+    typeof window !== 'undefined' &&
+    network === 'localnet' &&
+    window.location.hostname.endsWith('.local.jejunetwork.org')
+  ) {
+    // Use same port as the current page (proxy handles routing)
+    const port = window.location.port ? `:${window.location.port}` : ''
+    return `http://oauth3.local.jejunetwork.org${port}`
+  }
+
+  return services.oauth3.tee
+}
+
+/**
  * OAuth3 configuration for wallet authentication
  * Called at runtime to ensure network is detected correctly
  */
@@ -85,8 +107,8 @@ export function getOAuth3Config() {
     appName: 'Crucible',
     // Redirect URI for OAuth callbacks
     redirectUri: getRedirectUri(),
-    // OAuth3 TEE agent URL
-    teeAgentUrl: services.oauth3.tee,
+    // OAuth3 TEE agent URL - use proxy URL in browser to avoid CORS
+    teeAgentUrl: getOAuth3TeeUrl(),
     // RPC URL for on-chain interactions - use network-appropriate URL
     rpcUrl: services.rpc.l2,
     // Chain ID for the current network - prevents defaulting to localnet
