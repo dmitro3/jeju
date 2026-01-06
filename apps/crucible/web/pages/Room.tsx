@@ -1,15 +1,16 @@
 import { useJejuAuth } from '@jejunetwork/auth/react'
-import { useRef, useState, useEffect, useMemo } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { useChatCharacters } from '../hooks'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
+import { LoadingSpinner } from '../components/LoadingSpinner'
+import { useAgents, useChatCharacters } from '../hooks'
 import {
+  type AgentRole,
+  useJoinRoom,
+  usePostRoomMessage,
   useRoom,
   useRoomMessages,
-  usePostRoomMessage,
-  type AgentRole,
 } from '../hooks/useRooms'
 import { ROOM_TYPE_CONFIG, type RoomTypeKey } from '../lib/constants'
-import { LoadingSpinner } from '../components/LoadingSpinner'
 
 const ROOM_WELCOME_MESSAGES: Record<RoomTypeKey, string> = {
   collaboration:
@@ -35,6 +36,9 @@ function truncateAddress(address: string): string {
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const [message, setMessage] = useState('')
+  const [showAddAgent, setShowAddAgent] = useState(false)
+  const [selectedAgentId, setSelectedAgentId] = useState('')
+  const [selectedRole, setSelectedRole] = useState<AgentRole>('participant')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Auth state
@@ -50,6 +54,8 @@ export default function RoomPage() {
     roomId ?? '',
   )
   const postMessage = usePostRoomMessage()
+  const joinRoom = useJoinRoom()
+  const { data: agentsData } = useAgents({ active: true, limit: 50 })
   const { data: characters } = useChatCharacters()
 
   // Create lookup map from agentId to character name
@@ -57,13 +63,18 @@ export default function RoomPage() {
     const map = new Map<string, string>()
     if (characters) {
       characters.forEach((char, index) => {
-        // Map both the character id and the numeric index
         map.set(char.id, char.name ?? char.id)
         map.set(String(index), char.name ?? char.id)
       })
     }
+    // Add registered agents from indexer
+    if (agentsData?.agents) {
+      agentsData.agents.forEach((agent) => {
+        map.set(String(agent.id), agent.name)
+      })
+    }
     return map
-  }, [characters])
+  }, [characters, agentsData?.agents])
 
   const getAgentName = (msgAgentId: string) => {
     // Check if this message is from the current user
@@ -105,6 +116,25 @@ export default function RoomPage() {
     setMessage('')
   }
 
+  const handleJoinRoom = async () => {
+    if (!selectedAgentId || !roomId) return
+    await joinRoom.mutateAsync({
+      roomId,
+      agentId: selectedAgentId,
+      role: selectedRole,
+    })
+    setShowAddAgent(false)
+    setSelectedAgentId('')
+    setSelectedRole('participant')
+  }
+
+  // Filter out agents already in the room
+  const availableAgents = useMemo(() => {
+    if (!agentsData?.agents || !room?.members) return []
+    const memberIds = new Set(room.members.map((m) => String(m.agentId)))
+    return agentsData.agents.filter((a) => !memberIds.has(String(a.id)))
+  }, [agentsData?.agents, room?.members])
+
   // Loading state
   if (isLoadingRoom) {
     return (
@@ -132,7 +162,8 @@ export default function RoomPage() {
             Room not found
           </h2>
           <p style={{ color: 'var(--text-secondary)' }}>
-            {roomError?.message ?? 'The room you are looking for does not exist.'}
+            {roomError?.message ??
+              'The room you are looking for does not exist.'}
           </p>
           <Link to="/rooms" className="btn-secondary mt-4 inline-block">
             Back to Rooms
@@ -283,7 +314,7 @@ export default function RoomPage() {
                     msg.agentId === 'user' ||
                     msg.agentId.startsWith('user-')
                   const member = room.members.find(
-                    (m) => m.agentId === msg.agentId,
+                    (m) => String(m.agentId) === msg.agentId,
                   )
                   const roleConfig = member
                     ? ROLE_CONFIG[member.role]
@@ -296,9 +327,7 @@ export default function RoomPage() {
                     >
                       <div
                         className={`max-w-[75%] p-4 rounded-2xl ${
-                          isUserMessage
-                            ? 'rounded-br-sm'
-                            : 'rounded-bl-sm'
+                          isUserMessage ? 'rounded-br-sm' : 'rounded-bl-sm'
                         }`}
                         style={{
                           backgroundColor: isUserMessage
@@ -401,12 +430,93 @@ export default function RoomPage() {
         {/* Members Sidebar (1/4 width) */}
         <aside className="lg:col-span-1">
           <section className="card-static p-4">
-            <h2
-              className="text-lg font-bold mb-4 font-display"
-              style={{ color: 'var(--text-primary)' }}
-            >
-              Members
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2
+                className="text-lg font-bold font-display"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                Members
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowAddAgent(!showAddAgent)}
+                className="btn-secondary text-xs px-2 py-1"
+              >
+                + Add Agent
+              </button>
+            </div>
+
+            {/* Add Agent Form */}
+            {showAddAgent && (
+              <div
+                className="mb-4 p-3 rounded-lg"
+                style={{ backgroundColor: 'var(--bg-secondary)' }}
+              >
+                <div className="space-y-3">
+                  <div>
+                    <label
+                      className="text-xs font-medium block mb-1"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Select Agent
+                    </label>
+                    <select
+                      value={selectedAgentId}
+                      onChange={(e) => setSelectedAgentId(e.target.value)}
+                      className="input w-full text-sm"
+                    >
+                      <option value="">Choose an agent...</option>
+                      {availableAgents.map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name} (#{agent.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      className="text-xs font-medium block mb-1"
+                      style={{ color: 'var(--text-secondary)' }}
+                    >
+                      Role
+                    </label>
+                    <select
+                      value={selectedRole}
+                      onChange={(e) =>
+                        setSelectedRole(e.target.value as AgentRole)
+                      }
+                      className="input w-full text-sm"
+                    >
+                      {Object.entries(ROLE_CONFIG).map(([role, config]) => (
+                        <option key={role} value={role}>
+                          {config.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleJoinRoom}
+                    disabled={!selectedAgentId || joinRoom.isPending}
+                    className="btn-primary w-full text-sm"
+                  >
+                    {joinRoom.isPending ? (
+                      <LoadingSpinner size="sm" />
+                    ) : (
+                      'Add to Room'
+                    )}
+                  </button>
+                  {joinRoom.isError && (
+                    <p
+                      className="text-xs"
+                      style={{ color: 'var(--color-error)' }}
+                    >
+                      {joinRoom.error.message}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {room.members.length === 0 ? (
               <p
@@ -455,7 +565,7 @@ export default function RoomPage() {
                           className="text-sm font-medium truncate"
                           style={{ color: 'var(--text-primary)' }}
                         >
-                          {getAgentName(member.agentId)}
+                          {getAgentName(String(member.agentId))}
                         </p>
                         <span
                           className="text-xs px-1.5 py-0.5 rounded inline-block mt-1"
