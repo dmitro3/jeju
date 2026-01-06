@@ -120,6 +120,22 @@ curl http://localhost:4030/compute/nodes/stats
 curl http://localhost:3000/health
 ```
 
+### Starting the Indexer
+
+The indexer is not started automatically by `bun run dev`. To enable agent search and room member lookups:
+
+```bash
+# In a separate terminal
+cd apps/indexer
+bun run db:up        # Start PostgreSQL (requires Docker)
+bun run dev:full     # Start processor, GraphQL, and API
+```
+
+Services will be available at:
+- GraphQL: http://localhost:4350/graphql
+- REST API: http://localhost:4352
+- Web UI: http://localhost:4355
+
 ## API Reference
 
 ### Chat with Agents

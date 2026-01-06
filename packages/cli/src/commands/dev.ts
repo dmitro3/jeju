@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   getDWSUrl,
@@ -129,6 +129,9 @@ async function startDev(options: {
       process.exit(1)
     }
     logger.success('Contracts verified on-chain')
+
+    // Sync contract addresses to config after successful bootstrap
+    syncContractAddresses(rootDir)
   } else {
     logger.debug('Skipping bootstrap (--no-bootstrap)')
   }
@@ -538,7 +541,56 @@ async function printReady(
   orchestrator: ServicesOrchestrator | null,
   deployedApps: AppManifest[],
 ): Promise<void> {
-  console.clear()
+  // Check for failed or excluded services
+  const failedServices: Array<{ name: string; reason: string }> = []
+
+  // Check running services for failed processes
+  for (const service of services) {
+    if (service.process) {
+      // Check if process has exited (exitCode is set when process terminates)
+      const exitCode = service.process.exitCode
+      if (exitCode !== null && exitCode !== undefined) {
+        failedServices.push({
+          name: service.name,
+          reason: `exited with code ${exitCode}`,
+        })
+      }
+    }
+  }
+
+  // Check orchestrated services for health issues
+  if (orchestrator) {
+    const orchestratedServices = orchestrator.getRunningServices()
+    for (const [_key, service] of orchestratedServices) {
+      if (service.process) {
+        const exitCode = service.process.exitCode
+        if (exitCode !== null && exitCode !== undefined && exitCode !== 0) {
+          // Avoid duplicates
+          if (!failedServices.some((f) => f.name === service.name)) {
+            failedServices.push({
+              name: service.name,
+              reason: `exited with code ${exitCode}`,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  // Show warning section if any services failed
+  if (failedServices.length > 0) {
+    logger.newline()
+    logger.warn('Some services failed to start:')
+    for (const failed of failedServices) {
+      logger.table([
+        {
+          label: failed.name,
+          value: failed.reason,
+          status: 'error' as const,
+        },
+      ])
+    }
+  }
 
   logger.header('READY')
   logger.info('Press Ctrl+C to stop\n')
@@ -700,6 +752,136 @@ async function waitForever(): Promise<void> {
   await new Promise(() => {
     /* never resolves */
   })
+}
+
+/**
+ * Sync contract addresses from deployment output to config.
+ * Called automatically after bootstrap to keep contracts.json up to date.
+ */
+function syncContractAddresses(rootDir: string): void {
+  const deploymentFile = join(
+    rootDir,
+    'packages/contracts/deployments/localnet-complete.json',
+  )
+  const configFile = join(rootDir, 'packages/config/contracts.json')
+
+  if (!existsSync(deploymentFile)) {
+    logger.warn('No deployment file found, skipping address sync')
+    return
+  }
+
+  if (!existsSync(configFile)) {
+    logger.warn('Config file not found, skipping address sync')
+    return
+  }
+
+  interface BootstrapContracts {
+    jeju?: string
+    usdc?: string
+    identityRegistry?: string
+    reputationRegistry?: string
+    validationRegistry?: string
+    banManager?: string
+    reputationLabelManager?: string
+    nodeStakingManager?: string
+    nodePerformanceOracle?: string
+    tokenRegistry?: string
+    paymasterFactory?: string
+    priceOracle?: string
+    universalPaymaster?: string
+    jnsRegistry?: string
+    jnsResolver?: string
+    computeRegistry?: string
+    ledgerManager?: string
+    inferenceServing?: string
+    computeStaking?: string
+  }
+
+  interface BootstrapResult {
+    contracts: BootstrapContracts
+  }
+
+  const deployment: BootstrapResult = JSON.parse(
+    readFileSync(deploymentFile, 'utf-8'),
+  )
+  const config = JSON.parse(readFileSync(configFile, 'utf-8'))
+  const contracts = deployment.contracts
+
+  // Update tokens
+  if (isValidAddress(contracts.jeju)) {
+    config.localnet.tokens.jeju = contracts.jeju
+  }
+  if (isValidAddress(contracts.usdc)) {
+    config.localnet.tokens.usdc = contracts.usdc
+  }
+
+  // Update registry
+  if (isValidAddress(contracts.identityRegistry)) {
+    config.localnet.registry.identity = contracts.identityRegistry
+  }
+  if (isValidAddress(contracts.reputationRegistry)) {
+    config.localnet.registry.reputation = contracts.reputationRegistry
+  }
+  if (isValidAddress(contracts.validationRegistry)) {
+    config.localnet.registry.validation = contracts.validationRegistry
+  }
+
+  // Update moderation
+  if (isValidAddress(contracts.banManager)) {
+    config.localnet.moderation.banManager = contracts.banManager
+  }
+  if (isValidAddress(contracts.reputationLabelManager)) {
+    config.localnet.moderation.reputationLabelManager =
+      contracts.reputationLabelManager
+  }
+
+  // Update nodeStaking
+  if (isValidAddress(contracts.nodeStakingManager)) {
+    config.localnet.nodeStaking.manager = contracts.nodeStakingManager
+  }
+  if (isValidAddress(contracts.nodePerformanceOracle)) {
+    config.localnet.nodeStaking.performanceOracle =
+      contracts.nodePerformanceOracle
+  }
+
+  // Update payments
+  if (isValidAddress(contracts.tokenRegistry)) {
+    config.localnet.payments.tokenRegistry = contracts.tokenRegistry
+  }
+  if (isValidAddress(contracts.paymasterFactory)) {
+    config.localnet.payments.paymasterFactory = contracts.paymasterFactory
+  }
+  if (isValidAddress(contracts.priceOracle)) {
+    config.localnet.payments.priceOracle = contracts.priceOracle
+  }
+  if (isValidAddress(contracts.universalPaymaster)) {
+    config.localnet.payments.multiTokenPaymaster = contracts.universalPaymaster
+  }
+
+  // Update JNS
+  if (isValidAddress(contracts.jnsRegistry)) {
+    config.localnet.jns.registry = contracts.jnsRegistry
+  }
+  if (isValidAddress(contracts.jnsResolver)) {
+    config.localnet.jns.resolver = contracts.jnsResolver
+  }
+
+  // Update compute
+  if (isValidAddress(contracts.computeRegistry)) {
+    config.localnet.compute.registry = contracts.computeRegistry
+  }
+  if (isValidAddress(contracts.ledgerManager)) {
+    config.localnet.compute.ledgerManager = contracts.ledgerManager
+  }
+  if (isValidAddress(contracts.inferenceServing)) {
+    config.localnet.compute.inferenceServing = contracts.inferenceServing
+  }
+  if (isValidAddress(contracts.computeStaking)) {
+    config.localnet.compute.staking = contracts.computeStaking
+  }
+
+  writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`)
+  logger.debug('Synced contract addresses to config')
 }
 
 devCommand
