@@ -246,6 +246,40 @@ async function deployAppsOnchain(
     const dwsReady = await pollForHealth('http://127.0.0.1:4030/health', 10000)
     if (dwsReady) {
       logger.success('DWS server running on port 4030')
+
+      // Register CLI inference server with DWS
+      const inferenceHost = getLocalhostHost()
+      const inferenceEndpoint = `http://${inferenceHost}:4100`
+      try {
+        const registerRes = await fetch(
+          'http://127.0.0.1:4030/compute/nodes/register',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              address: 'cli-inference-node',
+              endpoint: inferenceEndpoint,
+              gpuTier: 0,
+              capabilities: ['inference'],
+              models: ['*'],
+              provider: 'cli-multi-provider',
+              region: 'local',
+              maxConcurrent: 100,
+            }),
+          },
+        )
+        if (registerRes.ok) {
+          logger.success(`Inference node registered at ${inferenceEndpoint}`)
+        } else {
+          logger.warn(
+            `Failed to register inference node: ${await registerRes.text()}`,
+          )
+        }
+      } catch (err) {
+        logger.warn(
+          `Could not register inference node: ${(err as Error).message}`,
+        )
+      }
     } else {
       logger.warn('DWS server may not be fully ready')
     }
