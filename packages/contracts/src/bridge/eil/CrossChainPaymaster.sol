@@ -1456,7 +1456,7 @@ contract CrossChainPaymaster is BasePaymaster, ReentrancyGuard {
         )
     {
         ethLiquidity = totalETHLiquidity;
-        entryPointBalance = entryPoint().balanceOf(address(this));
+        entryPointBalance = entryPoint.balanceOf(address(this));
         supportedTokenCount = 0; // Requires off-chain enumeration
         totalGasFees = totalGasFeesCollected;
         oracleSet = address(priceOracle) != address(0);
@@ -1467,7 +1467,7 @@ contract CrossChainPaymaster is BasePaymaster, ReentrancyGuard {
      * @dev Called by owner or XLPs to fund gas sponsorship
      */
     function fundEntryPoint() external payable onlyOwner {
-        entryPoint().depositTo{value: msg.value}(address(this));
+        entryPoint.depositTo{value: msg.value}(address(this));
     }
 
     /**
@@ -1476,7 +1476,7 @@ contract CrossChainPaymaster is BasePaymaster, ReentrancyGuard {
      */
     function refillEntryPoint(uint256 amount) external onlyOwner {
         require(totalETHLiquidity >= amount, "Insufficient pool liquidity");
-        entryPoint().depositTo{value: amount}(address(this));
+        entryPoint.depositTo{value: amount}(address(this));
     }
 
     /// @notice Swap fee in basis points (30 = 0.3%)
