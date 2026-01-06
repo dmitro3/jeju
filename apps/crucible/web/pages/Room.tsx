@@ -1,5 +1,7 @@
-import { useRef, useState, useEffect } from 'react'
+import { useJejuAuth } from '@jejunetwork/auth/react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
+import { useChatCharacters } from '../hooks'
 import {
   useRoom,
   useRoomMessages,
@@ -25,11 +27,19 @@ const ROLE_CONFIG: Record<AgentRole, { label: string; color: string }> = {
   observer: { label: 'Observer', color: 'var(--text-tertiary)' },
 }
 
+function truncateAddress(address: string): string {
+  if (address.length <= 10) return address
+  return `${address.slice(0, 6)}...${address.slice(-4)}`
+}
+
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const [message, setMessage] = useState('')
-  const [agentId] = useState('user-1') // TODO: Get from auth context
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auth state
+  const { walletAddress, userId, authenticated } = useJejuAuth()
+  const senderAgentId = walletAddress ?? userId ?? 'anonymous'
 
   const {
     data: room,
@@ -40,6 +50,41 @@ export default function RoomPage() {
     roomId ?? '',
   )
   const postMessage = usePostRoomMessage()
+  const { data: characters } = useChatCharacters()
+
+  // Create lookup map from agentId to character name
+  const agentNameMap = useMemo(() => {
+    const map = new Map<string, string>()
+    if (characters) {
+      characters.forEach((char, index) => {
+        // Map both the character id and the numeric index
+        map.set(char.id, char.name ?? char.id)
+        map.set(String(index), char.name ?? char.id)
+      })
+    }
+    return map
+  }, [characters])
+
+  const getAgentName = (msgAgentId: string) => {
+    // Check if this message is from the current user
+    if (
+      msgAgentId === senderAgentId ||
+      msgAgentId === walletAddress ||
+      msgAgentId === userId ||
+      msgAgentId === 'user' ||
+      msgAgentId.startsWith('user-')
+    ) {
+      return 'You'
+    }
+    // Check character name map
+    const characterName = agentNameMap.get(msgAgentId)
+    if (characterName) return characterName
+    // Format wallet addresses nicely
+    if (msgAgentId.startsWith('0x') && msgAgentId.length >= 42) {
+      return truncateAddress(msgAgentId)
+    }
+    return `Agent ${msgAgentId}`
+  }
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -54,7 +99,7 @@ export default function RoomPage() {
 
     await postMessage.mutateAsync({
       roomId,
-      agentId,
+      agentId: senderAgentId,
       content: message.trim(),
     })
     setMessage('')
@@ -229,7 +274,14 @@ export default function RoomPage() {
               {/* Message List */}
               {messages &&
                 messages.map((msg) => {
-                  const isUserMessage = msg.agentId === agentId
+                  // Check if this message is from the current user
+                  // (supports both new wallet-based IDs and legacy 'user-*' IDs)
+                  const isUserMessage =
+                    msg.agentId === senderAgentId ||
+                    msg.agentId === walletAddress ||
+                    msg.agentId === userId ||
+                    msg.agentId === 'user' ||
+                    msg.agentId.startsWith('user-')
                   const member = room.members.find(
                     (m) => m.agentId === msg.agentId,
                   )
@@ -266,7 +318,7 @@ export default function RoomPage() {
                               className="text-xs font-bold"
                               style={{ color: roleConfig.color }}
                             >
-                              Agent {msg.agentId}
+                              {getAgentName(msg.agentId)}
                             </span>
                             {member && (
                               <span
@@ -309,7 +361,11 @@ export default function RoomPage() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder={
-                    room.active ? 'Type your message...' : 'Room has ended'
+                    !room.active
+                      ? 'Room has ended'
+                      : !authenticated
+                        ? 'Connect wallet to post as yourself...'
+                        : 'Type your message...'
                   }
                   disabled={!room.active || postMessage.isPending}
                   className="input flex-1"
@@ -399,7 +455,7 @@ export default function RoomPage() {
                           className="text-sm font-medium truncate"
                           style={{ color: 'var(--text-primary)' }}
                         >
-                          Agent {member.agentId}
+                          {getAgentName(member.agentId)}
                         </p>
                         <span
                           className="text-xs px-1.5 py-0.5 rounded inline-block mt-1"

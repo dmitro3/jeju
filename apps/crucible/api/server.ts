@@ -1340,7 +1340,7 @@ app.post('/api/v1/rooms/:roomId/message', async ({ params, body }) => {
   )
   const message = await roomSdk.postMessage(
     BigInt(parsedParams.roomId),
-    BigInt(parsedBody.agentId),
+    parsedBody.agentId,
     parsedBody.content,
     parsedBody.action ?? undefined,
   )

@@ -171,7 +171,7 @@ export const LeaveRoomRequestSchema = z.object({
 export const PostMessageRequestSchema = z.object({
   content: NonEmptyStringSchema,
   action: z.string().optional(),
-  agentId: z.coerce.number().int().positive(),
+  agentId: z.string().min(1), // Supports both numeric IDs and wallet addresses
 })
 
 export const SetPhaseRequestSchema = z.object({
