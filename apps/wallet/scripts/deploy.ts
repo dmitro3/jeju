@@ -78,34 +78,44 @@ async function uploadToIPFS(
   dwsUrl: string,
   filePath: string,
   name: string,
+  maxRetries = 3,
 ): Promise<UploadResult> {
   const content = await readFile(resolve(APP_DIR, filePath))
   const hash = keccak256(content) as `0x${string}`
 
-  const formData = new FormData()
-  formData.append('file', new Blob([content]), name)
-  formData.append('name', name)
+  let lastError: Error | null = null
 
-  const response = await fetch(`${dwsUrl}/storage/upload`, {
-    method: 'POST',
-    body: formData,
-  })
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const formData = new FormData()
+    formData.append('file', new Blob([content]), name)
+    formData.append('name', name)
 
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${await response.text()}`)
+    const response = await fetch(`${dwsUrl}/storage/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (response.ok) {
+      const rawJson: unknown = await response.json()
+      const parsed = IPFSUploadResponseSchema.safeParse(rawJson)
+      if (!parsed.success) {
+        throw new Error(`Invalid upload response: ${parsed.error.message}`)
+      }
+      return {
+        cid: parsed.data.cid,
+        hash,
+        size: content.length,
+      }
+    }
+
+    lastError = new Error(`Upload failed: ${await response.text()}`)
+    if (attempt < maxRetries) {
+      console.log(`   Retry ${attempt}/${maxRetries} for ${name}...`)
+      await new Promise((r) => setTimeout(r, 1000 * attempt))
+    }
   }
 
-  const rawJson: unknown = await response.json()
-  const parsed = IPFSUploadResponseSchema.safeParse(rawJson)
-  if (!parsed.success) {
-    throw new Error(`Invalid upload response: ${parsed.error.message}`)
-  }
-
-  return {
-    cid: parsed.data.cid,
-    hash,
-    size: content.length,
-  }
+  throw lastError ?? new Error('Upload failed after retries')
 }
 
 async function uploadDirectory(

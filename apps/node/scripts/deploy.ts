@@ -78,34 +78,44 @@ async function uploadToIPFS(
   dwsUrl: string,
   filePath: string,
   name: string,
+  maxRetries = 3,
 ): Promise<UploadResult> {
   const content = await readFile(resolve(APP_DIR, filePath))
   const hash = keccak256(content) as `0x${string}`
 
-  const formData = new FormData()
-  formData.append('file', new Blob([content]), name)
-  formData.append('name', name)
+  let lastError: Error | null = null
 
-  const response = await fetch(`${dwsUrl}/storage/upload`, {
-    method: 'POST',
-    body: formData,
-  })
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const formData = new FormData()
+    formData.append('file', new Blob([content]), name)
+    formData.append('name', name)
 
-  if (!response.ok) {
-    throw new Error(`Upload failed: ${await response.text()}`)
+    const response = await fetch(`${dwsUrl}/storage/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (response.ok) {
+      const rawJson: unknown = await response.json()
+      const parsed = IPFSUploadResponseSchema.safeParse(rawJson)
+      if (!parsed.success) {
+        throw new Error(`Invalid upload response: ${parsed.error.message}`)
+      }
+      return {
+        cid: parsed.data.cid,
+        hash,
+        size: content.length,
+      }
+    }
+
+    lastError = new Error(`Upload failed: ${await response.text()}`)
+    if (attempt < maxRetries) {
+      console.log(`   Retry ${attempt}/${maxRetries} for ${name}...`)
+      await new Promise((r) => setTimeout(r, 1000 * attempt))
+    }
   }
 
-  const rawJson: unknown = await response.json()
-  const parsed = IPFSUploadResponseSchema.safeParse(rawJson)
-  if (!parsed.success) {
-    throw new Error(`Invalid upload response: ${parsed.error.message}`)
-  }
-
-  return {
-    cid: parsed.data.cid,
-    hash,
-    size: content.length,
-  }
+  throw lastError ?? new Error('Upload failed after retries')
 }
 
 async function uploadDirectory(
@@ -208,23 +218,36 @@ async function deploy(): Promise<void> {
 
   await ensureBuild()
 
-  // Upload static assets
+  // Upload static assets (frontend app)
   console.log('\nUploading static assets...')
   const staticAssets = await uploadDirectory(config.dwsUrl, './dist/static')
   console.log(`   Total: ${staticAssets.size} files\n`)
 
+  // Upload lander assets
+  console.log('Uploading lander assets...')
+  const landerAssets = await uploadDirectory(config.dwsUrl, './dist/lander')
+  console.log(`   Total: ${landerAssets.size} files\n`)
+
+  // Merge assets for CDN configuration
+  const allAssets = new Map([...staticAssets, ...landerAssets])
+
   // Setup CDN
   console.log('Configuring CDN...')
-  await setupCDN(config, staticAssets)
+  await setupCDN(config, allAssets)
 
-  const indexCid = staticAssets.get('index.html')?.cid
+  const appIndexCid = staticAssets.get('index.html')?.cid
+  const landerIndexCid = landerAssets.get('index.html')?.cid
   console.log('')
   console.log('╔════════════════════════════════════════════════════════════╗')
   console.log('║                  Deployment Complete                        ║')
   console.log('╠════════════════════════════════════════════════════════════╣')
-  console.log(`║  Frontend: https://node.jejunetwork.org                     ║`)
+  console.log(`║  Lander:   https://node.jejunetwork.org                     ║`)
+  console.log(`║  App:      https://app.node.jejunetwork.org                 ║`)
   console.log(
-    `║  IPFS:     ipfs://${indexCid?.slice(0, 20)}...                  ║`,
+    `║  Lander:   ipfs://${landerIndexCid?.slice(0, 20)}...                  ║`,
+  )
+  console.log(
+    `║  App:      ipfs://${appIndexCid?.slice(0, 20)}...                  ║`,
   )
   console.log('╚════════════════════════════════════════════════════════════╝')
 }

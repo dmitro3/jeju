@@ -90,11 +90,12 @@ jobs:
             FOUND=1
           fi
           
-          # Check for AWS keys
+          # Check for AWS keys (exclude test files and well-known example keys)
           if grep -rE "AKIA[0-9A-Z]{16}" \
             --include="*.ts" --include="*.js" --include="*.json" --include="*.env*" \
-            --exclude-dir=node_modules --exclude-dir=.git \
-            . 2>/dev/null; then
+            --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=test --exclude-dir=tests \
+            --exclude="*.test.ts" --exclude="*.spec.ts" --exclude="*mock*" \
+            . 2>/dev/null | grep -v "AKIAIOSFODNN7EXAMPLE"; then
             echo "Found potential AWS key"
             FOUND=1
           fi

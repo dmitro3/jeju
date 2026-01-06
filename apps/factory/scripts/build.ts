@@ -20,6 +20,7 @@ import type { BunPlugin } from 'bun'
 const DIST_DIR = './dist'
 const CLIENT_DIR = `${DIST_DIR}/client`
 const API_DIR = `${DIST_DIR}/api`
+const WORKER_DIR = `${DIST_DIR}/worker`
 
 const network = getCurrentNetwork()
 
@@ -266,7 +267,7 @@ async function buildFrontend(): Promise<void> {
 }
 
 async function buildApi(): Promise<void> {
-  console.log('Building API...')
+  console.log('Building API (server)...')
 
   await mkdir(API_DIR, { recursive: true })
 
@@ -298,6 +299,73 @@ async function buildApi(): Promise<void> {
   console.log(`  API: ${API_DIR}/`)
 }
 
+async function buildWorker(): Promise<void> {
+  console.log('Building API (worker)...')
+
+  await mkdir(WORKER_DIR, { recursive: true })
+
+  const result = await Bun.build({
+    entrypoints: ['./api/worker.ts'],
+    outdir: WORKER_DIR,
+    target: 'bun',
+    minify: true,
+    sourcemap: 'external',
+    drop: ['debugger'],
+    external: [
+      'bun:sqlite',
+      'child_process',
+      'node:child_process',
+      'node:fs',
+      'node:path',
+      'node:crypto',
+    ],
+    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+  })
+
+  if (!result.success) {
+    console.error('Worker build failed:')
+    for (const log of result.logs) console.error(log)
+    throw new Error('Worker build failed')
+  }
+
+  reportBundleSizes(result, 'Factory Worker')
+
+  // Create deployment metadata
+  let gitCommit = 'unknown'
+  let gitBranch = 'unknown'
+  try {
+    const commitResult = Bun.spawnSync(['git', 'rev-parse', '--short', 'HEAD'])
+    if (commitResult.success)
+      gitCommit = new TextDecoder().decode(commitResult.stdout).trim()
+    const branchResult = Bun.spawnSync([
+      'git',
+      'rev-parse',
+      '--abbrev-ref',
+      'HEAD',
+    ])
+    if (branchResult.success)
+      gitBranch = new TextDecoder().decode(branchResult.stdout).trim()
+  } catch {
+    /* Git not available */
+  }
+
+  const metadata = {
+    name: 'factory-api',
+    version: '1.0.0',
+    entrypoint: 'worker.js',
+    compatibilityDate: '2025-06-01',
+    buildTime: new Date().toISOString(),
+    git: { commit: gitCommit, branch: gitBranch },
+    runtime: 'bun',
+  }
+
+  await Bun.write(
+    `${WORKER_DIR}/metadata.json`,
+    JSON.stringify(metadata, null, 2),
+  )
+  console.log(`  Worker: ${WORKER_DIR}/`)
+}
+
 async function build(): Promise<void> {
   console.log('Building Factory for production...\n')
 
@@ -305,7 +373,7 @@ async function build(): Promise<void> {
     await rm(DIST_DIR, { recursive: true })
   }
 
-  await Promise.all([buildFrontend(), buildApi()])
+  await Promise.all([buildFrontend(), buildApi(), buildWorker()])
 
   console.log('\nBuild complete.')
   process.exit(0)

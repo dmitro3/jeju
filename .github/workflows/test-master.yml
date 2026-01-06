@@ -32,6 +32,9 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Install dependencies
         run: bun install
 
@@ -93,11 +96,16 @@ jobs:
     needs: [config-and-types]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install dependencies
         run: bun install
@@ -127,11 +135,16 @@ jobs:
     needs: [config-and-types]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
 
       - name: Install Helm
         uses: azure/setup-helm@v3

@@ -214,7 +214,7 @@ async function deploy(): Promise<DeployResult> {
 
   // Upload worker
   console.log('\nUploading worker...')
-  const workerPath = 'dist/api/server.js'
+  const workerPath = 'dist/worker/worker.js'
 
   if (!existsSync(workerPath)) {
     throw new Error(`Worker not built: ${workerPath} not found`)
@@ -222,7 +222,7 @@ async function deploy(): Promise<DeployResult> {
 
   // Upload worker using multipart form data
   const workerFormData = new FormData()
-  workerFormData.append('file', Bun.file(workerPath), 'factory-worker.js')
+  workerFormData.append('file', Bun.file(workerPath), 'worker.js')
   workerFormData.append('tier', 'system')
   workerFormData.append('backends', 'local,arweave')
 
@@ -277,7 +277,7 @@ async function deploy(): Promise<DeployResult> {
       name: 'factory-api',
       codeCid: workerCid,
       runtime: 'bun',
-      handler: 'server.js',
+      handler: 'worker.js:default',
       memory: 512,
       timeout: 30000,
     }),
