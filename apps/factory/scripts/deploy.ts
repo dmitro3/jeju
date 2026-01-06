@@ -242,13 +242,11 @@ async function deploy(): Promise<DeployResult> {
   ).cid
   console.log(`  Worker CID: ${workerCid}`)
 
-  // Deploy worker to DWS using /workers (Bun runtime)
-  console.log('\nDeploying to DWS Workers...')
+  // Verify worker code is accessible from storage
+  console.log('\nVerifying worker in storage...')
   console.log(`  Deployer: ${deployerAddress}`)
-  console.log(`  Using pre-uploaded code CID: ${workerCid}`)
+  console.log(`  Worker CID: ${workerCid}`)
 
-  // For large bundles, we need to use a reference deployment approach
-  // First, verify the code is accessible from storage
   const verifyResponse = await fetch(
     `${DWS_URL}/storage/download/${workerCid}`,
     {
@@ -263,61 +261,9 @@ async function deploy(): Promise<DeployResult> {
   }
   console.log('  Worker code verified in storage')
 
-  // Deploy worker using the workers API with pre-uploaded CID
-  const deployResponse = await fetch(`${DWS_URL}/workers/`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-jeju-address': deployerAddress,
-    },
-    body: JSON.stringify({
-      name: 'factory-api',
-      codeCid: workerCid,
-      runtime: 'bun',
-      handler: 'worker.js:default',
-      memory: 512,
-      timeout: 30000,
-    }),
-  })
-
-  // Handle deploy response or fall back to app registration
-  let deployResult:
-    | { functionId: string; codeCid: string; status: string }
-    | undefined
-
-  if (!deployResponse.ok) {
-    const errorText = await deployResponse.text()
-    console.log(`  Worker deploy endpoint not available: ${errorText}`)
-  } else {
-    const deployJson: unknown = await deployResponse.json()
-    const WorkerDeployResponseSchema = z.object({
-      functionId: z.string().optional(),
-      workerId: z.string().optional(),
-      name: z.string().optional(),
-      codeCid: z.string().optional(),
-      status: z.string(),
-    })
-    const parsedResult = parseResponse(
-      WorkerDeployResponseSchema,
-      deployJson,
-      'deploy response',
-    )
-    deployResult = {
-      functionId: parsedResult.functionId ?? parsedResult.workerId ?? 'unknown',
-      codeCid: parsedResult.codeCid ?? workerCid,
-      status: parsedResult.status,
-    }
-    console.log(`  Worker ID: ${deployResult.functionId}`)
-    console.log(`  Code CID: ${deployResult.codeCid}`)
-    console.log(`  Status: ${deployResult.status}`)
-  }
-
-  // Determine backend endpoint based on deployment result
-  // If worker deployment succeeded, use the worker URL
-  // Otherwise, the backend will need to be deployed separately
-  const backendEndpoint = deployResult
-    ? `${DWS_URL}/workers/${deployResult.functionId}`
-    : null
+  // Use CID directly as the workerId - DWS will deploy from CID on first request
+  // This uses the deployFromCid function which sets handler: 'fetch' correctly
+  const backendEndpoint = `${DWS_URL}/workers/${workerCid}/http`
 
   // Always register the app with the DWS app router
   console.log('\nRegistering app with DWS...')
