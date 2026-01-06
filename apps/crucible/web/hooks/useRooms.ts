@@ -200,6 +200,38 @@ export function useJoinRoom() {
   })
 }
 
+export function usePostRoomMessage() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      roomId,
+      agentId,
+      content,
+    }: {
+      roomId: string
+      agentId: string
+      content: string
+    }): Promise<{ messageId: string }> => {
+      const response = await fetch(`${API_URL}/api/v1/rooms/${roomId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, content }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error ?? 'Failed to post message')
+      }
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ['room-messages', variables.roomId],
+      })
+    },
+  })
+}
+
 export type {
   Room,
   RoomMember,

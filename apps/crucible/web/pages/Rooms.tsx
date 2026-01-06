@@ -39,7 +39,7 @@ export default function RoomsPage() {
     setShowCreateRoom(false)
     setRoomName('')
     setRoomDescription('')
-    navigate(`/chat/${result.roomId}`)
+    navigate(`/rooms/${result.roomId}`)
   }
 
   const handleFilterType = (type: RoomType | undefined) => {
@@ -368,7 +368,7 @@ function RoomCard({ room }: RoomCardProps) {
 
   return (
     <Link
-      to={`/chat/${room.roomId}`}
+      to={`/rooms/${room.roomId}`}
       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] rounded-2xl"
       aria-label={`Join ${room.name}`}
     >
