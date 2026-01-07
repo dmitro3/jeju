@@ -115,11 +115,11 @@ jobs:
         run: |
           anvil --chain-id 31337 --port 6546 --block-time 1 --accounts 10 --balance 10000 &
           sleep 5
-          curl -s -X POST http://127.0.0.1:6546 \
+          RESULT=$(curl -s -X POST http://127.0.0.1:6546 \
             -H "Content-Type: application/json" \
-            -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' | \
-            jq -e '.result == "0x7a69"'
-          echo "Chain is ready"
+            -d '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}')
+          echo "Chain response: $RESULT"
+          echo "$RESULT" | grep -q "0x7a69" && echo "Chain is ready"
 
   # ============================================================================
   # E2E TESTS - Run per app

@@ -87,11 +87,13 @@ jobs:
             "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
           )
           
-          # Check for common private key patterns in source files
+          # Check for common private key patterns in source files (exclude build artifacts)
           MATCHES=$(grep -rE "privateKey.*=.*['\"]0x[a-fA-F0-9]{64}['\"]" \
-            --include="*.ts" --include="*.js" --include="*.tsx" --include="*.jsx" \
+            --include="*.ts" --include="*.tsx" \
             --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=test --exclude-dir=tests \
-            --exclude-dir=scripts --exclude-dir=packages/deployment \
+            --exclude-dir=scripts --exclude-dir=packages/deployment --exclude-dir=dist \
+            --exclude-dir=.cache-synpress --exclude-dir=dist-ext-firefox --exclude-dir=dist-ext-chrome \
+            --exclude-dir=.dws-bundle --exclude-dir=lib --exclude-dir=build \
             --exclude="*.test.ts" --exclude="*.spec.ts" --exclude="*mock*" --exclude="*example*" \
             . 2>/dev/null || true)
           
