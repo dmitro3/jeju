@@ -1,4 +1,5 @@
 import type { AgentCharacter } from '../../lib/types'
+import { baseWatcherCharacter } from './base-watcher'
 import { blueTeamCharacter } from './blue-team'
 import {
   contractsAuditorCharacter,
@@ -37,6 +38,7 @@ export const characters: Record<string, AgentCharacter> = {
   'contracts-auditor': contractsAuditorCharacter,
   'security-analyst': securityAnalystCharacter,
   'test-agent': testAgentCharacter,
+  'base-watcher': baseWatcherCharacter,
 }
 
 export const RED_TEAM_CHARACTERS = [
@@ -54,6 +56,8 @@ export const BLUE_TEAM_CHARACTERS = [
   'contracts-auditor',
 ] as const
 
+export const WATCHER_CHARACTERS = ['base-watcher'] as const
+
 export async function loadBlueTeamCharacters(): Promise<AgentCharacter[]> {
   return BLUE_TEAM_CHARACTERS.map((id) => characters[id]).filter(
     (c): c is AgentCharacter => c !== undefined,
@@ -62,6 +66,12 @@ export async function loadBlueTeamCharacters(): Promise<AgentCharacter[]> {
 
 export async function loadRedTeamCharacters(): Promise<AgentCharacter[]> {
   return RED_TEAM_CHARACTERS.map((id) => characters[id]).filter(
+    (c): c is AgentCharacter => c !== undefined,
+  )
+}
+
+export async function loadWatcherCharacters(): Promise<AgentCharacter[]> {
+  return WATCHER_CHARACTERS.map((id) => characters[id]).filter(
     (c): c is AgentCharacter => c !== undefined,
   )
 }
@@ -75,6 +85,7 @@ export function listCharacters(): string[] {
   return Object.keys(characters)
 }
 
+export { baseWatcherCharacter } from './base-watcher'
 export { blueTeamCharacter } from './blue-team'
 export { communityManagerCharacter } from './community-manager'
 export { devRelCharacter } from './devrel'

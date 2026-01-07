@@ -106,6 +106,7 @@ import {
 // Extended Actions - Contract Fetching & Analysis
 import { analyzeContractAction } from './actions/analyze-contract'
 import { auditContractAction } from './actions/audit-contract'
+import { pollBlockscoutAction } from './actions/blockscout'
 import { fetchContractAction } from './actions/contract'
 import { retrieveFileAction, uploadFileAction } from './actions/storage'
 // Extended Actions - Storage
@@ -262,6 +263,7 @@ export const jejuPlugin: Plugin = {
     fetchContractAction,
     analyzeContractAction,
     auditContractAction,
+    pollBlockscoutAction,
   ],
 }
 

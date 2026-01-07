@@ -7,7 +7,7 @@ import {
 } from '@jejunetwork/training'
 import { Elysia } from 'elysia'
 import { type AutonomousAgentRunner, createAgentRunner } from '../autonomous'
-import { loadBlueTeamCharacters, loadRedTeamCharacters } from '../characters'
+import { loadBlueTeamCharacters, loadRedTeamCharacters, loadWatcherCharacters } from '../characters'
 import { createLogger } from '../sdk/logger'
 import { getCronSecret } from '../sdk/secrets'
 
@@ -131,11 +131,27 @@ async function getAgentRunner(): Promise<AutonomousAgentRunner> {
     })
   }
 
+  // Register watcher agents (contract monitoring)
+  const watcherCharacters = await loadWatcherCharacters()
+  for (const character of watcherCharacters) {
+    await agentRunner.registerAgent({
+      agentId: `watcher-${character.name.toLowerCase().replace(/\s+/g, '-')}`,
+      character,
+      tickIntervalMs: 120000, // 2 minutes
+      capabilities: { ...baseCapabilities, canTrade: false },
+      maxActionsPerTick: 2, // Poll + post audit request
+      enabled: true,
+      archetype: 'watcher',
+      recordTrajectories: true,
+    })
+  }
+
   await agentRunner.start()
 
   log.info('Agent runner initialized', {
     blueTeamCount: blueTeamCharacters.length,
     redTeamCount: redTeamCharacters.length,
+    watcherCount: watcherCharacters.length,
   })
 
   return agentRunner

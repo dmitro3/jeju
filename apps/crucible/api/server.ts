@@ -1591,6 +1591,7 @@ if (crucibleConfig.autonomousEnabled) {
             'blue-team',
             'moderator',
             'community-manager',
+            'base-watcher',
           ]
 
           for (const agentId of autoStartAgents) {
