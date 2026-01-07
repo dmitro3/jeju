@@ -2,6 +2,12 @@
  * Indexer initialization and contract registry
  */
 
+// Mute verbose squid processor logs in dev (set before any subsquid imports)
+// Only show warnings and errors, not INFO level block processing logs
+if (!process.env.SQD_LOG_LEVEL) {
+  process.env.SQD_LOG_LEVEL = 'WARN'
+}
+
 import 'reflect-metadata'
 // Import ALL models via the index file which handles circular dependency ordering
 // The index.ts imports all models as side effects first, then exports them

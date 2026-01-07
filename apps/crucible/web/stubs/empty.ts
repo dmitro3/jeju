@@ -1,49 +1,27 @@
-// Empty stub for server-only modules in browser builds
-// Provides minimal exports to satisfy imports
+/**
+ * Empty stub for server-only modules in browser builds.
+ * Provides minimal exports to prevent import errors.
+ *
+ * Used by the build process to replace server-only packages:
+ * - @jejunetwork/kms
+ * - @jejunetwork/db
+ * - @jejunetwork/deployment
+ * - @jejunetwork/messaging
+ * - @jejunetwork/contracts
+ * - elysia / @elysiajs/*
+ * - ioredis
+ */
 
-// Elysia stubs
-export class Elysia {
-  use() {
-    return this
-  }
-  get() {
-    return this
-  }
-  post() {
-    return this
-  }
-  put() {
-    return this
-  }
-  delete() {
-    return this
-  }
-  listen() {
-    return this
-  }
-  onError() {
-    return this
-  }
-}
+// Export empty object for any default import
+export default {}
 
-// @elysiajs/cors stub
-export function cors() {
-  return {}
-}
+// Export a no-op function for any named function import
+export function noop(): void {}
 
-// @jejunetwork/db stubs
-export function getSQLit() {
+// Common database stub
+export function getSQLit(): null {
   return null
 }
 
-export type SQLitClient = object
-
-// Generic stubs for any other imports
-export function createHealthMiddleware() {
-  return {}
-}
-
-export const healthMiddleware = {}
-
-// Default export for module compatibility
-export default {}
+// Common type stubs
+export type SQLitClient = never

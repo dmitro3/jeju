@@ -288,14 +288,14 @@ export function createDatabaseRoutes(backend: BackendManager) {
         },
       )
 
-      // Get PostgreSQL instance by name
-      .get('/postgres/:name', async ({ params, headers }) => {
+      // Get PostgreSQL instance by ID/name
+      .get('/postgres/:instanceId', async ({ params, headers }) => {
         const owner = headers['x-wallet-address'] as Address
         if (!owner) {
           return { error: 'Unauthorized', instance: null }
         }
 
-        const instance = await getInstance(params.name, owner)
+        const instance = await getInstance(params.instanceId, owner)
         if (!instance) {
           return { error: 'Instance not found', instance: null }
         }
