@@ -82,7 +82,7 @@ const MODEL_PATTERNS: Array<{ pattern: RegExp; provider: string }> = [
   { pattern: /^grok-/i, provider: 'xai' },
   { pattern: /^command-/i, provider: 'cohere' },
   { pattern: /^jamba-/i, provider: 'ai21' },
-  { pattern: /^llama-.*-versatile|^mixtral-/i, provider: 'groq' },
+  { pattern: /^llama-|^mixtral-/i, provider: 'groq' },
   { pattern: /^accounts\/fireworks\//i, provider: 'fireworks' },
   { pattern: /^mistral-|^codestral-/i, provider: 'mistral' },
   { pattern: /^deepseek-/i, provider: 'deepseek' },
