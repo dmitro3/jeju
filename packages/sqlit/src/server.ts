@@ -304,6 +304,7 @@ export async function createSQLitServer(config: SQLitServerConfig) {
       {
         body: t.Object({
           name: t.String(),
+          databaseId: t.Optional(t.String()),
           encryptionMode: t.Optional(
             t.Union([
               t.Literal('none'),

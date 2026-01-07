@@ -36,6 +36,7 @@ import { researchRoutes } from './routes/research'
 import { rlaifRoutes } from './routes/rlaif'
 import { safeRoutes } from './routes/safe'
 import { triggersRoutes } from './routes/triggers'
+import { appsRoutes } from './routes/apps'
 import { securityMiddleware } from './security'
 import {
   blockchain,
@@ -124,6 +125,7 @@ const app = new Elysia()
   .use(rlaifRoutes)
   .use(bugBountyRoutes)
   .use(safeRoutes)
+  .use(appsRoutes)
   // Root route - serve SPA if static files exist, otherwise return API info
   .get('/', () => {
     // If static files exist, serve index.html for the root

@@ -229,7 +229,8 @@ export class SQLitNode {
   async createDatabase(
     request: CreateDatabaseRequest,
   ): Promise<CreateDatabaseResponse> {
-    const databaseId = this.generateDatabaseId(request.name)
+    // Use provided databaseId or generate one
+    const databaseId = request.databaseId ?? this.generateDatabaseId(request.name)
     const dbPath = join(this.config.dataDir, `${databaseId}.db`)
 
     if (existsSync(dbPath)) {

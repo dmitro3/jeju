@@ -1,2 +1,49 @@
 // Empty stub for server-only modules in browser builds
-export {}
+// Provides minimal exports to satisfy imports
+
+// Elysia stubs
+export class Elysia {
+  use() {
+    return this
+  }
+  get() {
+    return this
+  }
+  post() {
+    return this
+  }
+  put() {
+    return this
+  }
+  delete() {
+    return this
+  }
+  listen() {
+    return this
+  }
+  onError() {
+    return this
+  }
+}
+
+// @elysiajs/cors stub
+export function cors() {
+  return {}
+}
+
+// @jejunetwork/db stubs
+export function getSQLit() {
+  return null
+}
+
+export type SQLitClient = object
+
+// Generic stubs for any other imports
+export function createHealthMiddleware() {
+  return {}
+}
+
+export const healthMiddleware = {}
+
+// Default export for module compatibility
+export default {}
