@@ -241,10 +241,7 @@ async function deployAppsOnchain(
     if (result.status === 'fulfilled' && result.value.success) {
       successCount++
     } else {
-      const name =
-        result.status === 'fulfilled'
-          ? result.value.name
-          : 'unknown'
+      const name = result.status === 'fulfilled' ? result.value.name : 'unknown'
       const error =
         result.status === 'fulfilled'
           ? result.value.error
@@ -298,7 +295,11 @@ async function deployAppsOnchain(
           },
           stdio: 'pipe',
         })
-        runningServices.push({ name: 'OAuth3', port: 4200, process: oauth3Proc })
+        runningServices.push({
+          name: 'OAuth3',
+          port: 4200,
+          process: oauth3Proc,
+        })
         await new Promise((r) => setTimeout(r, 1000))
         logger.success('OAuth3 gateway running on port 4200')
       }

@@ -41,7 +41,7 @@ export interface IndexerConfig {
   logLevel: string
   corsOrigins: string[]
 
-  // Indexer mode: 'postgres' | 'sqlit' | 'dws'
+  // Indexer mode: 'dws' (default, permissionless) | 'postgres' | 'sqlit'
   indexerMode: string
 
   // DWS database provisioning
@@ -101,8 +101,8 @@ const { config, configure: setIndexerConfig } = createAppConfig<IndexerConfig>({
   logLevel: getEnvVar('LOG_LEVEL') ?? 'info',
   corsOrigins: (getEnvVar('CORS_ORIGINS') ?? '').split(',').filter(Boolean),
 
-  // Indexer mode: 'postgres' | 'sqlit' | 'dws'
-  indexerMode: getEnvVar('INDEXER_MODE') ?? 'sqlit',
+  // Indexer mode: 'dws' (default) | 'postgres' | 'sqlit'
+  indexerMode: getEnvVar('INDEXER_MODE') ?? 'dws',
 
   // DWS database provisioning
   dwsUrl: getDwsUrl(),
