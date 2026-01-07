@@ -82,12 +82,19 @@ const MODEL_PATTERNS: Array<{ pattern: RegExp; provider: string }> = [
   { pattern: /^grok-/i, provider: 'xai' },
   { pattern: /^command-/i, provider: 'cohere' },
   { pattern: /^jamba-/i, provider: 'ai21' },
-  { pattern: /^llama-.*-versatile|^mixtral-/i, provider: 'groq' },
+  { pattern: /^llama-.*-versatile|^mixtral-|^qwen/i, provider: 'groq' },
   { pattern: /^accounts\/fireworks\//i, provider: 'fireworks' },
   { pattern: /^mistral-|^codestral-/i, provider: 'mistral' },
   { pattern: /^deepseek-/i, provider: 'deepseek' },
   { pattern: /^pplx-/i, provider: 'perplexity' },
 ]
+
+// Provider aliases - map vendor model prefixes to their hosting providers
+const PROVIDER_ALIASES: Record<string, string> = {
+  qwen: 'groq', // Qwen models hosted on Groq
+  meta: 'groq', // Meta Llama models hosted on Groq
+  llama: 'groq', // Llama models hosted on Groq
+}
 
 const API_KEY_VARS: Record<string, string> = {
   openai: 'OPENAI_API_KEY',
@@ -155,10 +162,16 @@ class LocalInferenceServer {
     model: string,
     explicitProvider?: string,
   ): { provider: string; model: string } {
-    if (explicitProvider) return { provider: explicitProvider, model }
+    if (explicitProvider) {
+      // Resolve alias if the explicit provider is an alias
+      const resolved = PROVIDER_ALIASES[explicitProvider] ?? explicitProvider
+      return { provider: resolved, model }
+    }
 
     if (model.includes('/') && !model.startsWith('accounts/')) {
-      const [provider, ...rest] = model.split('/')
+      const [providerPrefix, ...rest] = model.split('/')
+      // Resolve alias - e.g., qwen/qwen3-32b -> provider: groq, model: qwen3-32b
+      const provider = PROVIDER_ALIASES[providerPrefix] ?? providerPrefix
       return { provider, model: rest.join('/') }
     }
 

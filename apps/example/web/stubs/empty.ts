@@ -1,56 +1,33 @@
-// Empty stub for server-only modules in browser builds
+/**
+ * Empty stub for server-only modules in browser builds.
+ * Provides minimal exports to prevent import errors.
+ *
+ * Used by the build process to replace server-only packages:
+ * - pino / pino-pretty
+ * - @jejunetwork/contracts
+ * - @jejunetwork/db
+ * - @jejunetwork/kms
+ * - ioredis
+ */
 
-// Pino stubs
-export function pino() {
-  return {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-    debug: () => {},
-    trace: () => {},
-    fatal: () => {},
-    child: () => pino(),
-  }
+// Pino-compatible logger stub
+const noopLogger = {
+  info: (): void => {},
+  warn: (): void => {},
+  error: (): void => {},
+  debug: (): void => {},
+  trace: (): void => {},
+  fatal: (): void => {},
+  child: (): typeof noopLogger => noopLogger,
+}
+
+export function pino(): typeof noopLogger {
+  return noopLogger
 }
 export default pino
 
-// Contract stubs
-export async function readContract() {
+// Database stub
+export function getSQLit(): null {
   return null
 }
-export async function writeContract() {
-  return null
-}
-export function getContractAddress() {
-  return '0x0000000000000000000000000000000000000000'
-}
-export const deployments = {}
-export const banManagerAbi = []
-
-// DB stubs
-export function getSQLit() {
-  return null
-}
-export type SQLitClient = object
-
-// KMS stubs - comprehensive list
-export function getKMSClient() { return null }
-export function getSecureSigningService() { return null }
-export function createKMSClient() { return null }
-export function signWithKMS() { return Promise.resolve(null) }
-export function createMPCClient() { return null }
-export function getKMS() { return null }
-export function resetKMS() { return null }
-export function createLogger() { return pino() }
-export const kmsLogger = pino()
-export class KMSService {}
-export function getMPCClient() { return null }
-export function createSecureSigningService() { return null }
-export function deriveKey() { return Promise.resolve(null) }
-export function encrypt() { return Promise.resolve(null) }
-export function decrypt() { return Promise.resolve(null) }
-export function sign() { return Promise.resolve(null) }
-export function verify() { return Promise.resolve(false) }
-
-// Default export
-export const _ = {}
+export type SQLitClient = never

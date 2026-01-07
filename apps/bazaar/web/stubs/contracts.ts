@@ -7,11 +7,24 @@
 
 import { type Address, isAddress } from 'viem'
 
-// Re-export isValidAddress (alias for viem's isAddress)
-export const isValidAddress = isAddress
+export const ZERO_ADDRESS: Address =
+  '0x0000000000000000000000000000000000000000'
 
-export const ZERO_ADDRESS =
-  '0x0000000000000000000000000000000000000000' as const
+/**
+ * Validates that an address is a proper Ethereum address.
+ * Returns false for null, undefined, empty, and ZERO_ADDRESS.
+ * Matches the behavior of @jejunetwork/types isValidAddress.
+ */
+export function isValidAddress(
+  address: Address | string | undefined | null,
+): address is Address {
+  return (
+    typeof address === 'string' &&
+    address.length === 42 &&
+    address !== ZERO_ADDRESS &&
+    isAddress(address)
+  )
+}
 
 // Chain IDs
 export const CHAIN_IDS = {
@@ -36,12 +49,12 @@ export interface SimpleCollectibleDeployment {
 }
 
 export interface UniswapV4Deployment {
-  poolManager: string
-  weth: string
-  swapRouter?: string
-  positionManager?: string
-  quoterV4?: string
-  stateView?: string
+  poolManager: Address
+  weth: Address
+  swapRouter?: Address
+  positionManager?: Address
+  quoterV4?: Address
+  stateView?: Address
 }
 
 // Window config for browser deployment data
@@ -96,9 +109,9 @@ export function getUniswapV4(_chainId: ChainId): UniswapV4Deployment {
   return {
     poolManager: config.poolManager ?? ZERO_ADDRESS,
     weth: config.weth ?? ZERO_ADDRESS,
-    swapRouter: config.swapRouter,
-    positionManager: config.positionManager,
-    quoterV4: config.quoterV4,
-    stateView: config.stateView,
+    swapRouter: config.swapRouter ?? undefined,
+    positionManager: config.positionManager ?? undefined,
+    quoterV4: config.quoterV4 ?? undefined,
+    stateView: config.stateView ?? undefined,
   }
 }

@@ -445,11 +445,13 @@ export class LocalJNSGateway {
     ]
 
     // Common build output directories (order matters - more specific first)
+    // Also check public folder for dev mode when assets aren't copied to dist
     const buildDirs = [
       'dist', // Most common
       'dist/web',
       'dist/client',
       'dist/static',
+      'public', // Dev mode - serve directly from public folder
       'docs/dist',
       'build',
       'out',
