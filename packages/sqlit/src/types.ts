@@ -336,6 +336,8 @@ export interface CreateDatabaseRequest {
   encryptionMode: DatabaseEncryptionMode
   replication: Partial<ReplicationConfig>
   schema?: string
+  /** Optional custom database ID. If not provided, one will be generated. */
+  databaseId?: string
 }
 
 export interface CreateDatabaseResponse {
