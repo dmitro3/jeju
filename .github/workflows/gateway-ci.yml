@@ -49,7 +49,7 @@ jobs:
         run: bun install
 
       - name: Run unit tests
-        run: bun test tests/ || true
+        run: bun test tests/unit/ || true
 
   security-audit:
     name: Security Audit
