@@ -496,12 +496,18 @@ export class CrucibleDatabase {
     return this.query<Message>(sql, values)
   }
 
-  async getRecentMessages(options: { limit?: number } = {}): Promise<Message[]> {
+  async getRecentMessages(
+    options: { limit?: number } = {},
+  ): Promise<Message[]> {
     const limit = options.limit ?? 10
     return this.query<Message>(
       `SELECT * FROM messages ORDER BY created_at DESC LIMIT ?`,
       [limit],
     )
+  }
+
+  async clearMessages(roomId: string): Promise<void> {
+    await this.exec(`DELETE FROM messages WHERE room_id = ?`, [roomId])
   }
 
   // ============================================

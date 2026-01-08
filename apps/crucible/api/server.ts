@@ -61,6 +61,7 @@ import { createLogger } from "./sdk/logger";
 import { createRoomSDK } from "./sdk/room";
 import { getApiKey, getPrivateKey } from "./sdk/secrets";
 import { createStorage } from "./sdk/storage";
+import { getDatabase } from "./sdk/database";
 
 const log = createLogger("Server");
 
@@ -757,12 +758,14 @@ app.onAfterHandle(({ set }) => {
 });
 
 // Global error handler - prevents stack trace leakage in production
-app.onError(({ error, set }) => {
+app.onError(({ error, set, request }) => {
   // Log full error for debugging
   const errorObj = error instanceof Error ? error : new Error(String(error));
   const errorLog: Record<string, string> = {
     message: errorObj.message,
     name: errorObj.name,
+    path: new URL(request.url).pathname,
+    method: request.method,
   };
   if (NETWORK === "localnet" && errorObj.stack) {
     errorLog.stack = errorObj.stack;
@@ -1219,18 +1222,61 @@ app.get("/api/v1/rooms", async ({ query }) => {
     offset: query.offset ? parseInt(query.offset as string, 10) : 0,
   };
 
+  // Fetch on-chain rooms
   const result = await roomSdk.searchRooms(filters);
+  const onchainRooms = result.items.map((room) => ({
+    ...room,
+    roomId: room.roomId.toString(),
+    members: room.members.map((m) => ({
+      ...m,
+      agentId: m.agentId.toString(),
+    })),
+    source: "onchain" as const,
+  }));
+
+  // Fetch off-chain rooms from SQLite
+  let offchainRooms: Array<{
+    roomId: string;
+    name: string;
+    description: string;
+    owner: string;
+    stateCid: string;
+    members: Array<{ agentId: string; role: string; joinedAt: number }>;
+    roomType: string;
+    config: { maxMembers: number; turnBased: boolean; turnTimeout: number; visibility: string };
+    active: boolean;
+    createdAt: number;
+    source: "offchain";
+  }> = [];
+
+  try {
+    const db = getDatabase();
+    const dbRooms = await db.listRooms(100);
+    offchainRooms = dbRooms.map((r) => ({
+      roomId: r.room_id,
+      name: r.name,
+      description: "",
+      owner: "0x0000000000000000000000000000000000000000",
+      stateCid: r.state_cid ?? "",
+      members: [],
+      roomType: r.room_type ?? "collaboration",
+      config: { maxMembers: 100, turnBased: false, turnTimeout: 300, visibility: "public" },
+      active: true,
+      createdAt: r.created_at * 1000,
+      source: "offchain" as const,
+    }));
+  } catch (err) {
+    log.warn("Failed to fetch off-chain rooms", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Merge: off-chain first, then on-chain
+  const allRooms = [...offchainRooms, ...onchainRooms];
 
   return {
-    rooms: result.items.map((room) => ({
-      ...room,
-      roomId: room.roomId.toString(),
-      members: room.members.map((m) => ({
-        ...m,
-        agentId: m.agentId.toString(),
-      })),
-    })),
-    total: result.total,
+    rooms: allRooms,
+    total: result.total + offchainRooms.length,
     hasMore: result.hasMore,
   };
 });
@@ -1274,21 +1320,53 @@ app.post("/api/v1/rooms", async ({ body }) => {
 });
 
 app.get("/api/v1/rooms/:roomId", async ({ params }) => {
-  const parsedParams = parseOrThrow(
-    RoomIdParamSchema,
-    params,
-    "Room ID parameter",
-  );
-  const room = await roomSdk.getRoom(BigInt(parsedParams.roomId));
-  const validRoom = expect(room, `Room not found: ${parsedParams.roomId}`);
+  const roomId = params.roomId;
+  const isNumericId = /^\d+$/.test(roomId);
+
+  if (isNumericId) {
+    // On-chain room
+    const parsedParams = parseOrThrow(
+      RoomIdParamSchema,
+      params,
+      "Room ID parameter",
+    );
+    const room = await roomSdk.getRoom(BigInt(parsedParams.roomId));
+    const validRoom = expect(room, `Room not found: ${parsedParams.roomId}`);
+    return {
+      room: {
+        ...validRoom,
+        roomId: validRoom.roomId.toString(),
+        members: validRoom.members.map((m) => ({
+          ...m,
+          agentId: m.agentId.toString(),
+        })),
+        source: "onchain",
+      },
+    };
+  }
+
+  // Off-chain room (SQLite)
+  const db = getDatabase();
+  const dbRoom = await db.getRoom(roomId);
+  const validRoom = expect(dbRoom, `Room not found: ${roomId}`);
   return {
     room: {
-      ...validRoom,
-      roomId: validRoom.roomId.toString(),
-      members: validRoom.members.map((m) => ({
-        ...m,
-        agentId: m.agentId.toString(),
-      })),
+      roomId: validRoom.room_id,
+      name: validRoom.name,
+      description: "",
+      owner: "0x0000000000000000000000000000000000000000",
+      stateCid: validRoom.state_cid ?? "",
+      members: [],
+      roomType: validRoom.room_type ?? "collaboration",
+      config: {
+        maxMembers: 100,
+        turnBased: false,
+        turnTimeout: 300,
+        visibility: "public",
+      },
+      active: true,
+      createdAt: validRoom.created_at * 1000,
+      source: "offchain",
     },
   };
 });
@@ -1361,11 +1439,8 @@ app.post("/api/v1/rooms/:roomId/message", async ({ params, body }) => {
 });
 
 app.get("/api/v1/rooms/:roomId/messages", async ({ params, query, set }) => {
-  const parsedParams = parseOrThrow(
-    RoomIdParamSchema,
-    params,
-    "Room ID parameter",
-  );
+  const roomId = params.roomId;
+  const isNumericId = /^\d+$/.test(roomId);
   const limitStr = query.limit;
   const limit = limitStr
     ? parseOrThrow(
@@ -1374,11 +1449,32 @@ app.get("/api/v1/rooms/:roomId/messages", async ({ params, query, set }) => {
         "Limit query parameter",
       )
     : 50;
+
+  if (isNumericId) {
+    // On-chain room
+    try {
+      const messages = await roomSdk.getMessages(BigInt(roomId), limit);
+      return { messages };
+    } catch (error) {
+      set.status = 404;
+      return { error: String(error) };
+    }
+  }
+
+  // Off-chain room (SQLite)
   try {
-    const messages = await roomSdk.getMessages(
-      BigInt(parsedParams.roomId),
-      limit,
-    );
+    const db = getDatabase();
+    const dbMessages = await db.getMessages(roomId, { limit });
+    // Reverse to get oldest-first (chat order)
+    const messages = dbMessages
+      .map((m) => ({
+        id: m.id,
+        agentId: m.agent_id,
+        content: m.content,
+        action: m.action,
+        timestamp: m.created_at * 1000,
+      }))
+      .reverse();
     return { messages };
   } catch (error) {
     set.status = 404;
@@ -1644,7 +1740,8 @@ if (crucibleConfig.autonomousEnabled) {
                   // It doesn't need external compute actions (RUN_INFERENCE, RENT_GPU)
                   compute: agentId !== "security-analyst",
                   canTrade: agentId === "project-manager",
-                  canVote: true,
+                  // security-analyst and base-watcher don't vote - they have specialized roles
+                  canVote: agentId !== "security-analyst" && agentId !== "base-watcher",
                   canPropose: agentId === "project-manager",
                   canDelegate: false,
                   canStake: false,

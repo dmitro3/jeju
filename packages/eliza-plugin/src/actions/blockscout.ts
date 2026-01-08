@@ -1,8 +1,8 @@
 /**
  * POLL_BLOCKSCOUT Action
  *
- * Discovers recently verified smart contracts on Base chain via Blockscout API.
- * Supports cursor-based pagination for continuous monitoring.
+ * Discovers recently verified smart contracts on Base chain via Blockscout RPC API.
+ * Supports timestamp-based filtering for continuous monitoring.
  */
 
 import type {
@@ -52,8 +52,25 @@ const blockscoutContractsResponseSchema = z.object({
   next_page_params: blockscoutNextPageParamsSchema,
 })
 
+// Schema for RPC API response (different from v2 API)
+const blockscoutRpcContractSchema = z.object({
+  Address: z.string(),
+  ContractName: z.string().nullable(),
+  CompilerVersion: z.string().optional(),
+  OptimizationUsed: z.string().optional(),
+  ABI: z.string().optional(),
+})
+
+const blockscoutRpcResponseSchema = z.object({
+  status: z.string(),
+  message: z.string(),
+  result: z.array(blockscoutRpcContractSchema),
+})
+
 // Type exports
-export type BlockscoutContractItem = z.infer<typeof blockscoutContractItemSchema>
+export type BlockscoutContractItem = z.infer<
+  typeof blockscoutContractItemSchema
+>
 export type BlockscoutContractsResponse = z.infer<
   typeof blockscoutContractsResponseSchema
 >
@@ -82,17 +99,12 @@ export interface PollBlockscoutResult {
 }
 
 /**
- * Build the API URL with optional pagination params
+ * Build the v2 API URL for verified contracts
+ * The v2 API returns actual verification timestamps
  */
-function buildContractsApiUrl(cursor?: BlockscoutCursor): string {
-  const url = new URL(`${BLOCKSCOUT_BASE_URL}/api/v2/smart-contracts`)
-
-  if (cursor) {
-    url.searchParams.set('items_count', cursor.itemsCount.toString())
-    url.searchParams.set('smart_contract_id', cursor.smartContractId.toString())
-  }
-
-  return url.toString()
+function buildContractsApiUrl(): string {
+  // Use v2 API which returns verified_at timestamps
+  return `${BLOCKSCOUT_BASE_URL}/api/v2/smart-contracts`
 }
 
 /**
@@ -103,31 +115,27 @@ function buildContractViewUrl(address: string): string {
 }
 
 /**
- * Fetch verified contracts from Blockscout
+ * Fetch verified contracts from Blockscout v2 API
+ * Filters by sinceTimestamp to only return contracts verified after that time
  */
 async function fetchVerifiedContracts(
-  cursor?: BlockscoutCursor,
+  sinceTimestamp?: number,
   limit = 10,
 ): Promise<PollBlockscoutResult> {
-  const apiUrl = buildContractsApiUrl(cursor)
+  const apiUrl = buildContractsApiUrl()
 
-  // Security check
   if (!isUrlSafeToFetch(apiUrl)) {
     throw new Error('URL failed security validation')
   }
 
   const response = await fetchWithTimeout(
     apiUrl,
-    {
-      headers: { Accept: 'application/json' },
-    },
+    { headers: { Accept: 'application/json' } },
     30000,
   )
 
   if (!response.ok) {
-    throw new Error(
-      `Blockscout API error: ${response.status} ${response.statusText}`,
-    )
+    throw new Error(`Blockscout API error: ${response.status} ${response.statusText}`)
   }
 
   const json = await response.json()
@@ -137,10 +145,16 @@ async function fetchVerifiedContracts(
     throw new Error(`Invalid Blockscout response: ${parsed.error.message}`)
   }
 
-  const { items, next_page_params } = parsed.data
+  // Filter by sinceTimestamp (only contracts verified after that time)
+  // If no sinceTimestamp provided, default to last 24 hours to avoid old contracts
+  const effectiveTimestamp = sinceTimestamp ?? Math.floor(Date.now() / 1000) - 86400
+  const sinceDate = new Date(effectiveTimestamp * 1000)
+  const filteredItems = parsed.data.items.filter((item) => {
+    const verifiedDate = new Date(item.verified_at)
+    return verifiedDate > sinceDate
+  })
 
-  // Map to our output format, limiting to requested count
-  const contracts: VerifiedContract[] = items.slice(0, limit).map((item) => ({
+  const contracts: VerifiedContract[] = filteredItems.slice(0, limit).map((item) => ({
     address: item.address.hash,
     name: item.address.name ?? 'Unknown',
     verifiedAt: item.verified_at,
@@ -149,11 +163,11 @@ async function fetchVerifiedContracts(
     blockscoutUrl: buildContractViewUrl(item.address.hash),
   }))
 
-  // Build next cursor if available
-  const nextCursor: BlockscoutCursor | null = next_page_params
+  // Build cursor from API response
+  const nextCursor = parsed.data.next_page_params
     ? {
-        itemsCount: next_page_params.items_count,
-        smartContractId: next_page_params.smart_contract_id,
+        itemsCount: parsed.data.next_page_params.items_count,
+        smartContractId: parsed.data.next_page_params.smart_contract_id,
       }
     : null
 
@@ -165,36 +179,26 @@ async function fetchVerifiedContracts(
 }
 
 /**
- * Parse cursor from message text or content
+ * Parse sinceTimestamp from message text or content
  */
-function parseCursor(message: Memory): BlockscoutCursor | undefined {
+function parseSinceTimestamp(message: Memory): number | undefined {
   const content = message.content
 
-  // Check structured content first
-  if (
-    content.cursor &&
-    typeof content.cursor === 'object' &&
-    'itemsCount' in content.cursor &&
-    'smartContractId' in content.cursor
-  ) {
-    return content.cursor as BlockscoutCursor
+  // Check structured content for sinceTimestamp
+  if (typeof content.sinceTimestamp === 'number') {
+    return content.sinceTimestamp
   }
 
-  // Check text for cursor JSON
+  // Check for lastTick (from autonomous runner) - convert ms to seconds
+  if (typeof content.lastTick === 'number') {
+    return Math.floor(content.lastTick / 1000)
+  }
+
+  // Check text for timestamp
   const text = (content.text as string) ?? ''
-  const cursorMatch = text.match(/cursor[:\s]*(\{[^}]+\})/i)
-  if (cursorMatch) {
-    try {
-      const parsed = JSON.parse(cursorMatch[1])
-      if (
-        typeof parsed.itemsCount === 'number' &&
-        typeof parsed.smartContractId === 'number'
-      ) {
-        return parsed as BlockscoutCursor
-      }
-    } catch {
-      // Ignore parse errors, continue without cursor
-    }
+  const timestampMatch = text.match(/sinceTimestamp[=:\s]*(\d+)/i)
+  if (timestampMatch) {
+    return parseInt(timestampMatch[1], 10)
   }
 
   return undefined
@@ -240,16 +244,10 @@ function formatContractsOutput(result: PollBlockscoutResult): string {
     lines.push(
       `- **${contract.name}** (\`${contract.address.slice(0, 10)}...${contract.address.slice(-8)}\`)`,
     )
-    lines.push(`  Verified: ${verifiedDate} | Compiler: ${contract.compilerVersion}`)
+    lines.push(
+      `  Verified: ${verifiedDate} | Compiler: ${contract.compilerVersion}`,
+    )
     lines.push(`  [View on Blockscout](${contract.blockscoutUrl})\n`)
-  }
-
-  if (result.nextCursor) {
-    lines.push(`---`)
-    lines.push(`More contracts available. Next cursor:`)
-    lines.push('```json')
-    lines.push(JSON.stringify(result.nextCursor))
-    lines.push('```')
   }
 
   return lines.join('\n')
@@ -278,15 +276,19 @@ export const pollBlockscoutAction: Action = {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<void> => {
-    const cursor = parseCursor(message)
+    const sinceTimestamp = parseSinceTimestamp(message)
     const limit = parseLimit(message)
 
+    // Default to 24h ago if no timestamp provided
+    const effectiveTimestamp = sinceTimestamp ?? Math.floor(Date.now() / 1000) - 86400
+    const sinceDate = new Date(effectiveTimestamp * 1000)
+
     callback?.({
-      text: `Fetching verified contracts from Blockscout${cursor ? ' (continuing from cursor)' : ''}...`,
+      text: `Fetching contracts verified since ${sinceDate.toISOString()}...`,
     })
 
     try {
-      const result = await fetchVerifiedContracts(cursor, limit)
+      const result = await fetchVerifiedContracts(sinceTimestamp, limit)
 
       callback?.({
         text: formatContractsOutput(result),
@@ -322,7 +324,7 @@ export const pollBlockscoutAction: Action = {
       {
         name: 'user',
         content: {
-          text: 'Get more contracts with cursor: {"itemsCount": 50, "smartContractId": 2223915}',
+          text: 'Get contracts verified since sinceTimestamp=1736280000',
         },
       },
       {

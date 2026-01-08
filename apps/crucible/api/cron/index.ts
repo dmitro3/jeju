@@ -7,11 +7,20 @@ import {
 } from '@jejunetwork/training'
 import { Elysia } from 'elysia'
 import { type AutonomousAgentRunner, createAgentRunner } from '../autonomous'
-import { loadBlueTeamCharacters, loadRedTeamCharacters, loadWatcherCharacters } from '../characters'
+import {
+  loadBlueTeamCharacters,
+  loadRedTeamCharacters,
+  loadWatcherCharacters,
+} from '../characters'
 import { createLogger } from '../sdk/logger'
 import { getCronSecret } from '../sdk/secrets'
 
 const log = createLogger('CronRoutes')
+
+// Coordination room IDs for agent communication
+export const COORDINATION_ROOMS = {
+  BASE_CONTRACT_REVIEWS: 'base-contract-reviews',
+} as const
 
 // Database persistence for trajectory batches (lazy initialized)
 let dbPersistence: TrainingDbPersistence | null = null
@@ -69,12 +78,48 @@ const crucibleTrajectoryStorage = getStaticTrajectoryStorage('crucible', {
 let agentRunner: AutonomousAgentRunner | null = null
 
 /**
+ * Ensure coordination rooms exist in the database
+ * Called on startup before agents are registered
+ */
+async function ensureCoordinationRoom(): Promise<void> {
+  const { getDatabase } = await import('../sdk/database')
+  const db = getDatabase()
+
+  const roomId = COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS
+
+  try {
+    const existingRoom = await db.getRoom(roomId)
+
+    if (!existingRoom) {
+      log.info('Creating coordination room', { roomId })
+      await db.createRoom({
+        roomId,
+        name: 'Base Contract Reviews',
+        roomType: 'collaboration',
+      })
+      log.info('Coordination room created', { roomId })
+    } else {
+      log.debug('Coordination room already exists', { roomId })
+    }
+  } catch (err) {
+    log.warn('Failed to create coordination room', {
+      roomId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    // Don't block startup - room can be created later
+  }
+}
+
+/**
  * Get or create the agent runner with default agents
  */
 async function getAgentRunner(): Promise<AutonomousAgentRunner> {
   if (agentRunner) {
     return agentRunner
   }
+
+  // Ensure coordination room exists before registering agents
+  await ensureCoordinationRoom()
 
   agentRunner = createAgentRunner({
     enableBuiltinCharacters: true,
@@ -116,6 +161,22 @@ async function getAgentRunner(): Promise<AutonomousAgentRunner> {
     })
   }
 
+  // Register security analyst (watches coordination room for audit requests)
+  const { securityAnalystCharacter } = await import('../characters')
+  await agentRunner.registerAgent({
+    agentId: 'blue-security-analyst',
+    character: securityAnalystCharacter,
+    tickIntervalMs: 120000,
+    // Security analyst doesn't vote/propose - focused on auditing
+    capabilities: { ...baseCapabilities, canTrade: false, canVote: false, canPropose: false },
+    maxActionsPerTick: 3,
+    enabled: true,
+    archetype: 'blue-team',
+    recordTrajectories: true,
+    watchRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
+    postToRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
+  })
+
   // Register red team agents (adversarial)
   const redTeamCharacters = await loadRedTeamCharacters()
   for (const character of redTeamCharacters) {
@@ -143,6 +204,7 @@ async function getAgentRunner(): Promise<AutonomousAgentRunner> {
       enabled: true,
       archetype: 'watcher',
       recordTrajectories: true,
+      postToRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
     })
   }
 
