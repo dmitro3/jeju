@@ -11,6 +11,7 @@ import {
   type CrucibleAgentRuntime,
   createCrucibleRuntime,
 } from '../sdk/eliza-runtime'
+import { getDatabase, type Message } from '../sdk/database'
 import { createLogger } from '../sdk/logger'
 import type {
   ActivityEntry,
@@ -20,6 +21,7 @@ import type {
   AutonomousRunnerStatus,
   AvailableAction,
   NetworkState,
+  PendingMessage,
 } from './types'
 
 export type {
@@ -198,6 +200,7 @@ export class AutonomousAgentRunner {
         character: agent.config.character.name,
         lastTick: agent.lastTick,
         tickCount: agent.tickCount,
+        recentActivity: agent.recentActivity.slice(-10),
       })),
     }
   }
@@ -592,6 +595,20 @@ export class AutonomousAgentRunner {
       }
     }
 
+    // Post response to coordination room if configured
+    if (config.postToRoom && response.text) {
+      // Extract audit requests or meaningful content to post
+      const contentToPost = this.extractPostableContent(response.text, config.agentId)
+      if (contentToPost) {
+        await this.postToRoom(
+          config.agentId,
+          config.postToRoom,
+          contentToPost,
+          response.action,
+        )
+      }
+    }
+
     // Complete the trajectory step
     if (trajectoryId) {
       const action: Action = {
@@ -664,13 +681,132 @@ export class AutonomousAgentRunner {
     const networkState = await this.getNetworkState()
     const availableActions = this.getAvailableActions(agent.config.capabilities)
 
+    // Fetch pending messages from watched room
+    let pendingMessages: PendingMessage[] = []
+
+    if (agent.config.watchRoom) {
+      pendingMessages = await this.fetchPendingMessages(
+        agent.config.agentId,
+        agent.config.watchRoom,
+        agent.lastTick,
+      )
+    }
+
     return {
       availableActions,
       recentActivity: agent.recentActivity.slice(-10),
       pendingGoals: agent.config.goals ?? [],
-      pendingMessages: [],
+      pendingMessages,
       networkState,
     }
+  }
+
+  /**
+   * Fetch messages from a room that arrived since the agent's last tick
+   */
+  private async fetchPendingMessages(
+    agentId: string,
+    roomId: string,
+    sinceTimestamp: number,
+  ): Promise<PendingMessage[]> {
+    try {
+      const db = getDatabase()
+
+      // Get messages since last tick
+      const messages = await db.getMessages(roomId, {
+        limit: 20,
+        since: Math.floor(sinceTimestamp / 1000),
+      })
+
+      // Filter out own messages and convert to PendingMessage format
+      return messages
+        .filter((msg: Message) => msg.agent_id !== agentId)
+        .map((msg: Message) => ({
+          id: String(msg.id),
+          from: msg.agent_id,
+          content: msg.content,
+          timestamp: msg.created_at * 1000,
+          roomId: msg.room_id,
+          requiresResponse:
+            msg.content.includes('blockscout.com/address/') ||
+            msg.content.toLowerCase().includes('audit request'),
+        }))
+    } catch (err) {
+      log.warn('Failed to fetch pending messages', {
+        agentId,
+        roomId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return []
+    }
+  }
+
+  /**
+   * Post a message to a coordination room
+   */
+  async postToRoom(
+    agentId: string,
+    roomId: string,
+    content: string,
+    action?: string,
+  ): Promise<void> {
+    try {
+      const db = getDatabase()
+      await db.createMessage({
+        roomId,
+        agentId,
+        content,
+        action,
+      })
+      log.debug('Posted message to room', { agentId, roomId })
+    } catch (err) {
+      log.warn('Failed to post to room', {
+        agentId,
+        roomId,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  /**
+   * Extract meaningful content from agent response to post to coordination room
+   * Filters out generic responses and extracts actionable content
+   */
+  private extractPostableContent(
+    responseText: string,
+    agentId: string,
+  ): string | null {
+    // For base-watcher: extract audit request lines
+    if (agentId.includes('watcher') || agentId.includes('base')) {
+      const auditLines = responseText
+        .split('\n')
+        .filter((line) => line.includes('Audit request:') || line.includes('blockscout.com/address/'))
+
+      if (auditLines.length > 0) {
+        return auditLines.join('\n')
+      }
+    }
+
+    // For security-analyst: extract audit summaries
+    if (agentId.includes('security') || agentId.includes('analyst') || agentId.includes('auditor')) {
+      if (responseText.includes('Audit complete') || responseText.includes('Risk Level:')) {
+        // Post the full audit summary
+        return responseText
+      }
+    }
+
+    // Don't post generic responses like "No new contracts"
+    if (responseText.toLowerCase().includes('no new') ||
+        responseText.toLowerCase().includes('nothing to')) {
+      return null
+    }
+
+    // For other agents, post if it contains meaningful action content
+    if (responseText.includes('[ACTION:') || responseText.length > 200) {
+      return responseText
+    }
+
+    return null
   }
 
   private async getNetworkState(): Promise<NetworkState> {
@@ -863,6 +999,23 @@ export class AutonomousAgentRunner {
       parts.push(`- ${action.name}: ${action.description}`)
     }
     parts.push('')
+
+    // Pending messages from watched room
+    if (context.pendingMessages.length > 0) {
+      parts.push('## Pending Messages')
+      parts.push('The following messages require your attention:')
+      parts.push('')
+
+      for (const msg of context.pendingMessages) {
+        const time = new Date(msg.timestamp).toISOString()
+        parts.push(`**From:** ${msg.from} (${time})`)
+        parts.push(`> ${msg.content}`)
+        if (msg.requiresResponse) {
+          parts.push('*This message requires your response.*')
+        }
+        parts.push('')
+      }
+    }
 
     // Network state
     parts.push('## Network State')

@@ -9,6 +9,10 @@ export interface AutonomousAgentConfig {
   maxActionsPerTick: number
   enabled: boolean
   goals?: AgentGoal[]
+  /** Room to watch for incoming messages during ticks */
+  watchRoom?: string
+  /** Room to post action results and messages to */
+  postToRoom?: string
 }
 
 export interface AutonomousCapabilities {
@@ -122,5 +126,6 @@ export interface AutonomousRunnerStatus {
     character: string
     lastTick: number
     tickCount: number
+    recentActivity: ActivityEntry[]
   }>
 }
