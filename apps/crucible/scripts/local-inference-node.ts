@@ -263,7 +263,7 @@ async function registerWithDWS() {
       endpoint: `http://127.0.0.1:${PORT}`,
       gpuTier: 2,
       capabilities: ['inference'],
-      provider: provider.name,
+      provider: 'local', // Always 'local' so DWS routing prefers us for llama models
       models: ['*', ...provider.supportedModels],
       region: 'local',
       maxConcurrent: 50,
