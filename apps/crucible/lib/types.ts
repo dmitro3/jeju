@@ -46,6 +46,16 @@ export interface MessageMetadata {
 
 export type BotType = 'ai_agent' | 'trading_bot' | 'org_tool'
 
+export interface AgentCapabilities {
+  canTrade?: boolean
+  canChat?: boolean
+  canPropose?: boolean
+  canVote?: boolean
+  canStake?: boolean
+  a2a?: boolean
+  compute?: boolean
+}
+
 export interface AgentDefinition {
   agentId: bigint
   owner: Address
@@ -62,7 +72,7 @@ export interface AgentDefinition {
   chains?: TradingBotChain[]
   treasuryAddress?: Address
   orgId?: string
-  capabilities?: string[]
+  capabilities?: AgentCapabilities
 }
 
 export interface AgentCharacter {
@@ -87,15 +97,7 @@ export interface AgentCharacter {
   } | null
   mcpServers?: string[] | null
   a2aCapabilities?: string[] | null
-  capabilities?: {
-    canTrade?: boolean
-    canChat?: boolean
-    canPropose?: boolean
-    canVote?: boolean
-    canStake?: boolean
-    a2a?: boolean
-    compute?: boolean
-  } | null
+  capabilities?: AgentCapabilities | null
 }
 
 export interface MessageExample {

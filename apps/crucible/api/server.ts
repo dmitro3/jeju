@@ -532,14 +532,8 @@ async function seedDefaultAgents(): Promise<void> {
     "community-manager",
     "devrel",
     "liaison",
-    "blue-team",
     "moderator",
   ];
-
-  // In testnet/localnet, also seed red team for adversarial testing
-  if (config.network !== "mainnet") {
-    coreAgentIds.push("red-team", "security-researcher");
-  }
 
   log.info("Seeding default agents", { count: coreAgentIds.length });
 
@@ -1101,8 +1095,24 @@ app.get("/api/v1/agents/:agentId", async ({ params }) => {
   const agentId = BigInt(parsedParams.agentId);
   const agent = await agentSdk.getAgent(agentId);
   const validAgent = expect(agent, `Agent not found: ${parsedParams.agentId}`);
+
+  // Load capabilities from character if available
+  let capabilities = validAgent.capabilities;
+  if (validAgent.characterCid && !capabilities) {
+    try {
+      const character = await agentSdk.loadCharacter(agentId);
+      capabilities = character.capabilities ?? undefined;
+    } catch {
+      // Character load failed, continue without capabilities
+    }
+  }
+
   return {
-    agent: { ...validAgent, agentId: validAgent.agentId.toString() },
+    agent: {
+      ...validAgent,
+      agentId: validAgent.agentId.toString(),
+      capabilities,
+    },
   };
 });
 
@@ -1668,7 +1678,7 @@ app.post("/api/v1/bots/:botId/start", async ({ params, request, set }) => {
 import { type AutonomousAgentRunner, createAgentRunner } from "./autonomous";
 
 // Global autonomous runner (started if AUTONOMOUS_ENABLED=true)
-let autonomousRunner: AutonomousAgentRunner | null = null;
+export let autonomousRunner: AutonomousAgentRunner | null = null;
 
 if (crucibleConfig.autonomousEnabled) {
   // Initialize autonomous runner with async private key loading
@@ -1680,6 +1690,7 @@ if (crucibleConfig.autonomousEnabled) {
         maxConcurrentAgents: crucibleConfig.maxConcurrentAgents,
         privateKey: agentPrivateKey,
         network: config.network,
+        enableTrajectoryRecording: true,
       });
       autonomousRunner
         .start()
@@ -1688,11 +1699,6 @@ if (crucibleConfig.autonomousEnabled) {
 
           // Auto-register key agents for autonomous operation
           const autoStartAgents = [
-            // 'project-manager',
-            // 'red-team',
-            // 'blue-team',
-            // 'moderator',
-            // 'community-manager',
             "base-watcher",
             "security-analyst",
           ];
@@ -1746,8 +1752,7 @@ if (crucibleConfig.autonomousEnabled) {
                   canDelegate: false,
                   canStake: false,
                   canBridge: false,
-                  canModerate:
-                    agentId === "moderator" || agentId === "blue-team",
+                  canModerate: agentId === "moderator",
                 },
                 // Room configuration for agent pipeline
                 ...(agentId === "base-watcher" && {
