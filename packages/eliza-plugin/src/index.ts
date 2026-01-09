@@ -108,6 +108,11 @@ import { analyzeContractAction } from './actions/analyze-contract'
 import { auditContractAction } from './actions/audit-contract'
 import { pollBlockscoutAction } from './actions/blockscout'
 import { fetchContractAction } from './actions/contract'
+import {
+  analyzeInfraHealthAction,
+  collectNodeStatsAction,
+} from './actions/infra'
+import { probeEndpointsAction } from './actions/probe'
 import { retrieveFileAction, uploadFileAction } from './actions/storage'
 // Extended Actions - Storage
 import {
@@ -264,6 +269,11 @@ export const jejuPlugin: Plugin = {
     analyzeContractAction,
     auditContractAction,
     pollBlockscoutAction,
+
+    // Infrastructure monitoring actions
+    collectNodeStatsAction,
+    analyzeInfraHealthAction,
+    probeEndpointsAction,
   ],
 }
 
