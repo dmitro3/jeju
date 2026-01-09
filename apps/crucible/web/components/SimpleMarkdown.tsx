@@ -1,6 +1,6 @@
 /**
  * Simple markdown renderer for basic formatting without external dependencies.
- * Supports: links, bold, inline code, and auto-linking URLs.
+ * Supports: headings, links, bold, inline code, and auto-linking URLs.
  */
 
 interface SimpleMarkdownProps {
@@ -9,38 +9,65 @@ interface SimpleMarkdownProps {
 }
 
 export function SimpleMarkdown({ content, className = '' }: SimpleMarkdownProps) {
-  const elements = parseMarkdown(content)
+  const lines = content.split('\n')
+  let key = 0
+
+  const elements = lines.map((line, lineIndex) => {
+    // Check for headings at start of line
+    const h3Match = line.match(/^###\s+(.+)$/)
+    if (h3Match) {
+      return (
+        <strong key={key++} className="block text-sm font-semibold mt-2 mb-1">
+          {parseInline(h3Match[1], key)}
+        </strong>
+      )
+    }
+
+    const h2Match = line.match(/^##\s+(.+)$/)
+    if (h2Match) {
+      return (
+        <strong key={key++} className="block text-base font-semibold mt-3 mb-1">
+          {parseInline(h2Match[1], key)}
+        </strong>
+      )
+    }
+
+    const h1Match = line.match(/^#\s+(.+)$/)
+    if (h1Match) {
+      return (
+        <strong key={key++} className="block text-lg font-bold mt-3 mb-2">
+          {parseInline(h1Match[1], key)}
+        </strong>
+      )
+    }
+
+    // Regular line - parse inline elements
+    const inlineElements = parseInline(line, key)
+    key += 100 // Increment key space for next line
+
+    // Add line break between lines (except last)
+    if (lineIndex < lines.length - 1) {
+      return (
+        <span key={`line-${lineIndex}`}>
+          {inlineElements}
+          <br />
+        </span>
+      )
+    }
+
+    return <span key={`line-${lineIndex}`}>{inlineElements}</span>
+  })
+
   return <span className={className}>{elements}</span>
 }
 
-function parseMarkdown(text: string): React.ReactNode[] {
+function parseInline(text: string, baseKey: number): React.ReactNode[] {
   const result: React.ReactNode[] = []
-  let key = 0
+  let key = baseKey
 
-  // Combined regex for markdown patterns
-  // Order matters: more specific patterns first
-  const patterns = [
-    // Markdown links: [text](url)
-    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-    // Raw URLs (not already in markdown link)
-    /(?<!\]\()https?:\/\/[^\s<>)\]]+/g,
-    // Bold: **text** or __text__
-    /\*\*([^*]+)\*\*|__([^_]+)__/g,
-    // Inline code: `code`
-    /`([^`]+)`/g,
-  ]
-
-  // Process text segment by segment
-  let remaining = text
-  let lastIndex = 0
-
-  // First pass: find all markdown links and raw URLs
-  const urlPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\]\()https?:\/\/[^\s<>)\]]+/g
-  const boldPattern = /\*\*([^*]+)\*\*|__([^_]+)__/g
-  const codePattern = /`([^`]+)`/g
-
-  // Split by all patterns and reconstruct
-  const allPatterns = /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\]\()https?:\/\/[^\s<>)\]]+|\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`)/g
+  // Combined regex for inline markdown patterns
+  const allPatterns =
+    /(\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(?<!\]\()https?:\/\/[^\s<>)\]]+|\*\*([^*]+)\*\*|__([^_]+)__|`([^`]+)`)/g
 
   let match: RegExpExecArray | null
   let lastEnd = 0
