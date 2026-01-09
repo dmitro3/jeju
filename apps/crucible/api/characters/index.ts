@@ -1,25 +1,13 @@
 import type { AgentCharacter } from '../../lib/types'
 import { baseWatcherCharacter } from './base-watcher'
-import { blueTeamCharacter } from './blue-team'
-import {
-  contractsAuditorCharacter,
-  moderatorCharacter,
-  networkGuardianCharacter,
-} from './blue-team/index'
 import { communityManagerCharacter } from './community-manager'
 import { devRelCharacter } from './devrel'
 import { liaisonCharacter } from './liaison'
+import { moderatorCharacter } from './moderator'
 import { projectManagerCharacter } from './project-manager'
-import { redTeamCharacter } from './red-team'
 import { securityAnalystCharacter } from './security-analyst'
-import { testAgentCharacter } from './test-agent'
-import {
-  contractsExpertCharacter,
-  fuzzTesterCharacter,
-  scammerCharacter,
-  securityResearcherCharacter,
-} from './red-team/index'
 import { socialMediaManagerCharacter } from './social-media-manager'
+import { testAgentCharacter } from './test-agent'
 
 export const characters: Record<string, AgentCharacter> = {
   'project-manager': projectManagerCharacter,
@@ -27,48 +15,13 @@ export const characters: Record<string, AgentCharacter> = {
   devrel: devRelCharacter,
   liaison: liaisonCharacter,
   'social-media-manager': socialMediaManagerCharacter,
-  'red-team': redTeamCharacter,
-  scammer: scammerCharacter,
-  'security-researcher': securityResearcherCharacter,
-  'contracts-expert': contractsExpertCharacter,
-  'fuzz-tester': fuzzTesterCharacter,
-  'blue-team': blueTeamCharacter,
   moderator: moderatorCharacter,
-  'network-guardian': networkGuardianCharacter,
-  'contracts-auditor': contractsAuditorCharacter,
   'security-analyst': securityAnalystCharacter,
   'test-agent': testAgentCharacter,
   'base-watcher': baseWatcherCharacter,
 }
 
-export const RED_TEAM_CHARACTERS = [
-  'red-team',
-  'scammer',
-  'security-researcher',
-  'contracts-expert',
-  'fuzz-tester',
-] as const
-
-export const BLUE_TEAM_CHARACTERS = [
-  'blue-team',
-  'moderator',
-  'network-guardian',
-  'contracts-auditor',
-] as const
-
 export const WATCHER_CHARACTERS = ['base-watcher'] as const
-
-export async function loadBlueTeamCharacters(): Promise<AgentCharacter[]> {
-  return BLUE_TEAM_CHARACTERS.map((id) => characters[id]).filter(
-    (c): c is AgentCharacter => c !== undefined,
-  )
-}
-
-export async function loadRedTeamCharacters(): Promise<AgentCharacter[]> {
-  return RED_TEAM_CHARACTERS.map((id) => characters[id]).filter(
-    (c): c is AgentCharacter => c !== undefined,
-  )
-}
 
 export async function loadWatcherCharacters(): Promise<AgentCharacter[]> {
   return WATCHER_CHARACTERS.map((id) => characters[id]).filter(
@@ -86,12 +39,11 @@ export function listCharacters(): string[] {
 }
 
 export { baseWatcherCharacter } from './base-watcher'
-export { blueTeamCharacter } from './blue-team'
 export { communityManagerCharacter } from './community-manager'
 export { devRelCharacter } from './devrel'
 export { liaisonCharacter } from './liaison'
+export { moderatorCharacter } from './moderator'
 export { projectManagerCharacter } from './project-manager'
-export { redTeamCharacter } from './red-team'
 export { securityAnalystCharacter } from './security-analyst'
 export { socialMediaManagerCharacter } from './social-media-manager'
 export { testAgentCharacter } from './test-agent'

@@ -37,7 +37,7 @@ const log = createLogger('AutonomousRunner')
  * Extended config with archetype for trajectory recording
  */
 export interface ExtendedAgentConfig extends AutonomousAgentConfig {
-  /** Agent archetype for training (blue-team, red-team, etc.) */
+  /** Agent archetype for training (watcher, auditor, moderator, etc.) */
   archetype?: string
   /** Enable trajectory recording for this agent */
   recordTrajectories?: boolean
@@ -47,7 +47,6 @@ interface RegisteredAgent {
   config: ExtendedAgentConfig
   runtime: CrucibleAgentRuntime | null
   lastTick: number
-  /** Previous tick timestamp for polling actions to filter by */
   previousTick: number
   tickCount: number
   errorCount: number
@@ -55,7 +54,6 @@ interface RegisteredAgent {
   backoffMs: number
   intervalId: ReturnType<typeof setInterval> | null
   recentActivity: ActivityEntry[]
-  /** Active trajectory ID for current tick */
   currentTrajectoryId: string | null
 }
 
@@ -301,12 +299,10 @@ export class AutonomousAgentRunner {
     agent: RegisteredAgent,
   ): Promise<{ reward: number }> {
     const agentId = agent.config.agentId
-    // Save previous tick timestamp before updating (for polling actions to filter by)
     agent.previousTick = agent.lastTick
     agent.lastTick = Date.now()
     agent.tickCount++
 
-    // Start trajectory recording for this tick
     const shouldRecord =
       this.config.enableTrajectoryRecording &&
       (agent.config.recordTrajectories ?? true)
@@ -388,12 +384,10 @@ export class AutonomousAgentRunner {
         }
       }
 
-      // Save previous tick timestamp before updating (for polling actions to filter by)
       agent.previousTick = agent.lastTick
       agent.lastTick = Date.now()
       agent.tickCount++
 
-      // Start trajectory recording for this tick
       const shouldRecord =
         this.config.enableTrajectoryRecording &&
         (agent.config.recordTrajectories ?? true)
@@ -589,17 +583,9 @@ export class AutonomousAgentRunner {
         0,
         config.maxActionsPerTick,
       )) {
-        // Inject sinceTimestamp for polling actions (uses previousTick to filter new items)
         const enrichedParams = { ...action.params }
         if (action.type.toUpperCase().includes('POLL') && agent.previousTick > 0) {
-          // Convert ms to seconds for API timestamp
           enrichedParams.sinceTimestamp = Math.floor(agent.previousTick / 1000).toString()
-          log.debug('Injected sinceTimestamp for polling action', {
-            agentId: config.agentId,
-            action: action.type,
-            previousTick: agent.previousTick,
-            sinceTimestamp: enrichedParams.sinceTimestamp,
-          })
         }
 
         const actionResult = await this.executeAction(
@@ -612,15 +598,7 @@ export class AutonomousAgentRunner {
         // Reward for successful actions
         if (actionResult.success) {
           tickReward += this.calculateActionReward(action.type)
-          // Collect action results for room posting
           const resultResponse = (actionResult.result as { response?: string })?.response
-          log.info('Action result for room posting', {
-            agentId: config.agentId,
-            action: action.type,
-            hasResult: !!actionResult.result,
-            hasResponse: !!resultResponse,
-            responsePreview: resultResponse?.slice(0, 100),
-          })
           if (resultResponse) {
             actionResults.push({ action: action.type, response: resultResponse })
           }
@@ -628,35 +606,11 @@ export class AutonomousAgentRunner {
       }
     }
 
-    // Post action results to coordination room if configured
     if (config.postToRoom && actionResults.length > 0) {
-      log.info('Posting action results to room', {
-        agentId: config.agentId,
-        roomId: config.postToRoom,
-        actionCount: actionResults.length,
-      })
       for (const result of actionResults) {
-        // Extract meaningful content from action result
         const contentToPost = this.extractPostableContent(result.response, config.agentId)
         if (contentToPost) {
-          log.debug('Posting content to room', {
-            agentId: config.agentId,
-            roomId: config.postToRoom,
-            action: result.action,
-            contentLength: contentToPost.length,
-          })
-          await this.postToRoom(
-            config.agentId,
-            config.postToRoom,
-            contentToPost,
-            result.action,
-          )
-        } else {
-          log.debug('No postable content extracted', {
-            agentId: config.agentId,
-            action: result.action,
-            responseLength: result.response.length,
-          })
+          await this.postToRoom(config.agentId, config.postToRoom, contentToPost, result.action)
         }
       }
     }
@@ -733,10 +687,7 @@ export class AutonomousAgentRunner {
     const networkState = await this.getNetworkState()
     const availableActions = this.getAvailableActions(agent.config.capabilities)
 
-    // Fetch pending messages from watched room
-    // Use previousTick to catch messages posted since last tick (not current tick)
     let pendingMessages: PendingMessage[] = []
-
     if (agent.config.watchRoom) {
       pendingMessages = await this.fetchPendingMessages(
         agent.config.agentId,
@@ -754,9 +705,6 @@ export class AutonomousAgentRunner {
     }
   }
 
-  /**
-   * Fetch messages from a room that arrived since the agent's last tick
-   */
   private async fetchPendingMessages(
     agentId: string,
     roomId: string,
@@ -764,24 +712,10 @@ export class AutonomousAgentRunner {
   ): Promise<PendingMessage[]> {
     try {
       const db = getDatabase()
-
-      // Get messages since last tick
       const sinceSeconds = Math.floor(sinceTimestamp / 1000)
-      const messages = await db.getMessages(roomId, {
-        limit: 20,
-        since: sinceSeconds,
-      })
+      const messages = await db.getMessages(roomId, { limit: 20, since: sinceSeconds })
 
-      log.info('Fetched pending messages', {
-        agentId,
-        roomId,
-        sinceTimestamp,
-        sinceSeconds,
-        totalMessages: messages.length,
-      })
-
-      // Filter out own messages and convert to PendingMessage format
-      const filtered = messages
+      return messages
         .filter((msg: Message) => msg.agent_id !== agentId)
         .map((msg: Message) => ({
           id: String(msg.id),
@@ -793,30 +727,12 @@ export class AutonomousAgentRunner {
             msg.content.includes('blockscout.com/address/') ||
             msg.content.toLowerCase().includes('audit request'),
         }))
-
-      if (filtered.length > 0) {
-        log.info('Found pending messages for agent', {
-          agentId,
-          roomId,
-          messageCount: filtered.length,
-          messages: filtered.map(m => ({ from: m.from, preview: m.content.slice(0, 50) })),
-        })
-      }
-
-      return filtered
     } catch (err) {
-      log.warn('Failed to fetch pending messages', {
-        agentId,
-        roomId,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      log.warn('Failed to fetch pending messages', { roomId, error: String(err) })
       return []
     }
   }
 
-  /**
-   * Post a message to a coordination room
-   */
   async postToRoom(
     agentId: string,
     roomId: string,
@@ -825,59 +741,29 @@ export class AutonomousAgentRunner {
   ): Promise<void> {
     try {
       const db = getDatabase()
-      await db.createMessage({
-        roomId,
-        agentId,
-        content,
-        action,
-      })
-      log.debug('Posted message to room', { agentId, roomId })
+      await db.createMessage({ roomId, agentId, content, action })
     } catch (err) {
-      log.warn('Failed to post to room', {
-        agentId,
-        roomId,
-        error: err instanceof Error ? err.message : String(err),
-      })
+      log.warn('Failed to post to room', { roomId, error: String(err) })
     }
   }
 
-  /**
-   * Extract meaningful content from agent response to post to coordination room
-   * Filters out generic responses and extracts actionable content
-   */
-  private extractPostableContent(
-    responseText: string,
-    agentId: string,
-  ): string | null {
-    // For base-watcher: extract audit request lines
+  private extractPostableContent(responseText: string, agentId: string): string | null {
     if (agentId.includes('watcher') || agentId.includes('base')) {
       const auditLines = responseText
         .split('\n')
         .filter((line) => line.includes('Audit request:') || line.includes('blockscout.com/address/'))
-
-      if (auditLines.length > 0) {
-        return auditLines.join('\n')
-      }
+      if (auditLines.length > 0) return auditLines.join('\n')
     }
 
-    // For security-analyst: extract audit summaries
     if (agentId.includes('security') || agentId.includes('analyst') || agentId.includes('auditor')) {
       if (responseText.includes('Audit complete') || responseText.includes('Risk Level:')) {
-        // Post the full audit summary
         return responseText
       }
     }
 
-    // Don't post generic responses like "No new contracts"
-    if (responseText.toLowerCase().includes('no new') ||
-        responseText.toLowerCase().includes('nothing to')) {
-      return null
-    }
-
-    // For other agents, post if it contains meaningful action content
-    if (responseText.includes('[ACTION:') || responseText.length > 200) {
-      return responseText
-    }
+    const lower = responseText.toLowerCase()
+    if (lower.includes('no new') || lower.includes('nothing to')) return null
+    if (responseText.includes('[ACTION:') || responseText.length > 200) return responseText
 
     return null
   }
@@ -908,14 +794,6 @@ export class AutonomousAgentRunner {
     capabilities: AutonomousAgentConfig['capabilities'],
   ): AvailableAction[] {
     const actions: AvailableAction[] = []
-
-    if (capabilities.canChat) {
-      actions.push({
-        name: 'RESPOND',
-        description: 'Generate a response or message',
-        category: 'communication',
-      })
-    }
 
     if (capabilities.canTrade) {
       actions.push(
@@ -1026,24 +904,9 @@ export class AutonomousAgentRunner {
     parts.push('')
 
     // Archetype-specific instructions
-    if (config.archetype === 'blue-team') {
-      parts.push('## Objective: Blue Team Defense')
-      parts.push(
-        'Your mission is to protect the network, identify vulnerabilities, and propose security improvements.',
-      )
-      parts.push(
-        'Focus on: monitoring suspicious activity, voting for security proposals, delegating to trusted validators.',
-      )
-      parts.push('')
-    } else if (config.archetype === 'red-team') {
-      parts.push('## Objective: Red Team Testing')
-      parts.push(
-        'Your mission is to test network resilience by identifying weaknesses and proposing stress tests.',
-      )
-      parts.push(
-        'Focus on: exploring edge cases, testing governance limits, identifying potential attack vectors (for reporting).',
-      )
-      parts.push('')
+    // Reserved for future archetype-specific prompts (watcher, auditor, etc.)
+    if (config.archetype) {
+      // Placeholder for future archetype prompts
     }
 
     // Goals

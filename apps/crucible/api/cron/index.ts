@@ -6,12 +6,7 @@ import {
   type TrajectoryBatchReference,
 } from '@jejunetwork/training'
 import { Elysia } from 'elysia'
-import { type AutonomousAgentRunner, createAgentRunner } from '../autonomous'
-import {
-  loadBlueTeamCharacters,
-  loadRedTeamCharacters,
-  loadWatcherCharacters,
-} from '../characters'
+import { autonomousRunner } from '../server'
 import { createLogger } from '../sdk/logger'
 import { getCronSecret } from '../sdk/secrets'
 
@@ -74,9 +69,6 @@ const crucibleTrajectoryStorage = getStaticTrajectoryStorage('crucible', {
   },
 })
 
-// Singleton agent runner
-let agentRunner: AutonomousAgentRunner | null = null
-
 /**
  * Ensure coordination rooms exist in the database
  * Called on startup before agents are registered
@@ -108,115 +100,6 @@ async function ensureCoordinationRoom(): Promise<void> {
     })
     // Don't block startup - room can be created later
   }
-}
-
-/**
- * Get or create the agent runner with default agents
- */
-async function getAgentRunner(): Promise<AutonomousAgentRunner> {
-  if (agentRunner) {
-    return agentRunner
-  }
-
-  // Ensure coordination room exists before registering agents
-  await ensureCoordinationRoom()
-
-  agentRunner = createAgentRunner({
-    enableBuiltinCharacters: true,
-    defaultTickIntervalMs: 120000, // 2 minutes
-    maxConcurrentAgents: 20,
-    enableTrajectoryRecording: true,
-    onBatchFlushed: async (batch) => {
-      log.info('Runner trajectory batch flushed', {
-        batchId: batch.batchId,
-        cid: batch.storageCid,
-      })
-    },
-  })
-
-  // Shared capabilities for all agents
-  const baseCapabilities = {
-    canChat: true,
-    canPropose: true,
-    canVote: true,
-    canDelegate: true,
-    canStake: true,
-    canBridge: false,
-    a2a: true,
-    compute: true,
-  }
-
-  // Register blue team agents (defensive)
-  const blueTeamCharacters = await loadBlueTeamCharacters()
-  for (const character of blueTeamCharacters) {
-    await agentRunner.registerAgent({
-      agentId: `blue-${character.name.toLowerCase().replace(/\s+/g, '-')}`,
-      character,
-      tickIntervalMs: 120000,
-      capabilities: { ...baseCapabilities, canTrade: false },
-      maxActionsPerTick: 3,
-      enabled: true,
-      archetype: 'blue-team',
-      recordTrajectories: true,
-    })
-  }
-
-  // Register security analyst (watches coordination room for audit requests)
-  const { securityAnalystCharacter } = await import('../characters')
-  await agentRunner.registerAgent({
-    agentId: 'blue-security-analyst',
-    character: securityAnalystCharacter,
-    tickIntervalMs: 120000,
-    // Security analyst doesn't vote/propose - focused on auditing
-    capabilities: { ...baseCapabilities, canTrade: false, canVote: false, canPropose: false },
-    maxActionsPerTick: 3,
-    enabled: true,
-    archetype: 'blue-team',
-    recordTrajectories: true,
-    watchRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
-    postToRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
-  })
-
-  // Register red team agents (adversarial)
-  const redTeamCharacters = await loadRedTeamCharacters()
-  for (const character of redTeamCharacters) {
-    await agentRunner.registerAgent({
-      agentId: `red-${character.name.toLowerCase().replace(/\s+/g, '-')}`,
-      character,
-      tickIntervalMs: 120000,
-      capabilities: { ...baseCapabilities, canTrade: true },
-      maxActionsPerTick: 5,
-      enabled: true,
-      archetype: 'red-team',
-      recordTrajectories: true,
-    })
-  }
-
-  // Register watcher agents (contract monitoring)
-  const watcherCharacters = await loadWatcherCharacters()
-  for (const character of watcherCharacters) {
-    await agentRunner.registerAgent({
-      agentId: `watcher-${character.name.toLowerCase().replace(/\s+/g, '-')}`,
-      character,
-      tickIntervalMs: 120000, // 2 minutes
-      capabilities: { ...baseCapabilities, canTrade: false },
-      maxActionsPerTick: 2, // Poll + post audit request
-      enabled: true,
-      archetype: 'watcher',
-      recordTrajectories: true,
-      postToRoom: COORDINATION_ROOMS.BASE_CONTRACT_REVIEWS,
-    })
-  }
-
-  await agentRunner.start()
-
-  log.info('Agent runner initialized', {
-    blueTeamCount: blueTeamCharacters.length,
-    redTeamCount: redTeamCharacters.length,
-    watcherCount: watcherCharacters.length,
-  })
-
-  return agentRunner
 }
 
 // Track whether we've warned about missing CRON_SECRET
@@ -297,23 +180,26 @@ export const cronRoutes = new Elysia({ prefix: '/api/cron' })
   // Agent tick - executes autonomous agent actions
   .post(
     '/agent-tick',
-    async () => {
+    async ({ set }) => {
+      if (!autonomousRunner) {
+        set.status = 503
+        return { error: 'Autonomous runner not initialized', message: 'Server not ready' }
+      }
+
       const timestamp = new Date().toISOString()
       const startTime = Date.now()
 
       log.info('Agent tick cron job started', { timestamp })
 
-      const runner = await getAgentRunner()
-
       // Ensure runner is started
-      if (!runner.getStatus().running) {
-        await runner.start()
+      if (!autonomousRunner.getStatus().running) {
+        await autonomousRunner.start()
       }
 
       // Execute ticks for all agents immediately
-      const tickResults = await runner.executeAllAgentsTick()
+      const tickResults = await autonomousRunner.executeAllAgentsTick()
 
-      const trajStats = runner.getTrajectoryStats()
+      const trajStats = autonomousRunner.getTrajectoryStats()
       const duration = Date.now() - startTime
 
       log.info('Agent tick cron job completed', {
@@ -358,14 +244,18 @@ export const cronRoutes = new Elysia({ prefix: '/api/cron' })
   // Flush trajectories to storage
   .post(
     '/flush-trajectories',
-    async () => {
+    async ({ set }) => {
+      if (!autonomousRunner) {
+        set.status = 503
+        return { error: 'Autonomous runner not initialized', message: 'Server not ready' }
+      }
+
       const timestamp = new Date().toISOString()
 
       log.info('Trajectory flush triggered', { timestamp })
 
       // Flush from runner
-      const runner = await getAgentRunner()
-      const runnerBatch = await runner.flushTrajectories()
+      const runnerBatch = await autonomousRunner.flushTrajectories()
 
       // Also flush the shared storage
       const storageBatch = await crucibleTrajectoryStorage.flush()
@@ -409,12 +299,16 @@ export const cronRoutes = new Elysia({ prefix: '/api/cron' })
   // Health check
   .post(
     '/health-check',
-    async () => {
+    async ({ set }) => {
+      if (!autonomousRunner) {
+        set.status = 503
+        return { error: 'Autonomous runner not initialized', message: 'Server not ready' }
+      }
+
       const timestamp = new Date().toISOString()
 
-      const runner = await getAgentRunner()
-      const status = runner.getStatus()
-      const trajStats = runner.getTrajectoryStats()
+      const status = autonomousRunner.getStatus()
+      const trajStats = autonomousRunner.getTrajectoryStats()
       const storageStats = crucibleTrajectoryStorage.getBufferStats()
 
       log.debug('Health check', {
@@ -452,13 +346,16 @@ export const cronRoutes = new Elysia({ prefix: '/api/cron' })
   // Stop the agent runner (for maintenance)
   .post(
     '/stop-runner',
-    async () => {
+    async ({ set }) => {
       const timestamp = new Date().toISOString()
 
-      if (agentRunner) {
-        await agentRunner.stop()
-        log.info('Agent runner stopped', { timestamp })
+      if (!autonomousRunner) {
+        set.status = 503
+        return { error: 'Autonomous runner not initialized', message: 'Server not ready' }
       }
+
+      await autonomousRunner.stop()
+      log.info('Agent runner stopped', { timestamp })
 
       return {
         success: true,
@@ -478,15 +375,19 @@ export const cronRoutes = new Elysia({ prefix: '/api/cron' })
   // Start the agent runner
   .post(
     '/start-runner',
-    async () => {
+    async ({ set }) => {
       const timestamp = new Date().toISOString()
 
-      const runner = await getAgentRunner()
-      await runner.start()
+      if (!autonomousRunner) {
+        set.status = 503
+        return { error: 'Autonomous runner not initialized', message: 'Server not ready' }
+      }
+
+      await autonomousRunner.start()
 
       log.info('Agent runner started', { timestamp })
 
-      const status = runner.getStatus()
+      const status = autonomousRunner.getStatus()
       return {
         success: true,
         message: 'Agent runner started',
