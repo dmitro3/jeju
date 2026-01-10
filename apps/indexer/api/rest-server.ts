@@ -116,11 +116,19 @@ const DEFAULT_CORS_ORIGINS = [
   'https://jejunetwork.org',
 ]
 
+// In development, allow localhost origins
+const isDevMode = process.env.NODE_ENV !== 'production'
+const devOrigins = isDevMode
+  ? [/^http:\/\/localhost(:\d+)?$/, /^http:\/\/127\.0\.0\.1(:\d+)?$/]
+  : []
+
 const effectiveCorsOrigins =
-  CORS_ORIGINS.length > 0 ? CORS_ORIGINS : DEFAULT_CORS_ORIGINS
+  CORS_ORIGINS.length > 0
+    ? CORS_ORIGINS
+    : [...DEFAULT_CORS_ORIGINS, ...devOrigins]
 
 const corsOptions = {
-  origin: effectiveCorsOrigins,
+  origin: isDevMode ? true : effectiveCorsOrigins, // Allow all origins in dev mode
   credentials: true,
   methods: ['GET', 'POST', 'OPTIONS'] as ('GET' | 'POST' | 'OPTIONS')[],
   allowedHeaders: [
@@ -130,6 +138,7 @@ const corsOptions = {
     'X-Wallet-Address',
     'X-Agent-Id',
   ],
+  exposeHeaders: ['host', 'user-agent', 'accept'],
 }
 
 const app = new Elysia()
@@ -685,14 +694,40 @@ const app = new Elysia()
     const data = await response.json()
     return data
   })
+  // Catch-all for unknown API routes - return 404
+  .all('/api/*', (ctx: Context) => {
+    ctx.set.status = 404
+    return { error: 'Not found', path: ctx.path }
+  })
   .onError(({ error, set }) => {
     if (error instanceof Error) {
       console.error('[REST] Unhandled error:', error.message, error.stack)
 
+      // Handle validation errors from Zod/validateParams
+      // For path parameter validation errors, return 404 (resource not found)
+      // For query parameter validation errors, return 400 (bad request)
       if (
         error.name === 'ValidationError' ||
-        error.message.includes('Validation error')
+        error.message.includes('Validation error') ||
+        error.message.includes('Validation failed') ||
+        error.message.includes('Invalid') ||
+        error.message.includes('Must be')
       ) {
+        // Return 404 for path params (e.g., /api/agents/:id) or 400 for query params
+        // Path params contain errors about specific ID/hash/address format
+        const isPathParamError =
+          error.message.includes(':id') ||
+          error.message.includes(':numberOrHash') ||
+          error.message.includes(':hash') ||
+          error.message.includes(':address') ||
+          error.message.includes(':cid') ||
+          error.message.includes(':feedId')
+
+        if (isPathParamError) {
+          set.status = 404
+          return { error: 'Not found', message: error.message }
+        }
+
         set.status = 400
         return { error: 'Validation error', message: error.message }
       }
