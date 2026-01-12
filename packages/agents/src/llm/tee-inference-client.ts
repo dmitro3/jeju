@@ -468,11 +468,12 @@ export class TEEInferenceClient {
       filtered = filtered.filter((p) => p.maxContextLength >= contextLength)
     }
 
-    if (this.config.maxPricePerToken) {
+    const maxPricePerToken = this.config.maxPricePerToken
+    if (maxPricePerToken !== undefined) {
       filtered = filtered.filter(
         (p) =>
-          p.pricePerInputToken <= this.config.maxPricePerToken! &&
-          p.pricePerOutputToken <= this.config.maxPricePerToken!,
+          p.pricePerInputToken <= maxPricePerToken &&
+          p.pricePerOutputToken <= maxPricePerToken,
       )
     }
 

@@ -2304,7 +2304,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             }
           }
 
-          const { tool, arguments: args } = parsed.data
+          const { tool } = parsed.data
           switch (tool) {
             case 'crucible_list_characters':
               return { tool, result: listCharacters() }

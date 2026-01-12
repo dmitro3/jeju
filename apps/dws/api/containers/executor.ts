@@ -173,6 +173,7 @@ function validateImageRef(imageRef: string): void {
     /[`$;|<>&]/, // Shell metacharacters
     /\.\./, // Path traversal
     /\\x[0-9a-f]{2}/i, // Hex escapes
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: we explicitly reject ASCII control characters in user input
     /[\u0000-\u001f]/, // Control characters
   ]
 
