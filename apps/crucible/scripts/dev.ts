@@ -50,13 +50,6 @@ async function buildFrontend(): Promise<void> {
     sourcemap: 'inline',
     external: [
       ...DEFAULT_BROWSER_EXTERNALS,
-      '@jejunetwork/contracts',
-      '@jejunetwork/deployment',
-      '@jejunetwork/db',
-      '@jejunetwork/sqlit',
-      'elysia',
-      '@elysiajs/cors',
-      '@elysiajs/eden',
     ],
     define: {
       'process.env.NODE_ENV': JSON.stringify('development'),
@@ -165,6 +158,15 @@ async function buildFrontend(): Promise<void> {
             path: serverOnlyStub,
           }))
           build.onResolve({ filter: /^@jejunetwork\/messaging/ }, () => ({
+            path: serverOnlyStub,
+          }))
+          build.onResolve({ filter: /^@jejunetwork\/contracts/ }, () => ({
+            path: serverOnlyStub,
+          }))
+          build.onResolve({ filter: /^@jejunetwork\/deployment/ }, () => ({
+            path: serverOnlyStub,
+          }))
+          build.onResolve({ filter: /^@jejunetwork\/sqlit/ }, () => ({
             path: serverOnlyStub,
           }))
           build.onResolve({ filter: /^elysia/ }, () => ({

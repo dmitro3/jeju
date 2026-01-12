@@ -749,6 +749,18 @@ export class AutonomousAgentRunner {
   }
 
   private extractPostableContent(responseText: string, agentId: string): string | null {
+    // Monitoring agents: post snapshot/probe/analysis output
+    if (agentId.includes('monitor') || agentId.includes('prober') || agentId.includes('analyzer')) {
+      if (
+        responseText.includes('[NODE_SNAPSHOT') ||
+        responseText.includes('[ENDPOINT_PROBE') ||
+        responseText.includes('[INFRA_ANALYSIS') ||
+        responseText.includes('Infrastructure Status')
+      ) {
+        return responseText
+      }
+    }
+
     if (agentId.includes('watcher') || agentId.includes('base')) {
       const auditLines = responseText
         .split('\n')

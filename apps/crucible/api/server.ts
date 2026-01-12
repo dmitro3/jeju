@@ -737,7 +737,7 @@ app.onBeforeHandle(
 );
 
 // Ban check middleware
-app.onBeforeHandle(banCheckMiddleware());
+app.use(banCheckMiddleware());
 
 // Metrics middleware
 app.onBeforeHandle(() => {
@@ -1232,17 +1232,41 @@ app.get("/api/v1/rooms", async ({ query }) => {
     offset: query.offset ? parseInt(query.offset as string, 10) : 0,
   };
 
-  // Fetch on-chain rooms
-  const result = await roomSdk.searchRooms(filters);
-  const onchainRooms = result.items.map((room) => ({
-    ...room,
-    roomId: room.roomId.toString(),
-    members: room.members.map((m) => ({
-      ...m,
-      agentId: m.agentId.toString(),
-    })),
-    source: "onchain" as const,
-  }));
+  // Fetch on-chain rooms (may fail in localnet if contract not deployed)
+  let onchainRooms: Array<{
+    roomId: string;
+    name: string;
+    description: string;
+    owner: string;
+    stateCid: string;
+    members: Array<{ agentId: string; role: string; joinedAt: number }>;
+    roomType: string;
+    config: { maxMembers: number; turnBased: boolean; turnTimeout: number; visibility: string };
+    active: boolean;
+    createdAt: number;
+    source: "onchain";
+  }> = [];
+  let onchainTotal = 0;
+  let onchainHasMore = false;
+
+  try {
+    const result = await roomSdk.searchRooms(filters);
+    onchainRooms = result.items.map((room) => ({
+      ...room,
+      roomId: room.roomId.toString(),
+      members: room.members.map((m) => ({
+        ...m,
+        agentId: m.agentId.toString(),
+      })),
+      source: "onchain" as const,
+    }));
+    onchainTotal = result.total;
+    onchainHasMore = result.hasMore;
+  } catch (err) {
+    log.warn("Failed to fetch on-chain rooms", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   // Fetch off-chain rooms from SQLite
   let offchainRooms: Array<{
@@ -1286,8 +1310,8 @@ app.get("/api/v1/rooms", async ({ query }) => {
 
   return {
     rooms: allRooms,
-    total: result.total + offchainRooms.length,
-    hasMore: result.hasMore,
+    total: onchainTotal + offchainRooms.length,
+    hasMore: onchainHasMore,
   };
 });
 
@@ -1701,29 +1725,35 @@ if (crucibleConfig.autonomousEnabled) {
           const autoStartAgents = [
             "base-watcher",
             "security-analyst",
+            "node-monitor",
+            "infra-analyzer",
+            "endpoint-prober",
           ];
 
           // Room configuration for agent coordination
-          const COORDINATION_ROOM = "base-contract-reviews";
+          const COORDINATION_ROOMS = [
+            { id: "base-contract-reviews", name: "Base Contract Reviews" },
+            { id: "infra-monitoring", name: "Infrastructure Monitoring" },
+            { id: "endpoint-monitoring", name: "Endpoint Monitoring" },
+          ];
 
-          // Ensure coordination room exists for agent communication
+          // Ensure coordination rooms exist for agent communication
           try {
             const { getDatabase } = await import("./sdk/database");
             const db = getDatabase();
-            const existingRoom = await db.getRoom(COORDINATION_ROOM);
-            if (!existingRoom) {
-              await db.createRoom({
-                roomId: COORDINATION_ROOM,
-                name: "Base Contract Reviews",
-                roomType: "collaboration",
-              });
-              log.info("Created coordination room", {
-                roomId: COORDINATION_ROOM,
-              });
+            for (const room of COORDINATION_ROOMS) {
+              const existingRoom = await db.getRoom(room.id);
+              if (!existingRoom) {
+                await db.createRoom({
+                  roomId: room.id,
+                  name: room.name,
+                  roomType: "collaboration",
+                });
+                log.info("Created coordination room", { roomId: room.id });
+              }
             }
           } catch (err) {
-            log.warn("Failed to create coordination room", {
-              roomId: COORDINATION_ROOM,
+            log.warn("Failed to create coordination rooms", {
               error: err instanceof Error ? err.message : String(err),
             });
           }
@@ -1756,11 +1786,21 @@ if (crucibleConfig.autonomousEnabled) {
                 },
                 // Room configuration for agent pipeline
                 ...(agentId === "base-watcher" && {
-                  postToRoom: COORDINATION_ROOM,
+                  postToRoom: "base-contract-reviews",
                 }),
                 ...(agentId === "security-analyst" && {
-                  watchRoom: COORDINATION_ROOM,
-                  postToRoom: COORDINATION_ROOM,
+                  watchRoom: "base-contract-reviews",
+                  postToRoom: "base-contract-reviews",
+                }),
+                ...(agentId === "node-monitor" && {
+                  postToRoom: "infra-monitoring",
+                }),
+                ...(agentId === "infra-analyzer" && {
+                  watchRoom: "infra-monitoring",
+                  postToRoom: "infra-monitoring",
+                }),
+                ...(agentId === "endpoint-prober" && {
+                  postToRoom: "endpoint-monitoring",
                 }),
               });
               log.info("Auto-registered autonomous agent", { agentId });
