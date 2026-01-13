@@ -746,7 +746,7 @@ class CompleteBootstrapper {
       console.log('     Building SP1 circuits (this may take a few minutes)...')
 
       // Build ethereum circuit
-      execSync(`${cargoProve} build`, {
+      execSync(`${cargoProve} prove build`, {
         cwd: join(circuitsDir, 'ethereum'),
         stdio: 'pipe',
         env: {
@@ -758,7 +758,7 @@ class CompleteBootstrapper {
       console.log('     ✅ Ethereum circuit built')
 
       // Build solana-consensus circuit
-      execSync(`${cargoProve} build`, {
+      execSync(`${cargoProve} prove build`, {
         cwd: join(circuitsDir, 'solana-consensus'),
         stdio: 'pipe',
         env: {
@@ -1211,11 +1211,12 @@ class CompleteBootstrapper {
         'RiskSleeve (Risk-Tiered Liquidity)',
       )
 
-      // Deploy MultiServiceStakeManager (stakingToken, owner)
+      // Deploy MultiServiceStakeManager (stakingToken, treasury, initialOwner)
       const multiServiceStakeManager = this.deployContractFromPackages(
         'src/staking/MultiServiceStakeManager.sol:MultiServiceStakeManager',
         [
           contracts.jeju || '0x0000000000000000000000000000000000000000',
+          this.deployerAddress,
           this.deployerAddress,
         ],
         'MultiServiceStakeManager',
@@ -1344,10 +1345,29 @@ class CompleteBootstrapper {
     computeStaking: string
   }> {
     try {
+      const identityRegistry = contracts.identityRegistry
+      if (!identityRegistry) {
+        throw new Error(
+          'Missing identityRegistry dependency for ComputeRegistry deployment',
+        )
+      }
+      const banManager = contracts.banManager
+      if (!banManager) {
+        throw new Error(
+          'Missing banManager dependency for ComputeRegistry deployment',
+        )
+      }
+
       // Deploy ComputeRegistry (from packages/contracts)
       const computeRegistry = this.deployContractFromPackages(
         'src/compute/ComputeRegistry.sol:ComputeRegistry',
-        [this.deployerAddress],
+        [
+          this.deployerAddress,
+          identityRegistry,
+          banManager,
+          // 0.01 ETH minimum provider stake (matches solidity tests)
+          '10000000000000000',
+        ],
         'ComputeRegistry (Provider Registry)',
       )
 

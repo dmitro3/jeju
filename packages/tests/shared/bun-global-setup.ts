@@ -285,14 +285,14 @@ async function deployContractsIfNeeded(
     console.log('  Running bootstrap script...')
     await execa('bun', ['run', bootstrapScript], {
       cwd: rootDir,
-      stdio: 'pipe',
+      stdio: 'inherit',
       env: {
         ...process.env,
         JEJU_RPC_URL: rpcUrl,
         L2_RPC_URL: rpcUrl,
         DEPLOYER_PRIVATE_KEY: DEPLOYER_KEY,
       },
-      timeout: 300000, // 5 minute timeout
+      timeout: 900000, // 15 minute timeout (full bootstrap can be slow on CI)
     })
 
     // Verify deployment ON-CHAIN
