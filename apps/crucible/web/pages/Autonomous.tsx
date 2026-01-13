@@ -1,25 +1,35 @@
+import type { JsonValue } from '@jejunetwork/types'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { LoadingSpinner } from '../components/LoadingSpinner'
-import { useAuthenticatedFetch, useMyAgents } from '../hooks'
+import { useAuthenticatedFetch, useCharacters } from '../hooks'
+
+interface ActivityEntry {
+  action: string
+  timestamp: number
+  success: boolean
+  result?: JsonValue
+}
+
+interface AutonomousAgentStatus {
+  id: string
+  character: string
+  lastTick: number
+  tickCount: number
+  recentActivity: ActivityEntry[]
+}
 
 interface AutonomousStatus {
   enabled: boolean
   running?: boolean
   agentCount?: number
-  agents?: Array<{
-    id: string
-    agentId?: string
-    character: string
-    lastTick: number
-    tickCount: number
-    enabled?: boolean
-  }>
+  agents?: AutonomousAgentStatus[]
   message?: string
 }
 
 interface RegisterAgentRequest {
-  agentId: string
+  characterId: string
   tickIntervalMs?: number
 }
 
@@ -101,42 +111,80 @@ function useUnregisterAgent() {
   })
 }
 
+function formatTime(timestamp: number): string {
+  if (!timestamp) return 'Never'
+  return new Date(timestamp).toLocaleTimeString()
+}
+
+function formatActivityTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function summarizeJsonValue(value: JsonValue): string {
+  if (value === null) return 'null'
+  if (typeof value === 'string') return value.slice(0, 60)
+  if (typeof value === 'number' || typeof value === 'boolean')
+    return String(value)
+  const json = JSON.stringify(value)
+  return json.length > 60 ? `${json.slice(0, 60)}…` : json
+}
+
+function formatJsonValue(value: JsonValue): string {
+  if (value === null) return 'null'
+  if (typeof value === 'string') return value
+  return JSON.stringify(value, null, 2)
+}
+
 export default function AutonomousPage() {
   const { data: status, isLoading, error } = useAutonomousStatus()
-  const { data: agentsData } = useMyAgents()
+  const { data: characters } = useCharacters()
   const startRunner = useStartRunner()
   const stopRunner = useStopRunner()
   const registerAgent = useRegisterAgent()
   const unregisterAgent = useUnregisterAgent()
 
   const [showRegister, setShowRegister] = useState(false)
-  const [selectedAgentId, setSelectedAgentId] = useState('')
-  const [tickInterval, setTickInterval] = useState(60000)
+  const [selectedCharacterId, setSelectedCharacterId] = useState('')
+  const [tickInterval, setTickInterval] = useState(60_000)
+
+  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set())
+  const [expandedActivities, setExpandedActivities] = useState<Set<string>>(
+    new Set(),
+  )
+
+  const toggleExpanded = (agentId: string) => {
+    setExpandedAgents((prev) => {
+      const next = new Set(prev)
+      if (next.has(agentId)) next.delete(agentId)
+      else next.add(agentId)
+      return next
+    })
+  }
+
+  const toggleActivityExpanded = (key: string) => {
+    setExpandedActivities((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedAgentId) return
+    if (!selectedCharacterId) return
 
     await registerAgent.mutateAsync({
-      agentId: selectedAgentId,
+      characterId: selectedCharacterId,
       tickIntervalMs: tickInterval,
     })
 
     setShowRegister(false)
-    setSelectedAgentId('')
-  }
-
-  const formatTime = (timestamp: number) => {
-    if (!timestamp) return 'Never'
-    const date = new Date(timestamp)
-    return date.toLocaleTimeString()
-  }
-
-  const _formatDuration = (ms: number) => {
-    const seconds = Math.floor(ms / 1000)
-    const minutes = Math.floor(seconds / 60)
-    if (minutes > 0) return `${minutes}m`
-    return `${seconds}s`
+    setSelectedCharacterId('')
   }
 
   if (isLoading) {
@@ -154,7 +202,6 @@ export default function AutonomousPage() {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="card-static p-8 text-center" role="alert">
-          <div className="text-5xl mb-4">⚠️</div>
           <h2
             className="text-xl font-bold mb-2"
             style={{ color: 'var(--color-error)' }}
@@ -169,7 +216,6 @@ export default function AutonomousPage() {
 
   return (
     <div className="max-w-6xl mx-auto">
-      {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1
@@ -213,7 +259,6 @@ export default function AutonomousPage() {
         </div>
       </header>
 
-      {/* Status Card */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <div className="card-static p-5 text-center">
           <p
@@ -263,10 +308,8 @@ export default function AutonomousPage() {
         </div>
       </div>
 
-      {/* Not Enabled Message */}
       {!status?.enabled && (
         <div className="card-static p-8 text-center mb-8">
-          <div className="text-5xl mb-4">🔌</div>
           <h2
             className="text-xl font-bold mb-2"
             style={{ color: 'var(--text-primary)' }}
@@ -286,7 +329,6 @@ export default function AutonomousPage() {
         </div>
       )}
 
-      {/* Register Agent Form */}
       {status?.enabled && (
         <>
           <div className="flex items-center justify-between mb-6">
@@ -296,15 +338,18 @@ export default function AutonomousPage() {
             >
               Registered Agents
             </h2>
-            <button
-              type="button"
-              onClick={() => setShowRegister(!showRegister)}
-              className={
-                showRegister ? 'btn-secondary btn-sm' : 'btn-primary btn-sm'
-              }
-            >
-              {showRegister ? 'Cancel' : 'Register Agent'}
-            </button>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => setShowRegister((v) => !v)}
+              >
+                {showRegister ? 'Close' : 'Register existing'}
+              </button>
+              <Link to="/agents/new" className="btn-primary btn-sm">
+                Deploy Agent
+              </Link>
+            </div>
           </div>
 
           {showRegister && (
@@ -323,19 +368,19 @@ export default function AutonomousPage() {
                     className="block text-sm font-medium mb-2"
                     style={{ color: 'var(--text-secondary)' }}
                   >
-                    Agent
+                    Character
                   </label>
                   <select
                     id="agent-select"
-                    value={selectedAgentId}
-                    onChange={(e) => setSelectedAgentId(e.target.value)}
+                    value={selectedCharacterId}
+                    onChange={(e) => setSelectedCharacterId(e.target.value)}
                     className="input max-w-md"
                     required
                   >
-                    <option value="">Select an agent...</option>
-                    {agentsData?.agents.map((agent) => (
-                      <option key={agent.agentId} value={agent.agentId}>
-                        {agent.name} (#{agent.agentId})
+                    <option value="">Select a character...</option>
+                    {characters?.map((character) => (
+                      <option key={character.id} value={character.id}>
+                        {character.name} ({character.id})
                       </option>
                     ))}
                   </select>
@@ -355,10 +400,10 @@ export default function AutonomousPage() {
                     onChange={(e) => setTickInterval(Number(e.target.value))}
                     className="input max-w-xs"
                   >
-                    <option value={60000}>1 minute</option>
-                    <option value={120000}>2 minutes</option>
-                    <option value={300000}>5 minutes</option>
-                    <option value={600000}>10 minutes</option>
+                    <option value={60_000}>1 minute</option>
+                    <option value={120_000}>2 minutes</option>
+                    <option value={300_000}>5 minutes</option>
+                    <option value={600_000}>10 minutes</option>
                   </select>
                 </div>
 
@@ -372,7 +417,7 @@ export default function AutonomousPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={!selectedAgentId || registerAgent.isPending}
+                    disabled={!selectedCharacterId || registerAgent.isPending}
                     className="btn-primary"
                   >
                     {registerAgent.isPending ? (
@@ -401,81 +446,198 @@ export default function AutonomousPage() {
             </div>
           )}
 
-          {/* Agent List */}
           {status?.agents && status.agents.length > 0 ? (
             <div className="space-y-4">
-              {status.agents.map((agent) => (
-                <div
-                  key={agent.id}
-                  className="card-static p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
-                      style={{ backgroundColor: 'var(--bg-secondary)' }}
-                    >
-                      🤖
+              {status.agents.map((agent) => {
+                const isExpanded = expandedAgents.has(agent.id)
+                const hasActivity = agent.recentActivity.length > 0
+
+                return (
+                  <div key={agent.id} className="card-static overflow-hidden">
+                    <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                          style={{ backgroundColor: 'var(--bg-secondary)' }}
+                        >
+                          🤖
+                        </div>
+                        <div>
+                          <h3
+                            className="font-bold font-display"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {agent.character}
+                          </h3>
+                          <p
+                            className="text-sm font-mono"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          >
+                            {agent.id}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                        <div className="text-center">
+                          <p
+                            className="text-xs"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          >
+                            Last Tick
+                          </p>
+                          <p
+                            className="font-medium"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {formatTime(agent.lastTick)}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p
+                            className="text-xs"
+                            style={{ color: 'var(--text-tertiary)' }}
+                          >
+                            Ticks
+                          </p>
+                          <p
+                            className="font-medium tabular-nums"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {agent.tickCount}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(agent.id)}
+                          className="btn-ghost btn-sm"
+                          style={{ color: 'var(--text-secondary)' }}
+                          disabled={!hasActivity}
+                          title={
+                            hasActivity ? 'Show activity' : 'No activity yet'
+                          }
+                        >
+                          {isExpanded ? '▼' : '▶'} Activity
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => unregisterAgent.mutate(agent.id)}
+                          disabled={unregisterAgent.isPending}
+                          className="btn-ghost btn-sm"
+                          style={{ color: 'var(--color-error)' }}
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <h3
-                        className="font-bold font-display"
-                        style={{ color: 'var(--text-primary)' }}
+
+                    {isExpanded && hasActivity && (
+                      <div
+                        className="border-t px-5 py-4"
+                        style={{
+                          borderColor: 'var(--border-primary)',
+                          backgroundColor: 'var(--bg-secondary)',
+                        }}
                       >
-                        Agent #{agent.agentId ?? 'Unknown'}
-                      </h3>
-                      <p
-                        className="text-sm font-mono"
-                        style={{ color: 'var(--text-tertiary)' }}
-                      >
-                        trigger: {agent.id}
-                      </p>
-                    </div>
+                        <p
+                          className="text-xs font-medium mb-3"
+                          style={{ color: 'var(--text-tertiary)' }}
+                        >
+                          Recent Activity (last 10)
+                        </p>
+                        <div className="space-y-1">
+                          {[...agent.recentActivity]
+                            .reverse()
+                            .map((activity, idx) => {
+                              const activityKey = `${agent.id}-${activity.timestamp}-${idx}`
+                              const expanded =
+                                expandedActivities.has(activityKey)
+                              const hasResult = activity.result !== undefined
+                              const result = activity.result
+                              return (
+                                <div key={activityKey}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (hasResult)
+                                        toggleActivityExpanded(activityKey)
+                                    }}
+                                    className="w-full flex items-start gap-3 text-sm text-left py-1 px-2 rounded hover:bg-black/10"
+                                    style={{
+                                      cursor: hasResult ? 'pointer' : 'default',
+                                    }}
+                                  >
+                                    <span
+                                      className="flex-shrink-0 w-5 text-center"
+                                      style={{
+                                        color: activity.success
+                                          ? 'var(--color-success)'
+                                          : 'var(--color-error)',
+                                      }}
+                                    >
+                                      {activity.success ? '✓' : '✗'}
+                                    </span>
+                                    <span
+                                      className="flex-shrink-0 font-mono text-xs"
+                                      style={{ color: 'var(--text-tertiary)' }}
+                                    >
+                                      {formatActivityTime(activity.timestamp)}
+                                    </span>
+                                    <span
+                                      className="font-medium flex-shrink-0"
+                                      style={{ color: 'var(--text-primary)' }}
+                                    >
+                                      {activity.action}
+                                    </span>
+                                    {hasResult && !expanded && (
+                                      <span
+                                        className="truncate"
+                                        style={{
+                                          color: activity.success
+                                            ? 'var(--text-secondary)'
+                                            : 'var(--color-error)',
+                                        }}
+                                      >
+                                        {result !== undefined
+                                          ? summarizeJsonValue(result)
+                                          : ''}
+                                      </span>
+                                    )}
+                                    {hasResult && (
+                                      <span
+                                        className="flex-shrink-0 ml-auto"
+                                        style={{
+                                          color: 'var(--text-tertiary)',
+                                        }}
+                                      >
+                                        {expanded ? '▼' : '▶'}
+                                      </span>
+                                    )}
+                                  </button>
+                                  {expanded && hasResult && (
+                                    <pre
+                                      className="mt-1 ml-8 p-3 rounded text-xs overflow-x-auto"
+                                      style={{
+                                        backgroundColor: 'var(--bg-primary)',
+                                        color: 'var(--text-secondary)',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                      }}
+                                    >
+                                      {result !== undefined
+                                        ? formatJsonValue(result)
+                                        : ''}
+                                    </pre>
+                                  )}
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-center">
-                      <p
-                        className="text-xs"
-                        style={{ color: 'var(--text-tertiary)' }}
-                      >
-                        Last Tick
-                      </p>
-                      <p
-                        className="font-medium"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {formatTime(agent.lastTick)}
-                      </p>
-                    </div>
-                    <div className="text-center">
-                      <p
-                        className="text-xs"
-                        style={{ color: 'var(--text-tertiary)' }}
-                      >
-                        Ticks
-                      </p>
-                      <p
-                        className="font-medium tabular-nums"
-                        style={{ color: 'var(--text-primary)' }}
-                      >
-                        {agent.tickCount}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        agent.agentId
-                          ? unregisterAgent.mutate(agent.agentId)
-                          : undefined
-                      }
-                      disabled={!agent.agentId || unregisterAgent.isPending}
-                      className="btn-ghost btn-sm"
-                      style={{ color: 'var(--color-error)' }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ) : (
             <div className="card-static p-12 text-center">
@@ -487,15 +649,11 @@ export default function AutonomousPage() {
                 No Autonomous Agents
               </h3>
               <p className="mb-4" style={{ color: 'var(--text-secondary)' }}>
-                Register an agent to start autonomous execution.
+                Deploy an agent to start autonomous execution.
               </p>
-              <button
-                type="button"
-                onClick={() => setShowRegister(true)}
-                className="btn-primary"
-              >
-                Register Agent
-              </button>
+              <Link to="/agents/new" className="btn-primary">
+                Deploy Agent
+              </Link>
             </div>
           )}
         </>

@@ -34,11 +34,10 @@ export class MetricsExporter {
 
   constructor(config: MetricsConfig) {
     this.config = config
-    const chain = this.getChain(config.chainId)
     this.client = createPublicClient({
-      chain,
+      chain: this.getChain(config.chainId),
       transport: http(config.rpcUrl),
-    })
+    }) as ReturnType<typeof createPublicClient>
   }
 
   private getChain(chainId: number) {

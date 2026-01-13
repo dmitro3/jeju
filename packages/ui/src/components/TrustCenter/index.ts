@@ -11,4 +11,4 @@ export {
   type TEEPlatform,
   type TrustCenterProps,
   TrustCenterWidget,
-} from './TrustCenterWidget.js'
+} from './TrustCenterWidget'

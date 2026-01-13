@@ -116,6 +116,10 @@ packages/contracts/cache-root-owned/
 
 # Generated documentation
 docs/
+# But allow documentation app's required pages directory
+!apps/documentation/docs/
+apps/documentation/docs/*
+!apps/documentation/docs/pages/
 
 # Generated indexer models (regenerated from schema)
 apps/indexer/api/model/generated/
@@ -157,4 +161,4 @@ ONBOARDING-FIXES.md
 vendor/babylon/
 vendor/eliza/
 vendor/eliza-cloud-v2/
-vendor/
+vendor/packages/contracts/mcore_*

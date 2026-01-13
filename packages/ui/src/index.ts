@@ -43,7 +43,7 @@ export {
   type TEEPlatform,
   type TrustCenterProps,
   TrustCenterWidget,
-} from './components/TrustCenter/index.js'
+} from './components/TrustCenter'
 export {
   type NetworkContextValue,
   NetworkProvider,

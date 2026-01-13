@@ -421,9 +421,10 @@ function parseCertChain(certData: Uint8Array): string[] {
 
   const pemRegex =
     /-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g
-  let match
-  while ((match = pemRegex.exec(certString)) !== null) {
+  let match: RegExpExecArray | null = pemRegex.exec(certString)
+  while (match !== null) {
     certs.push(match[0])
+    match = pemRegex.exec(certString)
   }
 
   return certs

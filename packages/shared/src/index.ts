@@ -34,6 +34,8 @@ export {
   type WalletClientConfig,
   writeContract,
 } from '@jejunetwork/contracts'
+// Alerts
+export * from './alerts'
 // Moderation API
 export {
   type AgentLabels,

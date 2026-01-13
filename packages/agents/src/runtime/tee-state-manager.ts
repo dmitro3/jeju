@@ -399,11 +399,14 @@ export class TEEStateManager {
     // Get snapshot ID - check memory first, then storage
     let id = snapshotId
     if (!id) {
-      id = this.latestSnapshots.get(agentId) ?? null
+      id = this.latestSnapshots.get(agentId)
       if (!id && this.config.persistState) {
-        id = await this.storage.get(
+        const storedLatest = await this.storage.get(
           `state:${this.config.nodeId}:${agentId}:latest`,
         )
+        if (storedLatest) {
+          id = storedLatest
+        }
       }
       if (!id) return null
     }
@@ -450,7 +453,14 @@ export class TEEStateManager {
 
     return keys
       .filter((k) => !k.endsWith(':latest'))
-      .map((k) => k.split(':').pop()!)
+      .map((k) => {
+        const parts = k.split(':')
+        const last = parts[parts.length - 1]
+        if (!last) {
+          throw new Error(`Invalid snapshot key: ${k}`)
+        }
+        return last
+      })
   }
 
   // ============================================================================
@@ -463,8 +473,10 @@ export class TEEStateManager {
   async rotateKey(newMrEnclave: string, newMrSigner: string): Promise<void> {
     if (!this.initialized) await this.initialize()
 
-    const oldKey = this.masterKey!
-    const _oldVersion = this.keyVersion
+    const oldKey = this.masterKey
+    if (!oldKey) {
+      throw new Error('Master key not initialized')
+    }
 
     // Derive new key
     this.keyVersion++
@@ -473,19 +485,22 @@ export class TEEStateManager {
       newMrSigner,
       this.config.nodeId,
     )
+    const newKey: Buffer | null = this.masterKey
+    if (!newKey) {
+      throw new Error('Derived master key is missing')
+    }
 
     // Re-encrypt all secrets
     const secretEntries = Array.from(this.secrets.entries())
     for (let i = 0; i < secretEntries.length; i++) {
       const [id, secret] = secretEntries[i]
       // Decrypt with old key
-      const oldMasterKey = this.masterKey
       this.masterKey = oldKey
 
       const decrypted = this.decrypt(secret.value)
 
       // Re-encrypt with new key
-      this.masterKey = oldMasterKey
+      this.masterKey = newKey
       const reencrypted = this.encrypt(decrypted)
 
       secret.value = reencrypted

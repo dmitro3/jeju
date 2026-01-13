@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { type Subprocess, spawn } from 'bun'
 import { logger } from '../lib/logger'
+import { ensurePortAvailable } from '../lib/system'
 import { discoverApps } from '../lib/testing'
 import type { AppManifest } from '../types'
 
@@ -64,9 +65,9 @@ export class AppOrchestrator {
       return
     }
 
-    // For tests, prefer 'start' command which assumes infrastructure is already running
-    // Fall back to 'dev' which manages its own infrastructure
-    const command = app.commands?.start ?? app.commands?.dev
+    // For E2E, we usually need the full app (frontend + API). In Jeju apps,
+    // that is typically wired up under `dev` (while `start` can be backend-only).
+    const command = app.commands?.dev ?? app.commands?.start
     if (!command) {
       logger.debug(`No start/dev command for ${app.name}`)
       return
@@ -92,12 +93,21 @@ export class AppOrchestrator {
       appEnv.PUBLIC_PORT = String(mainPort)
     }
 
+    if (mainPort) {
+      const available = await ensurePortAvailable(mainPort)
+      if (!available) {
+        throw new Error(
+          `FATAL: Port ${mainPort} is already in use and could not be freed for ${app.name}`,
+        )
+      }
+    }
+
     const [cmd, ...args] = command.split(' ')
     const proc = spawn({
       cmd: [cmd, ...args],
       cwd: appDir,
-      stdout: 'pipe',
-      stderr: 'pipe',
+      stdout: 'inherit',
+      stderr: 'inherit',
       env: appEnv,
     })
 

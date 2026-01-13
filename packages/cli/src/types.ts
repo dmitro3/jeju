@@ -129,19 +129,12 @@ export interface AppManifest {
   }
   /** Architecture configuration for on-chain deployment */
   architecture?: {
-    frontend?: boolean | { outputDir?: string }
+    type?: 'hybrid' | 'frontend' | 'backend'
+    frontend?: boolean | { outputDir?: string; buildDir?: string }
     backend?: boolean | { outputDir?: string }
   }
   /** Decentralization configuration */
   decentralization?: {
-    frontend?: {
-      buildDir?: string
-      jnsName?: string
-      ipfs?: boolean
-      arweave?: boolean
-      spa?: boolean
-      fallbackOrigins?: string[]
-    }
     cdn?: {
       enabled?: boolean
       regions?: string[]
@@ -157,6 +150,20 @@ export interface AppManifest {
         varyHeaders?: string[]
       }
       serviceWorker?: boolean
+    }
+    frontend?: {
+      ipfs?: boolean
+      arweave?: boolean
+      jnsName?: string
+      buildDir?: string
+      spa?: boolean
+      fallbackOrigins?: string[]
+    }
+    robustness?: {
+      multiOrigin?: boolean
+      offlineSupport?: boolean
+      p2pFallback?: boolean
+      contentAddressed?: boolean
     }
   }
   /** Populated by discoverApps with actual directory name */

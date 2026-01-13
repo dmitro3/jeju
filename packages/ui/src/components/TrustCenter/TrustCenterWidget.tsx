@@ -207,9 +207,9 @@ const Tooltip: FC<TooltipProps> = ({ children, content }) => {
 
   return (
     <div className="relative inline-block">
-      <span
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
+        className="contents"
         aria-expanded={show}
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
@@ -225,7 +225,7 @@ const Tooltip: FC<TooltipProps> = ({ children, content }) => {
         }}
       >
         {children}
-      </span>
+      </button>
       {show && (
         <div className="absolute z-50 px-3 py-2 text-sm text-white bg-gray-900 rounded-lg shadow-lg -top-2 left-full ml-2 w-64">
           {content}
@@ -285,11 +285,10 @@ export const TrustCenterWidget: FC<TrustCenterProps> = ({
       className={`rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm ${className}`}
     >
       {/* Header */}
-      <div
-        className="flex items-center justify-between p-4 cursor-pointer"
+      <button
+        type="button"
+        className="flex items-center justify-between p-4 cursor-pointer w-full text-left"
         onClick={() => setExpanded(!expanded)}
-        role="button"
-        tabIndex={0}
         aria-expanded={expanded}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -341,7 +340,7 @@ export const TrustCenterWidget: FC<TrustCenterProps> = ({
             ▼
           </span>
         </div>
-      </div>
+      </button>
 
       {/* Expanded Content */}
       {expanded && (

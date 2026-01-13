@@ -73,12 +73,12 @@
       "workerRegistry": "0xD8a5a9b31c3C0232E196d518E89Fd8bF83AcAd43",
       "cdnRegistry": "0xDC11f7E700A4c898AE5CAddB1082cFfa76512aDD",
       "repoRegistry": "0x0dcd1bf9a1b36ce34237eeafef220932846bcd82",
-      "packageRegistry": "0x1f53e116c31f171e59f45f0752aec5d1f5aa3714",
-      "managedDatabaseRegistry": "0x6f2e42bb4176e9a7352a8bf8886255be9f3d2d13",
-      "gitRegistry": "0x6b21b3ae41f818fc91e322b53f8d0773d31ecb75",
-      "cacheManager": "0xa31f4c0ef2935af25370d9ae275169ccd9793da3",
-      "cronOrchestrator": "0xf9c0bf1cfaab883adb95fed4cfd60133bffab18a",
-      "containerRegistry": "0xb830887ee23d3f9ed8c27dbf7dcfe63037765475",
+      "packageRegistry": "0x6c383ef7c9bf496b5c847530eb9c49a3ed6e4c56",
+      "managedDatabaseRegistry": "0x01c93598eec9131c05a2450cd033cbd8f82da31e",
+      "gitRegistry": "0xf524930660f75cf602e909c15528d58459ab2a56",
+      "cacheManager": "0xaaf0f531b7947e8492f21862471d61d5305f7538",
+      "cronOrchestrator": "0x2ce1f0e20c1f69e9d9aea83b25f0ceb69e2aa2b5",
+      "containerRegistry": "0xe5b6f5e695ba6e4aed92b68c4cc8df1160d69a81",
       "storageProviderRegistry": "0xdc64a140aa3e981100a9beca4e685f962f0cf6c9",
       "identityRegistry": "0x5fc8d32690cc91d4c39d9d3abcbd16989f875707"
     },
@@ -86,7 +86,10 @@
       "creditManager": "0x68B1D87F95878fE05B998F19b66F4baba5De1aed",
       "universalPaymaster": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c",
       "paymasterFactory": "0xB7f8BC63BbcaD18155201308C8f3540b07f84F5e",
-      "feeConfig": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0"
+      "feeConfig": "0xA51c1fc2f0D1a1b8494Ed1FE312d7C3a78Ed91C0",
+      "tokenRegistry": "0x610178dA211FEF7D417bC0e6FeD39F05609AD788",
+      "priceOracle": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "multiTokenPaymaster": "0x3Aa5ebB10DC797CAC828524e59A333d0A371443c"
     },
     "commerce": {
       "authCaptureEscrow": "",
@@ -106,7 +109,7 @@
       "inferenceServing": "0x08A90aF9A6eBBe11c322AD9930CC58E122231B5A",
       "staking": "0x7bdd3b028C4796eF0EAf07d11394d0d9d8c24139",
       "workerRegistry": "",
-      "cronTriggerRegistry": "0xf9c0bf1cfaab883adb95fed4cfd60133bffab18a"
+      "cronTriggerRegistry": "0x2ce1f0e20c1f69e9d9aea83b25f0ceb69e2aa2b5"
     },
     "sequencer": {
       "registry": "0x22753E4264FDDc6181dc7cce468904A80a363E44",

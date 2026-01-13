@@ -1,34 +1,9 @@
 /**
- * Empty stub for server-only modules in browser builds.
- * Provides minimal exports to prevent import errors.
+ * Browser stub for server-only modules.
  *
- * Used by the build process to replace server-only packages:
- * - @jejunetwork/kms
- * - @jejunetwork/db
- * - @jejunetwork/deployment
- * - @jejunetwork/messaging
- * - @jejunetwork/contracts
- * - elysia / @elysiajs/*
- * - ioredis
+ * This file is used by Vite aliases to prevent bundling Node/server deps into the web build.
+ * It must be safe to import in the browser and should fail fast if used at runtime.
  */
-
-// Export empty object for any default import
-export default {}
-
-// Export a no-op function for any named function import
-export function noop(): void {}
-
-// Common database stub
-export function getSQLit(): null {
-  return null
-}
-
-// Common type stubs
-export type SQLitClient = never
-
-// ============================================================================
-// viem contract helpers (stubbed for browser builds)
-// ============================================================================
 
 import type {
   Abi,
@@ -43,6 +18,68 @@ import type {
   Transport,
   WalletClient as ViemWalletClient,
 } from 'viem'
+
+export default {}
+
+export function noop(): void {}
+
+export function cors(): object {
+  return {}
+}
+
+type AnyValue =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | object
+
+export class Elysia {
+  use(..._args: AnyValue[]): this {
+    return this
+  }
+  get(..._args: AnyValue[]): this {
+    return this
+  }
+  post(..._args: AnyValue[]): this {
+    return this
+  }
+  put(..._args: AnyValue[]): this {
+    return this
+  }
+  patch(..._args: AnyValue[]): this {
+    return this
+  }
+  delete(..._args: AnyValue[]): this {
+    return this
+  }
+  group(..._args: AnyValue[]): this {
+    return this
+  }
+  derive(..._args: AnyValue[]): this {
+    return this
+  }
+  onBeforeHandle(..._args: AnyValue[]): this {
+    return this
+  }
+  onError(..._args: AnyValue[]): this {
+    return this
+  }
+  listen(..._args: AnyValue[]): void {
+    throw new Error('Elysia is not available in browser builds')
+  }
+}
+
+export function getSQLit(): null {
+  return null
+}
+
+export const banManagerAbi: readonly [] = []
+
+export type SQLitClient = never
 
 export async function readContract<
   const TAbi extends Abi,
@@ -90,51 +127,4 @@ export async function writeContract<
   },
 ): Promise<Hex> {
   throw new Error('writeContract is not available in browser builds')
-}
-
-// ============================================================================
-// Elysia (stubbed for browser builds)
-// ============================================================================
-
-type AnyValue =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined
-  | object
-
-export class Elysia {
-  use(..._args: AnyValue[]): this {
-    return this
-  }
-  get(..._args: AnyValue[]): this {
-    return this
-  }
-  post(..._args: AnyValue[]): this {
-    return this
-  }
-  put(..._args: AnyValue[]): this {
-    return this
-  }
-  patch(..._args: AnyValue[]): this {
-    return this
-  }
-  delete(..._args: AnyValue[]): this {
-    return this
-  }
-  onError(..._args: AnyValue[]): this {
-    return this
-  }
-  onBeforeHandle(..._args: AnyValue[]): this {
-    return this
-  }
-  derive(..._args: AnyValue[]): this {
-    return this
-  }
-  listen(..._args: AnyValue[]): void {
-    throw new Error('Elysia is not available in browser builds')
-  }
 }

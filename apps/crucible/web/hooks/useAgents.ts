@@ -66,6 +66,7 @@ interface AgentsSearchResponse {
 }
 
 interface RegisterAgentRequest {
+  name: string
   character: {
     id: string
     name: string
@@ -82,6 +83,15 @@ interface RegisterAgentRequest {
     }
   }
   initialFunding?: string
+  capabilities?: {
+    canChat?: boolean
+    canTrade?: boolean
+    canVote?: boolean
+    canPropose?: boolean
+    canStake?: boolean
+    a2a?: boolean
+    compute?: boolean
+  }
 }
 
 interface RegisterAgentResponse {

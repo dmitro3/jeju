@@ -10,6 +10,7 @@ import {
   stopLocalnet,
 } from '../lib/chain'
 import { logger } from '../lib/logger'
+import { DEFAULT_PORTS } from '../types'
 
 export interface LocalnetStatus {
   running: boolean
@@ -26,6 +27,15 @@ export class LocalnetOrchestrator {
 
   constructor(rootDir: string) {
     this.rootDir = rootDir
+  }
+
+  private getPorts(): { l1Port: number; l2Port: number } {
+    return (
+      loadPortsConfig(this.rootDir) ?? {
+        l1Port: DEFAULT_PORTS.l1Rpc,
+        l2Port: DEFAULT_PORTS.l2Rpc,
+      }
+    )
   }
 
   async start(): Promise<void> {
@@ -50,12 +60,13 @@ export class LocalnetOrchestrator {
       return
     }
 
-    const ports = loadPortsConfig(this.rootDir)
-    if (!ports) {
-      throw new Error('Localnet not running - cannot bootstrap')
-    }
+    const ports = this.getPorts()
 
     const l2RpcUrl = `http://127.0.0.1:${ports.l2Port}`
+    const healthy = await checkRpcHealth(l2RpcUrl, 2000)
+    if (!healthy) {
+      throw new Error('Localnet not running - cannot bootstrap')
+    }
 
     logger.step('Bootstrapping contracts...')
     await bootstrapContracts(this.rootDir, l2RpcUrl)
@@ -78,20 +89,13 @@ export class LocalnetOrchestrator {
   }
 
   async waitForReady(timeout = 60000): Promise<boolean> {
-    const ports = loadPortsConfig(this.rootDir)
-    if (!ports) {
-      return false
-    }
-
+    const ports = this.getPorts()
     const l2RpcUrl = `http://127.0.0.1:${ports.l2Port}`
     return await checkRpcHealth(l2RpcUrl, timeout)
   }
 
   getEnvVars(): Record<string, string> {
-    const ports = loadPortsConfig(this.rootDir)
-    if (!ports) {
-      return {}
-    }
+    const ports = this.getPorts()
 
     return {
       L1_RPC_URL: `http://127.0.0.1:${ports.l1Port}`,
@@ -102,10 +106,7 @@ export class LocalnetOrchestrator {
   }
 
   getStatus(): LocalnetStatus {
-    const ports = loadPortsConfig(this.rootDir)
-    if (!ports) {
-      return { running: false }
-    }
+    const ports = this.getPorts()
 
     const bootstrapFile = join(
       this.rootDir,

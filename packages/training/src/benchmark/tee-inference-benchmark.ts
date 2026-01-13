@@ -295,9 +295,9 @@ export class TEEInferenceBenchmark {
     const failed = results.filter((r) => !r.success)
 
     const latencies = successful.map((r) => r.latency).sort((a, b) => a - b)
-    const attestationTimes = successful
-      .filter((r) => r.attestationTime !== undefined)
-      .map((r) => r.attestationTime!)
+    const attestationTimes = successful.flatMap((r) =>
+      r.attestationTime === undefined ? [] : [r.attestationTime],
+    )
 
     const totalInputTokens = successful.reduce(
       (sum, r) => sum + r.inputTokens,

@@ -34,6 +34,7 @@ import type {
   AgentCharacter,
   AgentDefinition,
   AgentSearchFilter,
+  RoomType,
 } from '../lib/types'
 import { createBotsRouter } from './bots'
 import { characters, getCharacter, listCharacters } from './characters'
@@ -56,6 +57,10 @@ import { createStorage } from './sdk/storage'
 // Minimal ABI for reading vault balance
 const AGENT_VAULT_ABI = parseAbi([
   'function getBalance(uint256 agentId) external view returns (uint256)',
+])
+
+const AGENT_VAULT_EVENTS_ABI = parseAbi([
+  'event Spent(uint256 indexed agentId, address indexed spender, address recipient, uint256 amount, string reason)',
 ])
 
 const TRIGGER_REGISTRY_CRON_ABI = parseAbi([
@@ -114,6 +119,15 @@ function parsePositiveBigIntParam(value: string, paramName: string): bigint {
     throw new Error(`Invalid ${paramName}`)
   }
   return result
+}
+
+function parseHex32(value: string, paramName: string): `0x${string}` {
+  const parsed = TX_HASH_SCHEMA.parse(value)
+  const isHex = (v: string): v is `0x${string}` => /^0x[a-fA-F0-9]+$/.test(v)
+  if (!isHex(parsed)) {
+    throw new Error(`Invalid ${paramName}`)
+  }
+  return parsed
 }
 
 async function validateOAuth3Session(teeUrl: string, token: string) {
@@ -504,6 +518,92 @@ async function loadTickIntervalMs(
   return Number(value)
 }
 
+type ActionsTodayCache = {
+  key: string
+  updatedAt: number
+  value: number
+}
+
+let actionsTodayCache: ActionsTodayCache | null = null
+
+async function findFirstBlockAtOrAfterTimestamp(
+  publicClient: CrucibleRuntimeContext['publicClient'],
+  targetTimestampSec: bigint,
+): Promise<bigint> {
+  let low = 0n
+  let high = await publicClient.getBlockNumber()
+
+  while (low < high) {
+    const mid = (low + high) / 2n
+    const block = await publicClient.getBlock({ blockNumber: mid })
+    if (block.timestamp < targetTimestampSec) {
+      low = mid + 1n
+    } else {
+      high = mid
+    }
+  }
+
+  return low
+}
+
+async function countSpentEventsSince(
+  ctx: CrucibleRuntimeContext,
+  fromBlock: bigint,
+): Promise<number> {
+  const latestBlock = await ctx.publicClient.getBlockNumber()
+  const step = 25_000n
+
+  let total = 0
+  for (let start = fromBlock; start <= latestBlock; start += step) {
+    const end = start + step - 1n
+    const toBlock = end < latestBlock ? end : latestBlock
+
+    const logs = await ctx.publicClient.getContractEvents({
+      address: ctx.contracts.agentVault,
+      abi: AGENT_VAULT_EVENTS_ABI,
+      eventName: 'Spent',
+      fromBlock: start,
+      toBlock,
+    })
+    total += logs.length
+  }
+
+  return total
+}
+
+async function getActionsToday(ctx: CrucibleRuntimeContext): Promise<number> {
+  const now = new Date()
+  const dayStartMs = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    0,
+    0,
+    0,
+    0,
+  )
+  const dayStartSec = BigInt(Math.floor(dayStartMs / 1000))
+  const key = `${ctx.network}:${dayStartSec.toString()}`
+
+  const cacheFreshMs = 30_000
+  if (
+    actionsTodayCache &&
+    actionsTodayCache.key === key &&
+    Date.now() - actionsTodayCache.updatedAt < cacheFreshMs
+  ) {
+    return actionsTodayCache.value
+  }
+
+  const fromBlock = await findFirstBlockAtOrAfterTimestamp(
+    ctx.publicClient,
+    dayStartSec,
+  )
+  const value = await countSpentEventsSince(ctx, fromBlock)
+
+  actionsTodayCache = { key, updatedAt: Date.now(), value }
+  return value
+}
+
 let autonomousRunnerRunning = false
 let autonomousRunnerInterval: ReturnType<typeof setInterval> | null = null
 let autonomousRunnerTicking = false
@@ -617,11 +717,12 @@ async function runAutonomousCronTick(
 
       if (!cronMatchesNow(cronExpression, now)) continue
 
+      const triggerIdHex = parseHex32(triggerId, 'triggerId')
       const trigger = (await ctx.publicClient.readContract({
         address: triggerRegistry,
         abi: TRIGGER_REGISTRY_CRON_ABI,
         functionName: 'getTrigger',
-        args: [triggerId],
+        args: [triggerIdHex],
       })) as readonly [
         Address,
         number,
@@ -832,6 +933,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
         functionName: 'totalActiveRooms',
         args: [],
       })
+      const actionsToday = await getActionsToday(ctx)
 
       return {
         service: 'crucible',
@@ -841,7 +943,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
         dwsAvailable: true,
         runtimes: Object.keys(characters).length,
         rooms: Number(rooms),
-        actionsToday: 0,
+        actionsToday,
       }
     })
 
@@ -1510,11 +1612,12 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
 
           const agents = await Promise.all(
             triggerIds.map(async (triggerId, idx) => {
+              const triggerIdHex = parseHex32(triggerId, 'triggerId')
               const trigger = (await ctx.publicClient.readContract({
                 address: ctx.contracts.triggerRegistry,
                 abi: TRIGGER_REGISTRY_CRON_ABI,
                 functionName: 'getTrigger',
-                args: [triggerId],
+                args: [triggerIdHex],
               })) as readonly [
                 Address,
                 number,
@@ -1882,8 +1985,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           const messageSchema = z.object({
             agentId: z
               .string()
-              .regex(/^\d+$/, 'agentId must be numeric string')
-              .transform((v) => BigInt(v)),
+              .regex(/^\d+$/, 'agentId must be numeric string'),
             content: z.string().min(1).max(10000),
             action: z.string().optional(),
           })
@@ -1908,8 +2010,7 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           const messageSchema = z.object({
             agentId: z
               .string()
-              .regex(/^\d+$/, 'agentId must be numeric string')
-              .transform((v) => BigInt(v)),
+              .regex(/^\d+$/, 'agentId must be numeric string'),
             content: z.string().min(1).max(10000),
             action: z.string().optional(),
           })
@@ -2020,14 +2121,13 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
                 offset: z.coerce.number().int().min(0).optional(),
               })
               const p = parseOrThrow(schema, params, 'agents.search params')
+              const owner = p.owner ? normalizeAddress(p.owner) : undefined
               const result = await ctx.agentSdk.searchAgents({
+                name: p.name,
+                owner,
+                active: p.active,
                 limit: p.limit ?? 20,
                 offset: p.offset ?? 0,
-                filter: {
-                  name: p.name,
-                  owner: p.owner,
-                  active: p.active,
-                },
               })
 
               const agents = await Promise.all(
@@ -2084,16 +2184,40 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
               const schema = z.object({
                 name: z.string().optional(),
                 roomType: z
-                  .enum(['chat', 'coordination', 'dao', 'marketplace'])
+                  .enum([
+                    'collaboration',
+                    'adversarial',
+                    'debate',
+                    'board',
+                    'chat',
+                    'coordination',
+                    'dao',
+                    'marketplace',
+                  ])
                   .optional(),
                 active: z.boolean().optional(),
                 limit: z.coerce.number().int().positive().max(100).optional(),
                 offset: z.coerce.number().int().min(0).optional(),
               })
               const p = parseOrThrow(schema, params, 'rooms.search params')
+
+              const roomType: RoomType | undefined = (() => {
+                if (!p.roomType) return undefined
+                if (
+                  p.roomType === 'collaboration' ||
+                  p.roomType === 'adversarial' ||
+                  p.roomType === 'debate' ||
+                  p.roomType === 'board'
+                ) {
+                  return p.roomType
+                }
+                if (p.roomType === 'dao') return 'board'
+                return 'collaboration'
+              })()
+
               const result = await ctx.roomSdk.searchRooms({
                 name: p.name,
-                roomType: p.roomType,
+                roomType,
                 active: p.active,
                 limit: p.limit ?? 20,
                 offset: p.offset ?? 0,
@@ -2289,7 +2413,8 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             },
           ],
         }))
-        .post('/invoke', async ({ body }) => {
+        .post('/invoke', async ({ body, request, set }) => {
+          const ctx = await getCtx(env)
           const parsed = z
             .object({
               tool: z.string(),
@@ -2298,27 +2423,148 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             .safeParse(body)
 
           if (!parsed.success) {
+            set.status = 422
             return {
               error: 'Invalid MCP request',
               details: parsed.error.issues,
             }
           }
 
-          const { tool } = parsed.data
+          const { tool, arguments: args } = parsed.data
+          const params = args ? args : {}
+
           switch (tool) {
             case 'crucible_list_characters':
               return { tool, result: listCharacters() }
-            case 'crucible_create_agent':
+            case 'crucible_create_agent': {
+              const schema = z.object({
+                characterId: z.string().min(1),
+                name: z.string().min(1).optional(),
+                initialFunding: z
+                  .string()
+                  .regex(/^\d+$/, 'initialFunding must be wei string')
+                  .optional(),
+              })
+              const parsedArgs = parseOrThrow(
+                schema,
+                params,
+                'mcp crucible_create_agent arguments',
+              )
+
+              const template = getCharacter(parsedArgs.characterId)
+              if (!template) {
+                set.status = 404
+                return {
+                  error: `Character not found: ${parsedArgs.characterId}`,
+                }
+              }
+
+              const character: AgentCharacter = parsedArgs.name
+                ? { ...template, name: parsedArgs.name }
+                : template
+
+              const initialFundingWei = parsedArgs.initialFunding
+                ? BigInt(parsedArgs.initialFunding)
+                : 0n
+
+              const authToken = getBearerToken(
+                request.headers.get('authorization'),
+              )
+
+              if (authToken) {
+                const session = await validateOAuth3Session(
+                  ctx.teeUrl,
+                  authToken,
+                )
+                const smartAccount = normalizeAddress(session.smartAccount)
+                const headerAddress = request.headers.get('x-jeju-address')
+                const expectedHeaderAddress = headerAddress
+                  ? normalizeAddress(headerAddress)
+                  : null
+                if (
+                  expectedHeaderAddress &&
+                  expectedHeaderAddress !== smartAccount
+                ) {
+                  set.status = 401
+                  return {
+                    error:
+                      'Unauthorized: address header does not match session',
+                  }
+                }
+
+                const result = await registerAgentViaOAuth3({
+                  ctx,
+                  sessionId: session.sessionId,
+                  character,
+                  initialFundingWei,
+                })
+
+                return {
+                  tool,
+                  result: {
+                    agentId: result.agentId.toString(),
+                    vaultAddress: result.vaultAddress,
+                    characterCid: result.characterCid,
+                    stateCid: result.stateCid,
+                  },
+                }
+              }
+
+              if (ctx.network === 'localnet') {
+                const result = await ctx.agentSdk.registerAgent(character, {
+                  initialFunding: initialFundingWei,
+                })
+                return {
+                  tool,
+                  result: {
+                    agentId: result.agentId.toString(),
+                    vaultAddress: result.vaultAddress,
+                    characterCid: result.characterCid,
+                    stateCid: result.stateCid,
+                  },
+                }
+              }
+
+              set.status = 401
+              return { error: 'Unauthorized: login required' }
+            }
+            case 'crucible_chat': {
+              const schema = z.object({
+                characterId: z.string().min(1),
+                message: z.string().min(1).max(10000),
+              })
+              const parsedArgs = parseOrThrow(
+                schema,
+                params,
+                'mcp crucible_chat arguments',
+              )
+              const character = getCharacter(parsedArgs.characterId)
+              if (!character) {
+                set.status = 404
+                return {
+                  error: `Character not found: ${parsedArgs.characterId}`,
+                }
+              }
+
+              const inference = await ctx.compute.runInference(
+                character,
+                parsedArgs.message,
+                { recentMessages: [], memories: [] },
+                undefined,
+              )
+
               return {
                 tool,
-                result: { agentId: crypto.randomUUID(), status: 'pending' },
+                result: {
+                  text: inference.content,
+                  action: null,
+                  actions: [],
+                  character: parsedArgs.characterId,
+                },
               }
-            case 'crucible_chat':
-              return {
-                tool,
-                result: { text: 'Worker mode response', action: null },
-              }
+            }
             default:
+              set.status = 400
               return { error: `Unknown tool: ${tool}` }
           }
         }),

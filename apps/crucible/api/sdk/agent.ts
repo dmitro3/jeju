@@ -1,4 +1,5 @@
 import {
+  type Abi,
   type Address,
   isAddress,
   type PublicClient,
@@ -34,6 +35,9 @@ import { expect, expectTrue } from '../schemas'
 import type { CrucibleCompute } from './compute'
 import { createLogger, type Logger } from './logger'
 import type { CrucibleStorage } from './storage'
+
+// Timeout for waiting for transaction receipts (60s for localnet, longer for prod)
+const TX_RECEIPT_TIMEOUT_MS = 60_000
 
 // ABI matching actual IdentityRegistry.sol contract
 const IDENTITY_REGISTRY_ABI = parseAbi([
@@ -99,9 +103,9 @@ export class AgentSDK {
    */
   private async executeWrite(params: {
     address: Address
-    abi: readonly unknown[]
+    abi: Abi
     functionName: string
-    args?: readonly unknown[]
+    args?: readonly (Address | bigint | string | boolean | number)[]
     value?: bigint
   }): Promise<`0x${string}`> {
     if (!this.kmsSigner.isInitialized()) {
@@ -151,6 +155,7 @@ export class AgentSDK {
 
     const receipt = await this.publicClient.waitForTransactionReceipt({
       hash: txHash,
+      timeout: TX_RECEIPT_TIMEOUT_MS,
     })
 
     const log = receipt.logs[0]
@@ -198,7 +203,10 @@ export class AgentSDK {
       args: [agentId],
       value: funding,
     })
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash })
+    await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: TX_RECEIPT_TIMEOUT_MS,
+    })
 
     const vaultAddress = (await this.publicClient.readContract({
       address: this.config.contracts.agentVault,
@@ -406,7 +414,10 @@ export class AgentSDK {
       args: [agentId],
       value: amount,
     })
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash })
+    await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: TX_RECEIPT_TIMEOUT_MS,
+    })
 
     this.log.info('Vault funded', { agentId: agentId.toString(), txHash })
     return txHash
@@ -430,7 +441,10 @@ export class AgentSDK {
       functionName: 'withdraw',
       args: [agentId, amount],
     })
-    await this.publicClient.waitForTransactionReceipt({ hash: txHash })
+    await this.publicClient.waitForTransactionReceipt({
+      hash: txHash,
+      timeout: TX_RECEIPT_TIMEOUT_MS,
+    })
 
     this.log.info('Withdrawal complete', {
       agentId: agentId.toString(),

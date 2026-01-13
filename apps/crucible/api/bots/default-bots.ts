@@ -16,17 +16,7 @@ export interface DefaultBotConfig {
 /**
  * Default chain configurations for various networks.
  */
-export const DEFAULT_CHAINS: Record<
-  string,
-  {
-    chainId: number
-    name: string
-    rpcUrl: string
-    blockTime: number
-    isL2: boolean
-    nativeSymbol: string
-  }
-> = {
+export const DEFAULT_CHAINS: Record<string, TradingBotChain> = {
   mainnet: {
     chainId: 1,
     name: 'Ethereum',
@@ -218,24 +208,15 @@ export function createTradingBotOptions(
   network: 'localnet' | 'testnet' | 'mainnet',
   treasuryAddress?: Address,
 ): TradingBotOptions {
-  const chains: TradingBotChain[] = config.chains
-    .map((chainId) => {
-      const chainConfig = Object.values(DEFAULT_CHAINS).find(
-        (c) => c.chainId === chainId,
-      )
-      if (!chainConfig) {
-        return null
-      }
-      return {
-        chainId: chainConfig.chainId,
-        name: chainConfig.name,
-        rpcUrl: chainConfig.rpcUrl,
-        blockTime: chainConfig.blockTime,
-        isL2: chainConfig.isL2,
-        nativeSymbol: chainConfig.nativeSymbol,
-      } as TradingBotChain
-    })
-    .filter((chain): chain is TradingBotChain => chain !== null)
+  const chains: TradingBotChain[] = config.chains.map((chainId) => {
+    const chainConfig = Object.values(DEFAULT_CHAINS).find(
+      (c) => c.chainId === chainId,
+    )
+    if (!chainConfig) {
+      throw new Error(`Unknown chainId in bot config: ${chainId}`)
+    }
+    return chainConfig
+  })
 
   return {
     agentId,
@@ -243,7 +224,7 @@ export function createTradingBotOptions(
     strategies: config.strategies,
     chains,
     maxConcurrentExecutions: 5,
-    useFlashbots: network !== 'localnet',
+    useFlashbots: network === 'mainnet',
     treasuryAddress,
   }
 }

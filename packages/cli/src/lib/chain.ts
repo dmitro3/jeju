@@ -114,6 +114,30 @@ export async function getAccountBalance(
 export async function startLocalnet(
   rootDir: string,
 ): Promise<{ l1Port: number; l2Port: number }> {
+  // If localnet is already running and reachable, don't try to recreate it.
+  // This avoids hard-failing on Kurtosis/Docker client issues during E2E,
+  // and preserves existing port forwarding config.
+  const existingPorts = loadPortsConfig(rootDir)
+  if (existingPorts) {
+    const existingL2RpcUrl = `http://127.0.0.1:${existingPorts.l2Port}`
+    const healthy = await checkRpcHealth(existingL2RpcUrl, 2000)
+    if (healthy) {
+      logger.success(
+        `Localnet already running (L1: ${existingPorts.l1Port}, L2: ${existingPorts.l2Port})`,
+      )
+      return existingPorts
+    }
+  }
+
+  // Fallback: localnet may already be running without a ports.json file.
+  // If the default L2 RPC is reachable, proceed without Kurtosis.
+  const defaultL2RpcUrl = CHAIN_CONFIG.localnet.rpcUrl
+  const defaultHealthy = await checkRpcHealth(defaultL2RpcUrl, 2000)
+  if (defaultHealthy) {
+    logger.success(`Localnet already running (L2: ${defaultL2RpcUrl})`)
+    return { l1Port: DEFAULT_PORTS.l1Rpc, l2Port: DEFAULT_PORTS.l2Rpc }
+  }
+
   // Check Docker
   logger.step('Checking Docker...')
   const dockerResult = await checkDocker()

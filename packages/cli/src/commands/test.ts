@@ -899,7 +899,14 @@ async function runForgeTests(
   try {
     const args = ['test']
     if (options.verbose) args.push('-vvv')
-    if (options.forgeOpts) args.push(...options.forgeOpts.split(' '))
+    const forgeOpts = options.forgeOpts ? options.forgeOpts.split(' ') : []
+    const hasThreads = forgeOpts.some(
+      (opt) => opt === '--threads' || opt === '-j' || opt === '--jobs',
+    )
+    if (!hasThreads) {
+      args.push('--threads', process.env.FORGE_THREADS ?? '4')
+    }
+    if (forgeOpts.length > 0) args.push(...forgeOpts)
     if (options.ci) args.push('--fail-fast')
     if (options.coverage) args.push('--coverage')
 
