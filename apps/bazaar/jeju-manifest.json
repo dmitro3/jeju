@@ -23,7 +23,7 @@
   "commands": {
     "dev": "bun run dev",
     "dev:api": "bun --watch api/server.ts",
-    "build": "bun run scripts/build.ts",
+    "build": "bun run build",
     "build:worker": "bun run scripts/build-worker.ts",
     "start": "bun run scripts/serve.ts",
     "test": "bun run test:unit",
