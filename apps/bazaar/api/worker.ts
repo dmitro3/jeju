@@ -228,18 +228,23 @@ async function initializeDatabase(db: SQLitClient): Promise<void> {
 export function createBazaarApp(env?: Partial<BazaarEnv>) {
   const isDev = env?.NETWORK === 'localnet'
 
-  const app = new Elysia().use(
-    cors({
-      origin: isDev
-        ? true
-        : [
-            'https://bazaar.jejunetwork.org',
-            'https://jejunetwork.org',
-            getCoreAppUrl('BAZAAR'),
-          ],
-      credentials: true,
-    }),
-  )
+  const app = new Elysia()
+    .onError(({ code, error, path }) => {
+      // Log all errors for debugging
+      console.error(`[Bazaar] Error on ${path}:`, code, error?.message || error)
+    })
+    .use(
+      cors({
+        origin: isDev
+          ? true
+          : [
+              'https://bazaar.jejunetwork.org',
+              'https://jejunetwork.org',
+              getCoreAppUrl('BAZAAR'),
+            ],
+        credentials: true,
+      }),
+    )
 
   // Health check - minimal info only (no internal config exposure)
   app.get('/health', () => ({
@@ -247,6 +252,21 @@ export function createBazaarApp(env?: Partial<BazaarEnv>) {
     service: 'bazaar-api',
     version: '2.0.0',
   }))
+
+  // Debug endpoint - echo back request info (remove in production)
+  app.post('/api/debug-echo', async ({ body, request }) => {
+    const headers: Record<string, string> = {}
+    request.headers.forEach((v, k) => { headers[k] = v })
+    console.log('[Debug] Request headers:', headers)
+    console.log('[Debug] Body type:', typeof body)
+    console.log('[Debug] Body:', body)
+    return {
+      received: true,
+      bodyType: typeof body,
+      body,
+      headers,
+    }
+  })
 
   // Seed state endpoint - must be registered early to avoid conflicts
   app.get('/api/seed-state', async ({ set }) => {
@@ -433,6 +453,13 @@ export function createBazaarApp(env?: Partial<BazaarEnv>) {
     }
 
     const indexerUrl = env?.INDEXER_URL || getIndexerGraphqlUrl()
+
+    // Debug logging for 400 errors
+    console.log('[Bazaar GraphQL] Request received:', {
+      contentType: request.headers.get('content-type'),
+      bodyType: typeof body,
+      bodyPreview: typeof body === 'string' ? body.slice(0, 200) : JSON.stringify(body).slice(0, 200),
+    })
 
     try {
       const response = await fetch(indexerUrl, {

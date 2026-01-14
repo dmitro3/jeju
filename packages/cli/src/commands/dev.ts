@@ -323,14 +323,13 @@ async function deployAppsOnchain(
   logger.step('Registering apps on-chain...')
   await localDeployOrchestrator.deployAllApps(appsWithDirs)
 
-  // Start vendor app backend workers in parallel
-  logger.step('Starting vendor app backends in parallel...')
-  const vendorAppsWithBackend = appsWithDirs.filter(
-    ({ manifest }) =>
-      manifest.type === 'vendor' && manifest.architecture?.backend,
+  // Start app backend workers in parallel (for apps with backend architecture)
+  logger.step('Starting app backends in parallel...')
+  const appsWithBackend = appsWithDirs.filter(
+    ({ manifest }) => manifest.architecture?.backend,
   )
 
-  const backendStartTasks = vendorAppsWithBackend.map(({ dir, manifest }) => {
+  const backendStartTasks = appsWithBackend.map(({ dir, manifest }) => {
     const backend = manifest.architecture?.backend
     const commands = manifest.commands as Record<string, string> | undefined
     const startCmd =
@@ -348,7 +347,23 @@ async function deployAppsOnchain(
 
     logger.debug(`  Starting ${manifest.name} backend on port ${apiPort}...`)
 
-    const workerProc = execa('bun', ['run', startCmd.replace('bun run ', '')], {
+    // Parse the start command - handle different formats:
+    // - "bun api/server.ts" -> execa('bun', ['api/server.ts'])
+    // - "bun run start:worker" -> execa('bun', ['run', 'start:worker'])
+    // - "start:worker" -> execa('bun', ['run', 'start:worker'])
+    let bunArgs: string[]
+    if (startCmd.startsWith('bun run ')) {
+      // Full "bun run script" command
+      bunArgs = ['run', startCmd.slice(8)]
+    } else if (startCmd.startsWith('bun ')) {
+      // Direct "bun file.ts" command - run as-is
+      bunArgs = startCmd.slice(4).split(' ')
+    } else {
+      // Assume it's a package.json script name
+      bunArgs = ['run', startCmd]
+    }
+
+    const workerProc = execa('bun', bunArgs, {
       cwd: dir,
       env: {
         ...process.env,
