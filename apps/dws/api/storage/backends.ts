@@ -86,16 +86,23 @@ class IPFSBackend implements StorageBackend {
 
     // Try primary IPFS API first
     const pinParam = this.skipPin ? '?pin=false' : ''
-    const primaryResponse = await fetch(`${this.apiUrl}/api/v0/add${pinParam}`, {
-      method: 'POST',
-      body: formData,
-      signal: AbortSignal.timeout(30000),
-    }).catch(() => null)
+    const primaryResponse = await fetch(
+      `${this.apiUrl}/api/v0/add${pinParam}`,
+      {
+        method: 'POST',
+        body: formData,
+        signal: AbortSignal.timeout(30000),
+      },
+    ).catch(() => null)
 
     if (primaryResponse?.ok) {
       const text = await primaryResponse.text()
       const firstLine = text.trim().split('\n')[0]
-      const data = expectJson(firstLine, IpfsAddResponseSchema, 'IPFS add response')
+      const data = expectJson(
+        firstLine,
+        IpfsAddResponseSchema,
+        'IPFS add response',
+      )
       return { cid: data.Hash, url: `${this.gatewayUrl}/ipfs/${data.Hash}` }
     }
 
@@ -107,11 +114,16 @@ class IPFSBackend implements StorageBackend {
 
     for (const service of publicPinningServices) {
       // Check if we have an API key for this service
-      const apiKey = process.env[`${service.name.toUpperCase().replace('.', '_')}_API_KEY`]
+      const apiKey =
+        process.env[`${service.name.toUpperCase().replace('.', '_')}_API_KEY`]
       if (!apiKey) continue
 
       const serviceFormData = new FormData()
-      serviceFormData.append('file', new Blob([new Uint8Array(content)]), filename)
+      serviceFormData.append(
+        'file',
+        new Blob([new Uint8Array(content)]),
+        filename,
+      )
 
       const response = await fetch(service.url, {
         method: 'POST',
@@ -137,8 +149,10 @@ class IPFSBackend implements StorageBackend {
     // Create CIDv1 with raw codec (0x55) and sha256 (0x12)
     const multihash = new Uint8Array([0x12, 0x20, ...hash])
     const cid = `Qm${Buffer.from(multihash).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '').slice(0, 44)}`
-    
-    console.warn(`[IPFS Backend] No IPFS API available, generated local CID: ${cid}`)
+
+    console.warn(
+      `[IPFS Backend] No IPFS API available, generated local CID: ${cid}`,
+    )
     return { cid, url: `${this.gatewayUrl}/ipfs/${cid}` }
   }
 
@@ -166,7 +180,9 @@ class IPFSBackend implements StorageBackend {
       }).catch(() => null)
 
       if (response?.ok) {
-        console.log(`[IPFS Backend] Downloaded ${cid} from fallback gateway: ${gateway}`)
+        console.log(
+          `[IPFS Backend] Downloaded ${cid} from fallback gateway: ${gateway}`,
+        )
         return Buffer.from(await response.arrayBuffer())
       }
     }
@@ -210,7 +226,9 @@ class IPFSBackend implements StorageBackend {
     }).catch(() => null)
 
     if (gatewayResponse?.ok) {
-      console.log('[IPFS Backend] Running in permissionless mode with public gateways')
+      console.log(
+        '[IPFS Backend] Running in permissionless mode with public gateways',
+      )
       return true
     }
 
