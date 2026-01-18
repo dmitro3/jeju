@@ -325,16 +325,22 @@ export function createRelayServer(config: NodeConfig) {
 
   // CORS - restrict to known origins in production
   const allowedOrigins = getAllowedOrigins()
+  const corsOrigin: string[] | true = allowedOrigins.includes('*')
+    ? true
+    : allowedOrigins
 
+  // Note: Type assertion needed due to duplicate Elysia versions in monorepo deps
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const corsPlugin = cors({
+    origin: corsOrigin,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400,
+  })
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const app = new Elysia()
-    .use(
-      cors({
-        origin: allowedOrigins.includes('*') ? true : allowedOrigins,
-        methods: ['GET', 'POST', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization'],
-        maxAge: 86400,
-      }),
-    )
+    .use(corsPlugin as any)
 
     .get('/health', () => ({
       status: 'healthy',

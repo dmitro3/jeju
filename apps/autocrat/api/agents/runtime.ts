@@ -386,7 +386,9 @@ export class AutocratAgentRuntimeManager {
     // - DeFi (swap, add liquidity)
     // - Identity (register agent)
     // - Cross-chain, Launchpad, Moderation, Work, Training
-    const plugins: Plugin[] = [jejuPlugin, specializedPlugin]
+    // Type assertion needed due to elizaos version misalignment in monorepo deps
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const plugins: Plugin[] = [jejuPlugin, specializedPlugin] as any as Plugin[]
 
     // Create runtime - ElizaOS generates agentId from character.name via stringToUuid
     // This ensures the agentId is always a valid UUID format

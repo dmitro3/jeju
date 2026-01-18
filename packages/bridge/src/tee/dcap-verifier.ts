@@ -50,7 +50,7 @@ export type TEEPlatformType =
   | 'TDX'
   | 'SEV_SNP'
   | 'PHALA'
-  | 'AWS_NITRO'
+  | 'DSTACK'
   | 'GCP_CONFIDENTIAL'
 
 export interface QuoteHeader {
@@ -609,7 +609,7 @@ const DCAPVerifierConfigSchema = z.object({
         'TDX',
         'SEV_SNP',
         'PHALA',
-        'AWS_NITRO',
+        'DSTACK',
         'GCP_CONFIDENTIAL',
       ]),
       description: z.string(),

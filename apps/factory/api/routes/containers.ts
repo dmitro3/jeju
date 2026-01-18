@@ -91,7 +91,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
         query,
         'query params',
       )
-      const containerRows = dbListContainers({
+      const containerRows = await dbListContainers({
         org: validated.org,
         name: validated.q,
       })
@@ -114,7 +114,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
         'request body',
       )
 
-      const row = dbCreateContainer({
+      const row = await dbCreateContainer({
         name: validated.name,
         tag: validated.tag,
         digest: validated.digest,
@@ -137,7 +137,9 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
         set.status = 401
         return { error: { code: 'UNAUTHORIZED', message: authResult.error } }
       }
-      const instanceRows = listContainerInstances({ owner: authResult.address })
+      const instanceRows = await listContainerInstances({
+        owner: authResult.address,
+      })
       const instances = instanceRows.map(transformInstance)
       return { instances, total: instances.length }
     },
@@ -157,7 +159,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
         'request body',
       )
 
-      const row = dbCreateInstance({
+      const row = await dbCreateInstance({
         containerId: validated.imageId,
         name: validated.name,
         cpu: validated.cpu,
@@ -168,7 +170,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
 
       // Simulate endpoint assignment on creation
       const endpoint = `https://${validated.name}.containers.jejunetwork.org`
-      updateContainerInstanceStatus(row.id, 'running', endpoint)
+      await updateContainerInstanceStatus(row.id, 'running', endpoint)
 
       set.status = 201
       return {
@@ -191,7 +193,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
       }
 
       // Verify ownership before stopping
-      const instance = getContainerInstance(params.instanceId)
+      const instance = await getContainerInstance(params.instanceId)
       if (!instance) {
         set.status = 404
         return {
@@ -212,7 +214,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
         }
       }
 
-      updateContainerInstanceStatus(params.instanceId, 'stopped')
+      await updateContainerInstanceStatus(params.instanceId, 'stopped')
 
       return { success: true, instanceId: params.instanceId, status: 'stopped' }
     },
@@ -228,7 +230,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
       }
 
       // Verify ownership before deleting
-      const instance = getContainerInstance(params.instanceId)
+      const instance = await getContainerInstance(params.instanceId)
       if (!instance) {
         set.status = 404
         return {
@@ -250,7 +252,7 @@ export const containersRoutes = new Elysia({ prefix: '/api/containers' })
       }
 
       // Mark as stopped/deleted (we don't hard delete)
-      updateContainerInstanceStatus(params.instanceId, 'stopped')
+      await updateContainerInstanceStatus(params.instanceId, 'stopped')
 
       return { success: true, instanceId: params.instanceId }
     },

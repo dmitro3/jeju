@@ -44,12 +44,8 @@ describe('Agent Seeding', () => {
     })
 
     test('should have all blue team characters', () => {
-      const blueTeamIds = [
-        'blue-team',
-        'moderator',
-        'network-guardian',
-        'contracts-auditor',
-      ]
+      // Blue team: defensive security and moderation focused
+      const blueTeamIds = ['blue-team', 'moderator', 'security-analyst']
 
       for (const id of blueTeamIds) {
         const char = getCharacter(id)
@@ -59,13 +55,8 @@ describe('Agent Seeding', () => {
     })
 
     test('should have all red team characters', () => {
-      const redTeamIds = [
-        'red-team',
-        'scammer',
-        'security-researcher',
-        'contracts-expert',
-        'fuzz-tester',
-      ]
+      // Red team: adversarial security testing focused
+      const redTeamIds = ['red-team', 'qa-engineer']
 
       for (const id of redTeamIds) {
         const char = getCharacter(id)

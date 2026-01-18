@@ -78,16 +78,19 @@ describe('Autonomous Agent Verification', () => {
     if (!data.enabled) return
 
     const agents = data.agents ?? []
+    // These are the agents auto-registered in server.ts when AUTONOMOUS_ENABLED=true
     const expectedAgents = [
-      'project-manager',
-      'red-team',
-      'blue-team',
-      'moderator',
-      'community-manager',
+      'base-watcher',
+      'security-analyst',
+      'node-monitor',
+      'infra-analyzer',
+      'endpoint-prober',
     ]
 
     for (const expected of expectedAgents) {
-      const found = agents.find((a) => a.id.includes(expected))
+      const found = agents.find((a: { id: string; character: string }) =>
+        a.id.includes(expected),
+      )
       expect(found).toBeDefined()
       console.log(`Agent ${expected}: ${found?.character} (registered)`)
     }

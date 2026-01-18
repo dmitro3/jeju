@@ -2,16 +2,17 @@
  * Factory Database Client
  *
  * This module provides the database interface for Factory.
- * In workerd/DWS environment, it uses SQLit (distributed database).
- * In local Bun environment, it falls back to bun:sqlite for development.
+ * Uses SQLit (distributed database) in all environments.
  *
- * All public functions are async to ensure workerd compatibility.
+ * All public functions are async for SQLit compatibility.
  */
 
 export {
   // Types
   type BountyRow,
   closeDB,
+  // Backup and recovery
+  createBackup,
   createBounty,
   createJob,
   createProject,
@@ -30,6 +31,7 @@ export {
   isHealthy,
   type JobRow,
   type LeaderboardRow,
+  listBackups,
   // Bounties
   listBounties,
   // Jobs
@@ -37,6 +39,8 @@ export {
   // Projects
   listProjects,
   type ProjectRow,
+  restoreFromBackup,
+  startBackupScheduler,
   updateBountyStatus,
   updateLeaderboardScore,
 } from './sqlit-client'
@@ -306,15 +310,6 @@ const ContainerInstanceRowSchema = z.object({
 })
 
 // Export types
-export type TaskRow = z.infer<typeof TaskRowSchema>
-export type IssueRow = z.infer<typeof IssueRowSchema>
-export type PullRequestRow = z.infer<typeof PullRequestRowSchema>
-export type DiscussionRow = z.infer<typeof DiscussionRowSchema>
-export type CIRunRow = z.infer<typeof CIRunRowSchema>
-export type AgentRow = z.infer<typeof AgentRowSchema>
-export type ContainerRow = z.infer<typeof ContainerRowSchema>
-export type DatasetRow = z.infer<typeof DatasetRowSchema>
-export type ModelRow = z.infer<typeof ModelRowSchema>
 export type RepoSettingsRow = z.infer<typeof RepoSettingsRowSchema>
 export type CollaboratorRow = z.infer<typeof CollaboratorRowSchema>
 export type WebhookRow = z.infer<typeof WebhookRowSchema>
@@ -1247,6 +1242,19 @@ export async function createContainer(container: {
   return ContainerRowSchema.parse(result.rows[0])
 }
 
+export async function getContainerInstance(
+  id: string,
+): Promise<ContainerInstanceRow | null> {
+  const database = getDB()
+  const result = await database.query<ContainerInstanceRow>(
+    'SELECT * FROM container_instances WHERE id = ?',
+    [id],
+  )
+  return result.rows[0]
+    ? ContainerInstanceRowSchema.parse(result.rows[0])
+    : null
+}
+
 export async function listContainerInstances(filter?: {
   owner?: string
   status?: string
@@ -2166,11 +2174,4 @@ export async function deleteCastReaction(
     [address.toLowerCase(), castHash, reactionType],
   )
   return result.rowsAffected > 0
-}
-
-// Sync compatibility aliases (for routes that haven't been updated yet)
-export function closeDBSync() {
-  console.warn(
-    '[Factory] closeDBSync is deprecated - use async closeDB instead',
-  )
 }

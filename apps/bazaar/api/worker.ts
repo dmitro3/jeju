@@ -231,7 +231,8 @@ export function createBazaarApp(env?: Partial<BazaarEnv>) {
   const app = new Elysia()
     .onError(({ code, error, path }) => {
       // Log all errors for debugging
-      console.error(`[Bazaar] Error on ${path}:`, code, error?.message || error)
+      const msg = error instanceof Error ? error.message : String(error)
+      console.error(`[Bazaar] Error on ${path}:`, code, msg)
     })
     .use(
       cors({
@@ -256,7 +257,9 @@ export function createBazaarApp(env?: Partial<BazaarEnv>) {
   // Debug endpoint - echo back request info (remove in production)
   app.post('/api/debug-echo', async ({ body, request }) => {
     const headers: Record<string, string> = {}
-    request.headers.forEach((v, k) => { headers[k] = v })
+    request.headers.forEach((v, k) => {
+      headers[k] = v
+    })
     console.log('[Debug] Request headers:', headers)
     console.log('[Debug] Body type:', typeof body)
     console.log('[Debug] Body:', body)
@@ -458,7 +461,10 @@ export function createBazaarApp(env?: Partial<BazaarEnv>) {
     console.log('[Bazaar GraphQL] Request received:', {
       contentType: request.headers.get('content-type'),
       bodyType: typeof body,
-      bodyPreview: typeof body === 'string' ? body.slice(0, 200) : JSON.stringify(body).slice(0, 200),
+      bodyPreview:
+        typeof body === 'string'
+          ? body.slice(0, 200)
+          : JSON.stringify(body).slice(0, 200),
     })
 
     try {

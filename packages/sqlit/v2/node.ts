@@ -34,7 +34,7 @@ const devChain: Chain = {
   id: 31337,
   name: 'Development',
   rpcUrls: {
-    default: { http: ['http://localhost:8545'] },
+    default: { http: ['http://localhost:6546'] },
   },
 }
 

@@ -641,7 +641,9 @@ async function verifyDeploymentEndpoints(config: DeployConfig): Promise<void> {
   }
 
   if (!healthOk) {
-    throw new Error('Deployment verification failed: health endpoint not responding')
+    throw new Error(
+      'Deployment verification failed: health endpoint not responding',
+    )
   }
 
   // Check frontend with retries

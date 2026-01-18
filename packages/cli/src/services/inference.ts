@@ -2,7 +2,7 @@
 
 import { cors } from '@elysiajs/cors'
 import { getDWSUrl, getLocalhostHost } from '@jejunetwork/config'
-import { Elysia } from 'elysia'
+import { type AnyElysia, Elysia } from 'elysia'
 import { logger } from '../lib/logger'
 
 export type ProviderType = string // Any provider name - not restricted
@@ -37,6 +37,8 @@ import {
   GeminiResponseSchema,
   type OpenAIResponse,
   OpenAIResponseSchema,
+  type ProviderResponse,
+  ProviderResponseSchema,
   validate,
 } from '../schemas'
 
@@ -132,7 +134,8 @@ class LocalInferenceServer {
     this.customProviders = config.providers ?? []
     this.defaultProvider =
       config.defaultProvider ?? this.detectDefaultProvider()
-    this.app = new Elysia().use(cors())
+    const corsPlugin = cors() as unknown as AnyElysia
+    this.app = new Elysia().use(corsPlugin)
     this.setupRoutes()
   }
 
@@ -393,7 +396,12 @@ class LocalInferenceServer {
       }
     }
 
-    const rawData: unknown = await response.json()
+    const jsonData = await response.json()
+    const rawData = validate(
+      jsonData,
+      ProviderResponseSchema,
+      `provider ${provider.name} response`,
+    )
     return this.normalizeResponse(provider, rawData, request.model)
   }
 
@@ -495,7 +503,7 @@ class LocalInferenceServer {
 
   private normalizeResponse(
     provider: InferenceProvider,
-    rawData: unknown,
+    rawData: ProviderResponse,
     model: string,
   ): OpenAIResponse {
     if (provider.type === 'anthropic') {

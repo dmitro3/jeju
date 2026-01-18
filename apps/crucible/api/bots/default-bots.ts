@@ -208,15 +208,15 @@ export function createTradingBotOptions(
   network: 'localnet' | 'testnet' | 'mainnet',
   treasuryAddress?: Address,
 ): TradingBotOptions {
-  const chains: TradingBotChain[] = config.chains.map((chainId) => {
+  const chains: TradingBotChain[] = []
+  for (const chainId of config.chains) {
     const chainConfig = Object.values(DEFAULT_CHAINS).find(
       (c) => c.chainId === chainId,
     )
-    if (!chainConfig) {
-      throw new Error(`Unknown chainId in bot config: ${chainId}`)
+    if (chainConfig) {
+      chains.push(chainConfig)
     }
-    return chainConfig
-  })
+  }
 
   return {
     agentId,
@@ -224,7 +224,8 @@ export function createTradingBotOptions(
     strategies: config.strategies,
     chains,
     maxConcurrentExecutions: 5,
-    useFlashbots: network === 'mainnet',
+    // Enable Flashbots in non-local environments
+    useFlashbots: network !== 'localnet',
     treasuryAddress,
   }
 }

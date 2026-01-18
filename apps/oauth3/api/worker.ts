@@ -1,5 +1,10 @@
 import { cors } from '@elysiajs/cors'
-import { getLocalhostHost } from '@jejunetwork/config'
+import {
+  type NetworkType,
+  getCurrentNetwork,
+  getLocalhostHost,
+  getOAuth3Url,
+} from '@jejunetwork/config'
 import { Elysia } from 'elysia'
 import type { Address } from 'viem'
 import { isAddress } from 'viem'
@@ -60,7 +65,16 @@ function createApp(env: Env) {
   process.env.JWT_SECRET = env.JWT_SECRET
   process.env.ALLOWED_ORIGINS = env.ALLOWED_ORIGINS
   process.env.SQLIT_DATABASE_ID = env.SQLIT_DATABASE_ID
-  process.env.BASE_URL = 'https://auth.jejunetwork.org'
+  let network: NetworkType = getCurrentNetwork()
+  if (network === 'localnet' && env.CHAIN_ID) {
+    const chainId = Number(env.CHAIN_ID)
+    if (chainId === 420690) {
+      network = 'testnet'
+    } else if (chainId === 420691) {
+      network = 'mainnet'
+    }
+  }
+  process.env.BASE_URL = getOAuth3Url(network)
 
   // Social OAuth env vars - prefer sealed secrets
   if (env.GITHUB_CLIENT_ID) process.env.GITHUB_CLIENT_ID = env.GITHUB_CLIENT_ID
@@ -166,6 +180,126 @@ function createApp(env: Env) {
       },
       docs: 'https://docs.jejunetwork.org/auth',
     }))
+    // OAuth callback handler - displays success page after auth completes
+    .get('/callback', ({ query }) => {
+      const code = query.code as string | undefined
+      const state = query.state as string | undefined
+      const error = query.error as string | undefined
+
+      if (error) {
+        return new Response(
+          `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Authentication Error · Jeju</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #fafbfc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: white; border-radius: 16px; padding: 40px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { color: #ef4444; font-size: 24px; margin: 0 0 8px; }
+    p { color: #64748b; margin: 0 0 24px; }
+    a { color: #6366f1; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">❌</div>
+    <h1>Authentication Failed</h1>
+    <p>${error === 'access_denied' ? 'You cancelled the authentication.' : 'An error occurred during authentication.'}</p>
+    <a href="/">Try again</a>
+  </div>
+</body>
+</html>`,
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+        )
+      }
+
+      if (!code || !state) {
+        return new Response(
+          `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Invalid Request · Jeju</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #fafbfc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: white; border-radius: 16px; padding: 40px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { color: #f59e0b; font-size: 24px; margin: 0 0 8px; }
+    p { color: #64748b; margin: 0 0 24px; }
+    a { color: #6366f1; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">⚠️</div>
+    <h1>Invalid Request</h1>
+    <p>Missing authorization code or state parameter.</p>
+    <a href="/">Start over</a>
+  </div>
+</body>
+</html>`,
+          { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+        )
+      }
+
+      // Success - display confirmation page with code for the parent window
+      return new Response(
+        `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>Authentication Successful · Jeju</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #fafbfc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+    .card { background: white; border-radius: 16px; padding: 40px; max-width: 400px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { color: #10b981; font-size: 24px; margin: 0 0 8px; }
+    p { color: #64748b; margin: 0 0 24px; }
+    .code { background: #f1f5f9; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 12px; word-break: break-all; margin-bottom: 24px; }
+    .spinner { width: 24px; height: 24px; border: 3px solid #e2e8f0; border-top-color: #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">✅</div>
+    <h1>Authentication Successful</h1>
+    <p>You have been authenticated successfully.</p>
+    <div class="code">Code: ${code.slice(0, 8)}...</div>
+    <div class="spinner"></div>
+    <p id="status">Completing authentication...</p>
+  </div>
+  <script>
+    // Post message to parent window if in popup/iframe
+    if (window.opener) {
+      window.opener.postMessage({
+        type: 'oauth-callback',
+        code: '${code}',
+        state: '${state}'
+      }, '*');
+      document.getElementById('status').textContent = 'You can close this window.';
+    } else if (window.parent !== window) {
+      window.parent.postMessage({
+        type: 'oauth-callback',
+        code: '${code}',
+        state: '${state}'
+      }, '*');
+      document.getElementById('status').textContent = 'You can close this window.';
+    } else {
+      // No parent window - user came here directly
+      document.getElementById('status').textContent = 'Authentication complete. You can close this tab.';
+    }
+  </script>
+</body>
+</html>`,
+        { headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      )
+    })
     .use(createAuthInitRouter(config))
     .use(createOAuthRouter(config))
     .use(createWalletRouter(config))

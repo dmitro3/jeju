@@ -19,6 +19,7 @@ import {
   getDWSUrl,
   getEnvVar,
   getL2RpcUrl,
+  getSQLitUrl,
   isProductionEnv,
 } from '@jejunetwork/config'
 import { defineChain } from 'viem'
@@ -73,9 +74,21 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { z } from 'zod'
 
+const NetworkSchema = z.enum(['localnet', 'testnet', 'mainnet'])
+
+function resolveNetwork(): 'localnet' | 'testnet' | 'mainnet' {
+  const envNetwork = getEnvVar('NETWORK') || getEnvVar('JEJU_NETWORK')
+  if (envNetwork) {
+    return NetworkSchema.parse(envNetwork)
+  }
+  return getCurrentNetwork()
+}
+
 // Use getDWSUrl() which respects the network - getCoreAppUrl returns localhost
-const DWS_URL = getEnvVar('DWS_URL') || getDWSUrl()
-const NETWORK = getCurrentNetwork()
+const NETWORK = resolveNetwork()
+const DWS_URL = getEnvVar('DWS_URL') || getDWSUrl(NETWORK)
+const RPC_URL = getEnvVar('RPC_URL') || getL2RpcUrl(NETWORK)
+const SQLIT_NODES = getEnvVar('SQLIT_NODES') || getSQLitUrl(NETWORK)
 
 /**
  * Get deployer private key with production validation.
@@ -102,6 +115,7 @@ const deployerAddress = DEPLOYER_PRIVATE_KEY
   : '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266' // Default dev address (Anvil account 0)
 
 const UploadResponseSchema = z.object({ cid: z.string() })
+const WorkerDeployResponseSchema = z.object({ functionId: z.string() })
 const _DeployResponseSchema = z.object({ id: z.string(), status: z.string() })
 
 function parseResponse<T>(
@@ -397,6 +411,43 @@ async function deploy(): Promise<DeployResult> {
   ).cid
   console.log(`  Worker CID: ${workerCid}`)
 
+  console.log('\nDeploying worker on DWS...')
+  const workerDeployResponse = await fetch(`${DWS_URL}/workers`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-jeju-address': deployerAddress,
+    },
+    body: JSON.stringify({
+      name: 'factory-api',
+      runtime: 'bun',
+      handler: 'index.handler',
+      codeCid: workerCid,
+      env: {
+        NETWORK,
+        JEJU_NETWORK: NETWORK,
+        DWS_URL,
+        RPC_URL,
+        SQLIT_NODES,
+        SQLIT_DATABASE_ID: getEnvVar('SQLIT_DATABASE_ID') || 'factory',
+      },
+    }),
+  })
+
+  if (!workerDeployResponse.ok) {
+    throw new Error(
+      `Worker deploy failed: ${await workerDeployResponse.text()}`,
+    )
+  }
+
+  const workerDeployJson = await workerDeployResponse.json()
+  const workerId = parseResponse(
+    WorkerDeployResponseSchema,
+    workerDeployJson,
+    'worker deploy response',
+  ).functionId
+  console.log(`  Worker ID: ${workerId}`)
+
   // Verify worker code is accessible from storage
   console.log('\nVerifying worker in storage...')
   console.log(`  Deployer: ${deployerAddress}`)
@@ -431,11 +482,19 @@ async function deploy(): Promise<DeployResult> {
       jnsName: 'factory.jeju',
       frontendCid: frontendCid,
       staticFiles: Object.keys(staticFiles).length > 0 ? staticFiles : null,
-      backendWorkerId: workerCid, // Use CID directly - DWS will deploy on first request
+      backendWorkerId: workerId,
       backendEndpoint: null, // Must be null for direct worker invocation
       apiPaths: ['/api', '/health', '/a2a', '/mcp', '/swagger'],
       spa: true,
       enabled: true,
+      env: {
+        NETWORK,
+        JEJU_NETWORK: NETWORK,
+        DWS_URL,
+        RPC_URL,
+        SQLIT_NODES,
+        SQLIT_DATABASE_ID: getEnvVar('SQLIT_DATABASE_ID') || 'factory',
+      },
     }),
   })
 

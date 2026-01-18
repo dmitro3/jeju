@@ -106,8 +106,20 @@ const workerEnv = {
   KMS_SECRET_IDS: process.env.KMS_SECRET_IDS || '',
   // SQLit configuration (non-sensitive)
   // SECURITY: SQLIT_PRIVATE_KEY must come from KMS in production
-  SQLIT_NODES: process.env.SQLIT_NODES || process.env.SQLIT_URL || '',
-  SQLIT_URL: process.env.SQLIT_URL || process.env.SQLIT_NODES || '',
+  SQLIT_NODES:
+    process.env.SQLIT_NODES ||
+    process.env.SQLIT_URL ||
+    process.env.SQLIT_HTTP_URL ||
+    process.env.SQLIT_BLOCK_PRODUCER_ENDPOINT ||
+    process.env.SQLIT_MINER_ENDPOINT ||
+    '',
+  SQLIT_URL:
+    process.env.SQLIT_URL ||
+    process.env.SQLIT_NODES ||
+    process.env.SQLIT_HTTP_URL ||
+    process.env.SQLIT_BLOCK_PRODUCER_ENDPOINT ||
+    process.env.SQLIT_MINER_ENDPOINT ||
+    '',
   SQLIT_DATABASE_ID: process.env.SQLIT_DATABASE_ID || '',
   SQLIT_KMS_KEY_ID: process.env.SQLIT_KMS_KEY_ID || '',
   SQLIT_MINER_ENDPOINT: process.env.SQLIT_MINER_ENDPOINT || '',

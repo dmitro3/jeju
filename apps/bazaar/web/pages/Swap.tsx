@@ -449,7 +449,7 @@ export default function SwapPage() {
   }, [inputToken, outputToken])
 
   const getButtonText = () => {
-    if (!isConnected) return 'Connect Wallet'
+    if (!isConnected) return 'Sign In'
     if (!isCorrectChain && !isCrossChain) return 'Switch Network'
     if (isPending) return 'Confirm in Wallet...'
     if (isConfirming) return 'Processing...'

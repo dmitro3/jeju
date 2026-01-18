@@ -229,7 +229,3 @@ export async function checkDatabaseHealth(
   const data = z.object({ status: z.string() }).parse(await response.json())
   return data.status === 'healthy'
 }
-
-
-
-

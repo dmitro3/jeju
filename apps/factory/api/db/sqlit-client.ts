@@ -11,8 +11,289 @@ import {
   type DatabaseService,
 } from '@jejunetwork/shared'
 import { z } from 'zod'
-import { getFactoryConfig } from '../config'
+import { configureFactory, getFactoryConfig } from '../config'
 import FACTORY_SCHEMA from './schema'
+
+// Response schema for SQLit database creation
+const CreateDatabaseResponseSchema = z.object({
+  success: z.boolean(),
+  status: z.string().optional(),
+  data: z
+    .object({
+      database: z.string(),
+    })
+    .optional(),
+  databaseId: z.string().optional(),
+  error: z.string().optional(),
+})
+
+// Backup metadata schema
+const BackupMetadataSchema = z.object({
+  databaseId: z.string(),
+  backupId: z.string(),
+  timestamp: z.number(),
+  ipfsCid: z.string().optional(),
+  tableCount: z.number(),
+  rowCount: z.number(),
+})
+
+type BackupMetadata = z.infer<typeof BackupMetadataSchema>
+
+// Local storage for backup metadata (persisted via SQLit __factory_backups table)
+let lastBackupTime = 0
+const BACKUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
+
+function isDwsSqlitProxy(endpoint: string): boolean {
+  return endpoint.includes('/sqlit')
+}
+
+/**
+ * Check if SQLit server is healthy
+ */
+async function checkSQLitHealth(endpoint: string): Promise<boolean> {
+  try {
+    const healthPath = isDwsSqlitProxy(endpoint) ? '/v1/status' : '/health'
+    const response = await fetch(`${endpoint}${healthPath}`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Create a backup of the database to IPFS
+ */
+export async function createBackup(): Promise<BackupMetadata | null> {
+  const config = getFactoryConfig()
+  const endpoint = config.sqlitEndpoint || getSQLitUrl()
+  const databaseId = config.sqlitDatabaseId
+
+  try {
+    // Request SQLit to create a backup
+    const response = await fetch(
+      `${endpoint}/v2/databases/${databaseId}/backup`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storage: 'ipfs' }),
+        signal: AbortSignal.timeout(60000),
+      },
+    )
+
+    const result = await response.json()
+    if (!result.success) {
+      console.warn('[Factory SQLit] Backup failed:', result.error)
+      return null
+    }
+
+    const metadata: BackupMetadata = {
+      databaseId,
+      backupId: result.backupId ?? `backup-${Date.now()}`,
+      timestamp: Date.now(),
+      ipfsCid: result.ipfsCid,
+      tableCount: result.tableCount ?? 0,
+      rowCount: result.rowCount ?? 0,
+    }
+
+    lastBackupTime = Date.now()
+    console.log(`[Factory SQLit] Backup created: ${metadata.backupId}`)
+    return metadata
+  } catch (err) {
+    console.warn('[Factory SQLit] Backup error:', err)
+    return null
+  }
+}
+
+/**
+ * Restore database from a backup
+ */
+export async function restoreFromBackup(backupId: string): Promise<boolean> {
+  const config = getFactoryConfig()
+  const endpoint = config.sqlitEndpoint || getSQLitUrl()
+  const databaseId = config.sqlitDatabaseId
+
+  try {
+    const response = await fetch(
+      `${endpoint}/v2/databases/${databaseId}/restore`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupId }),
+        signal: AbortSignal.timeout(120000),
+      },
+    )
+
+    const result = await response.json()
+    if (!result.success) {
+      console.error('[Factory SQLit] Restore failed:', result.error)
+      return false
+    }
+
+    console.log(`[Factory SQLit] Database restored from backup: ${backupId}`)
+    return true
+  } catch (err) {
+    console.error('[Factory SQLit] Restore error:', err)
+    return false
+  }
+}
+
+/**
+ * List available backups
+ */
+export async function listBackups(): Promise<BackupMetadata[]> {
+  const config = getFactoryConfig()
+  const endpoint = config.sqlitEndpoint || getSQLitUrl()
+  const databaseId = config.sqlitDatabaseId
+
+  try {
+    const response = await fetch(
+      `${endpoint}/v2/databases/${databaseId}/backups`,
+      { signal: AbortSignal.timeout(10000) },
+    )
+
+    const result = await response.json()
+    if (!result.success || !Array.isArray(result.backups)) {
+      return []
+    }
+
+    return result.backups.map((b: Record<string, unknown>) =>
+      BackupMetadataSchema.parse(b),
+    )
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Ensure the Factory database exists in SQLit.
+ * Creates it if it doesn't exist, or restores from backup if needed.
+ */
+async function ensureDatabaseExists(): Promise<string> {
+  const config = getFactoryConfig()
+  const endpoint = config.sqlitEndpoint || getSQLitUrl()
+  let databaseId = config.sqlitDatabaseId
+
+  // First check if SQLit server is healthy
+  const isHealthy = await checkSQLitHealth(endpoint)
+  if (!isHealthy) {
+    throw new Error(
+      `SQLit server not available at ${endpoint}. Ensure SQLit is running.`,
+    )
+  }
+
+  // Try to connect to existing database
+  try {
+    const checkResponse = await fetch(
+      isDwsSqlitProxy(endpoint) ? `${endpoint}/v1/exec` : `${endpoint}/v2/execute`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          isDwsSqlitProxy(endpoint)
+            ? {
+                database: databaseId,
+                query: 'SELECT 1',
+                args: [],
+              }
+            : {
+                databaseId,
+                sql: 'SELECT 1',
+                params: [],
+              },
+        ),
+        signal: AbortSignal.timeout(5000),
+      },
+    )
+
+    const checkResult = await checkResponse.json()
+
+    if (checkResult && checkResult.success === true) {
+      console.log(`[Factory SQLit] Connected to database: ${databaseId}`)
+      return databaseId
+    }
+  } catch {
+    // Database doesn't exist, will create or restore
+  }
+
+  // Check for backups to restore from (not supported via DWS SQLit proxy)
+  if (!isDwsSqlitProxy(endpoint)) {
+    const backups = await listBackups()
+    if (backups.length > 0) {
+      // Sort by timestamp descending to get most recent
+      const latestBackup = backups.sort((a, b) => b.timestamp - a.timestamp)[0]
+      console.log(
+        `[Factory SQLit] Found backup from ${new Date(latestBackup.timestamp).toISOString()}`,
+      )
+
+      const restored = await restoreFromBackup(latestBackup.backupId)
+      if (restored) {
+        return databaseId
+      }
+      console.warn(
+        '[Factory SQLit] Backup restore failed, creating new database',
+      )
+    }
+  }
+
+  // Create new database
+  try {
+    const createResponse = await fetch(
+      isDwsSqlitProxy(endpoint)
+        ? `${endpoint}/v1/admin/create`
+        : `${endpoint}/v2/databases`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          isDwsSqlitProxy(endpoint)
+            ? { databaseId }
+            : {
+                name: 'factory',
+                encryptionMode: 'none',
+                replication: { replicaCount: 2 },
+              },
+        ),
+        signal: AbortSignal.timeout(10000),
+      },
+    )
+
+    const createResult = CreateDatabaseResponseSchema.parse(
+      await createResponse.json(),
+    )
+
+    if (!createResult.success) {
+      throw new Error(createResult.error || 'Failed to create database')
+    }
+
+    const returnedId = createResult.data
+      ? createResult.data.database
+      : createResult.databaseId
+    databaseId = returnedId || databaseId
+    console.log(`[Factory SQLit] Created new database: ${databaseId}`)
+
+    // Update config with new database ID
+    configureFactory({ sqlitDatabaseId: databaseId })
+
+    return databaseId
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err)
+    throw new Error(`Failed to create SQLit database: ${error}`)
+  }
+}
+
+/**
+ * Schedule periodic backups
+ */
+export function startBackupScheduler(): void {
+  setInterval(async () => {
+    const timeSinceLastBackup = Date.now() - lastBackupTime
+    if (timeSinceLastBackup >= BACKUP_INTERVAL_MS) {
+      await createBackup()
+    }
+  }, 60000) // Check every minute
+}
 
 // Row Schemas (same as original)
 const BountyRowSchema = z.object({
@@ -99,37 +380,64 @@ export function getDB(): DatabaseService {
   return db
 }
 
-/** Initialize database with schema */
-export async function initDB(): Promise<DatabaseService> {
-  const database = getDB()
+/** Recreate database service with updated config (after auto-provisioning) */
+function recreateDB(): DatabaseService {
+  const config = getFactoryConfig()
+  db = createDatabaseService({
+    databaseId: config.sqlitDatabaseId,
+    endpoint: config.sqlitEndpoint || getSQLitUrl(),
+    timeout: 30000,
+    debug: config.isDev,
+  })
+  return db
+}
 
+/** Initialize database with schema (auto-provisions if needed) */
+export async function initDB(): Promise<DatabaseService> {
   if (!initialized) {
+    // First ensure database exists (creates if needed)
+    const databaseId = await ensureDatabaseExists()
+
+    // Recreate DB service with correct database ID
+    const config = getFactoryConfig()
+    if (config.sqlitDatabaseId !== databaseId) {
+      configureFactory({ sqlitDatabaseId: databaseId })
+      recreateDB()
+    }
+
+    const database = getDB()
+
     const healthy = await database.isHealthy()
     if (!healthy) {
-      const config = getFactoryConfig()
       throw new Error(
         `SQLit database not available at ${config.sqlitEndpoint}. ` +
           'Ensure SQLit server is running.',
       )
     }
 
-    // Execute schema - split by CREATE statements and run each
-    const statements = FACTORY_SCHEMA.split(/;[\s]*(?=CREATE|--)/i)
+    // Execute schema - split by semicolons and filter to valid statements
+    // First remove all SQL comments, then split on semicolons
+    const schemaWithoutComments = FACTORY_SCHEMA.replace(/--[^\n]*/g, '')
+    const statements = schemaWithoutComments
+      .split(';')
       .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith('--'))
+      .filter((s) => s.length > 0 && /^(CREATE|INSERT|ALTER)/i.test(s))
 
     for (const stmt of statements) {
-      if (stmt.length > 5) {
-        // Skip empty or trivial statements
-        await database.exec(`${stmt};`)
-      }
+      await database.exec(`${stmt};`)
     }
 
     initialized = true
     console.log('[Factory SQLit] Database initialized')
+
+    // Start backup scheduler in production
+    if (!config.isDev) {
+      startBackupScheduler()
+      console.log('[Factory SQLit] Backup scheduler started (hourly)')
+    }
   }
 
-  return database
+  return getDB()
 }
 
 /** Close database connection */

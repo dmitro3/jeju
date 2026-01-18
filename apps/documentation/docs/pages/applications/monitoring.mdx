@@ -2,7 +2,7 @@
 
 Monitoring provides the observability stack for Jeju — Prometheus for metrics collection, Grafana for dashboards, Alertmanager for alert routing, and an A2A server for agent-queryable metrics.
 
-**URLs:** A2A at http://127.0.0.1:9091, Prometheus at http://127.0.0.1:9090, Grafana at http://127.0.0.1:3000. Production uses https://monitoring.jejunetwork.org.
+**URLs:** A2A at http://127.0.0.1:3003, Prometheus at http://127.0.0.1:9090, Grafana at http://127.0.0.1:4010. Production uses https://monitoring.jejunetwork.org.
 
 ## Stack Components
 
@@ -51,7 +51,7 @@ HighRPCLatency fires when p99 latency exceeds 0.5 seconds for 5 minutes. Indexer
 Agents can query metrics via A2A:
 
 ```bash
-curl -X POST http://localhost:9091/api/a2a \
+curl -X POST http://localhost:3003/a2a \
   -H "Content-Type: application/json" \
   -d '{
     "type": "task",
@@ -96,7 +96,7 @@ app.get('/metrics', async (c) => {
 
 ## Setup & Configuration
 
-Install with `cd apps/monitoring && bun install`.
+Install with `cd packages/monitoring && bun install`.
 
 ### Prometheus Configuration
 
@@ -157,18 +157,18 @@ Monitoring is optional for local development. Start with `bun run dev:full` to i
 
 ### Testnet/Mainnet
 
-Deploy via Kubernetes using the Prometheus Operator:
+Deploy to DWS:
 
 ```bash
-cd packages/deployment/kubernetes/helmfile
-helmfile -e testnet -l component=monitoring sync
+cd packages/monitoring
+bun run deploy
 ```
 
-This deploys Prometheus, Grafana, Alertmanager, and the A2A server with pre-configured dashboards and alerts.
+This deploys the monitoring worker to DWS with the A2A/MCP API and configures CDN for the frontend.
 
 ## Grafana Access
 
-Local Grafana runs at http://localhost:3000 with default credentials admin/admin.
+Local Grafana runs at http://localhost:4010 with default credentials admin/admin.
 
 Production Grafana uses GitHub OAuth SSO at https://grafana.jejunetwork.org.
 
@@ -176,6 +176,6 @@ Production Grafana uses GitHub OAuth SSO at https://grafana.jejunetwork.org.
 
 "Prometheus not scraping" — check targets at `curl http://localhost:9090/api/v1/targets`. Verify the target is accessible and exposing /metrics.
 
-"Grafana dashboard missing" — reload dashboards with `curl -X POST http://admin:admin@localhost:3000/api/admin/provisioning/dashboards/reload`.
+"Grafana dashboard missing" — reload dashboards with `curl -X POST http://admin:admin@localhost:4010/api/admin/provisioning/dashboards/reload`.
 
 "Alerts not firing" — check Alertmanager configuration, verify the alert expression in Prometheus, and check the /alerts endpoint.

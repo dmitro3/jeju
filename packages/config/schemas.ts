@@ -249,6 +249,7 @@ export const ServicesNetworkConfigSchema = z.object({
   indexer: z.object({
     api: UrlString.optional(),
     graphql: UrlString,
+    graphqlCors: UrlString.optional(),
     websocket: UrlString,
     rest: UrlString.optional(),
     dws: UrlString.optional(),

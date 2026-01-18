@@ -9,9 +9,14 @@ import { findMonorepoRoot } from '../lib/system'
 export const cleanCommand = new Command('clean')
   .description('Clean build artifacts and stop running services')
   .option('--deep', 'Deep clean (includes Docker and node_modules)')
-  .option('--reset-localnet', 'Reset localnet state (clears deployment state and kurtosis enclave)')
+  .option(
+    '--reset-localnet',
+    'Reset localnet state (clears deployment state and kurtosis enclave)',
+  )
   .action(async (options) => {
-    logger.header(`CLEAN${options.deep ? ' (DEEP)' : ''}${options.resetLocalnet ? ' (RESET LOCALNET)' : ''}`)
+    logger.header(
+      `CLEAN${options.deep ? ' (DEEP)' : ''}${options.resetLocalnet ? ' (RESET LOCALNET)' : ''}`,
+    )
 
     const rootDir = findMonorepoRoot()
 
@@ -107,7 +112,9 @@ export const cleanCommand = new Command('clean')
             }
           }
           if (cleanedDeployments > 0) {
-            logger.success(`Cleaned ${cleanedDeployments} localnet deployment files`)
+            logger.success(
+              `Cleaned ${cleanedDeployments} localnet deployment files`,
+            )
           }
         } catch (_e) {
           logger.warn('Failed to clean deployment files')

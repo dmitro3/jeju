@@ -6,6 +6,7 @@ import {
   listPullRequests as dbListPRs,
   getPRReviews,
   getPullRequest,
+  mergePullRequest,
   type PRReviewRow,
   type PullRequestRow,
 } from '../db/client'
@@ -121,7 +122,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
       const validated = expectValid(PullsQuerySchema, query, 'query params')
       const page = Number.parseInt(validated.page ?? '1', 10)
 
-      const result = dbListPRs({
+      const result = await dbListPRs({
         repo: validated.repo,
         status: validated.status,
         author: validated.author,
@@ -143,7 +144,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
       }
       const validated = expectValid(CreatePullBodySchema, body, 'request body')
 
-      const row = dbCreatePR({
+      const row = await dbCreatePR({
         repo: validated.repo,
         title: validated.title,
         body: validated.body,
@@ -161,7 +162,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
   .get(
     '/:prId',
     async ({ params, set }) => {
-      const row = getPullRequest(params.prId)
+      const row = await getPullRequest(params.prId)
       if (!row) {
         set.status = 404
         return {
@@ -183,7 +184,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
         set.status = 401
         return { error: { code: 'UNAUTHORIZED', message: authResult.error } }
       }
-      const row = getPullRequest(params.prId)
+      const row = await getPullRequest(params.prId)
       if (!row) {
         set.status = 404
         return {
@@ -211,8 +212,16 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
       const validated = expectValid(PullMergeBodySchema, body, 'request body')
 
       // Update PR status to merged in the database
-      const db = await import('../db/client')
-      db.mergePullRequest(params.prId)
+      const merged = await mergePullRequest(params.prId)
+      if (!merged) {
+        set.status = 500
+        return {
+          error: {
+            code: 'INTERNAL_ERROR',
+            message: 'Failed to merge pull request',
+          },
+        }
+      }
 
       return {
         success: true,
@@ -231,7 +240,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
         set.status = 401
         return { error: { code: 'UNAUTHORIZED', message: authResult.error } }
       }
-      const row = getPullRequest(params.prId)
+      const row = await getPullRequest(params.prId)
       if (!row) {
         set.status = 404
         return {
@@ -248,7 +257,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
         comment: 'commented',
       }
 
-      const reviewRow = dbCreateReview({
+      const reviewRow = await dbCreateReview({
         prId: params.prId,
         author: authResult.address,
         state: stateMap[validated.event],
@@ -263,7 +272,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
   .get(
     '/:prId/reviews',
     async ({ params, set }) => {
-      const row = getPullRequest(params.prId)
+      const row = await getPullRequest(params.prId)
       if (!row) {
         set.status = 404
         return {
@@ -271,7 +280,7 @@ export const pullsRoutes = new Elysia({ prefix: '/api/pulls' })
         }
       }
 
-      const reviews = getPRReviews(params.prId)
+      const reviews = await getPRReviews(params.prId)
       return { reviews: reviews.map(transformReview), total: reviews.length }
     },
     { detail: { tags: ['pulls'], summary: 'Get reviews' } },

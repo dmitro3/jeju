@@ -53,6 +53,7 @@ import type {
 import {
   createPublicClient,
   createWalletClient,
+  getAddress,
   hashMessage,
   hashTypedData,
   http,
@@ -151,12 +152,25 @@ const KeyInfoResponseSchema = z.object({
   createdAt: z.number().optional(),
 })
 
-const HealthResponseSchema = z.object({
-  healthy: z.boolean(),
-  mode: z.enum(['mpc', 'tee', 'development']).optional(),
-  threshold: z.number().optional(),
-  activeParties: z.number().optional(),
-})
+const HealthResponseSchema = z.union([
+  z.object({
+    healthy: z.boolean(),
+    mode: z.enum(['mpc', 'tee', 'development']).optional(),
+    threshold: z.number().optional(),
+    activeParties: z.number().optional(),
+  }),
+  z.object({
+    status: z.literal('healthy'),
+    mode: z.enum(['distributed', 'centralized']).optional(),
+    distributedParties: z.number().optional(),
+    config: z
+      .object({
+        defaultThreshold: z.number(),
+        defaultParties: z.number(),
+      })
+      .optional(),
+  }),
+])
 
 // ════════════════════════════════════════════════════════════════════════════
 //                              KMS SIGNER CLASS
@@ -188,6 +202,7 @@ export class KMSSigner {
   private readonly network: 'mainnet' | 'testnet' | 'localnet'
   private readonly timeoutMs: number
   private readonly allowLocalDev: boolean
+  private readonly ownerAddress: Address
 
   private initialized = false
   private keyId: string | null = null
@@ -200,6 +215,7 @@ export class KMSSigner {
     this.network = config.network ?? getCurrentNetwork()
     this.timeoutMs = config.timeoutMs ?? 30000
     this.allowLocalDev = config.allowLocalDev ?? false
+    this.ownerAddress = deriveOwnerAddress(this.serviceId)
 
     // SECURITY: Block local dev mode in production
     if (this.allowLocalDev && isProductionEnv()) {
@@ -605,20 +621,37 @@ export class KMSSigner {
       return this.getLocalDevKey()
     }
 
-    const response = await this.kmsRequest('/keys', {
-      serviceId: this.serviceId,
-      action: 'get-or-create',
-    })
+    try {
+      const response = await this.kmsRequest('/keys', {
+        name: this.serviceId,
+        serviceId: this.serviceId,
+        action: 'get-or-create',
+        acknowledgeInsecureCentralized: this.network !== 'mainnet',
+      })
 
-    const parsed = KeyInfoResponseSchema.parse(response)
+      const parsed = KeyInfoResponseSchema.parse(response)
 
-    return {
-      keyId: parsed.keyId,
-      publicKey: (parsed.publicKey ?? '0x') as Hex,
-      address: parsed.address as Address,
-      threshold: parsed.threshold ?? 2,
-      totalParties: parsed.totalParties ?? 3,
-      createdAt: parsed.createdAt ?? Date.now(),
+      return {
+        keyId: parsed.keyId,
+        publicKey: (parsed.publicKey ?? '0x') as Hex,
+        address: parsed.address as Address,
+        threshold: parsed.threshold ?? 2,
+        totalParties: parsed.totalParties ?? 3,
+        createdAt: parsed.createdAt ?? Date.now(),
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      if (
+        this.network !== 'mainnet' &&
+        message.includes('SECURITY WARNING: FROSTCoordinator')
+      ) {
+        console.warn(
+          '[KMSSigner] KMS requires distributed coordinator; using local-dev key for testnet.',
+        )
+        this.mode = 'local-dev'
+        return this.getLocalDevKey()
+      }
+      throw error
     }
   }
 
@@ -707,17 +740,37 @@ export class KMSSigner {
 
       const data: unknown = await response.json()
       const parsed = HealthResponseSchema.parse(data)
-      const isHealthy = parsed.healthy
+      let isHealthy = false
+      let mode: SigningMode | undefined
+      let threshold: number | undefined
+      let activeParties: number | undefined
+
+      if ('healthy' in parsed) {
+        isHealthy = parsed.healthy
+        mode =
+          parsed.mode === 'development'
+            ? 'local-dev'
+            : (parsed.mode as SigningMode)
+        threshold = parsed.threshold
+        activeParties = parsed.activeParties
+      } else {
+        isHealthy = true
+        mode = 'mpc'
+        if (parsed.config) {
+          threshold = parsed.config.defaultThreshold
+          activeParties = parsed.config.defaultParties
+        } else {
+          threshold = undefined
+          activeParties = parsed.distributedParties
+        }
+      }
 
       return {
         healthy: isHealthy,
         available: isHealthy,
-        mode:
-          parsed.mode === 'development'
-            ? 'local-dev'
-            : (parsed.mode as SigningMode),
-        threshold: parsed.threshold,
-        activeParties: parsed.activeParties,
+        mode,
+        threshold,
+        activeParties,
       }
     } catch {
       return { healthy: false, available: false }
@@ -753,6 +806,7 @@ export class KMSSigner {
       headers: {
         'Content-Type': 'application/json',
         'X-Service-ID': this.serviceId,
+        'x-jeju-address': this.ownerAddress,
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(this.timeoutMs),
@@ -767,6 +821,12 @@ export class KMSSigner {
 
     return response.json()
   }
+}
+
+function deriveOwnerAddress(serviceId: string): Address {
+  const hash = keccak256(toBytes(serviceId))
+  const raw = `0x${hash.slice(-40)}`
+  return getAddress(raw)
 }
 
 // ════════════════════════════════════════════════════════════════════════════

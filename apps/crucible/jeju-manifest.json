@@ -8,7 +8,7 @@
   "commands": {
     "dev": "bun run dev",
     "build": "bun run build",
-    "start": "bun run api/worker.ts",
+    "start": "bun run api/server.ts",
     "test": "bun test"
   },
   "ports": {
@@ -185,6 +185,11 @@
       "builder": "bun",
       "entrypoint": "index.html",
       "outputDir": "dist/web"
+    },
+    "backend": {
+      "outputDir": "dist/api",
+      "entrypoint": "index.js",
+      "startCmd": "bun run api/server.ts"
     }
   }
 }

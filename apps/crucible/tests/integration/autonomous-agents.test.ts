@@ -45,10 +45,16 @@ beforeAll(async () => {
   const autonomousStatus = await fetch(
     `${CRUCIBLE_URL}/api/v1/autonomous/status`,
   ).catch(() => null)
-  crucibleAutonomousAvailable = autonomousStatus?.ok ?? false
+
+  // Check both HTTP status and response body - autonomous must be explicitly enabled
+  if (autonomousStatus?.ok) {
+    const statusBody = (await autonomousStatus.json()) as { enabled?: boolean }
+    crucibleAutonomousAvailable = statusBody.enabled === true
+  }
+
   if (!crucibleAutonomousAvailable) {
     console.log(
-      '[Autonomous Tests] Crucible running in worker mode - autonomous endpoints disabled',
+      '[Autonomous Tests] Crucible autonomous mode not enabled (set AUTONOMOUS_ENABLED=true)',
     )
   }
 })
@@ -62,6 +68,7 @@ describe('Agent Character Validation', () => {
     const allChars = listCharacters()
     expect(allChars.length).toBe(14)
 
+    // Match actual characters in api/characters directory
     const expectedCharacters = [
       'project-manager',
       'community-manager',
@@ -69,14 +76,14 @@ describe('Agent Character Validation', () => {
       'liaison',
       'social-media-manager',
       'red-team',
-      'scammer',
-      'security-researcher',
-      'contracts-expert',
-      'fuzz-tester',
       'blue-team',
       'moderator',
-      'network-guardian',
-      'contracts-auditor',
+      'security-analyst',
+      'base-watcher',
+      'node-monitor',
+      'infra-analyzer',
+      'endpoint-prober',
+      'qa-engineer',
     ]
 
     for (const id of expectedCharacters) {

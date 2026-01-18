@@ -24,7 +24,6 @@ const WORKERS: WorkerInfo[] = [
   { name: 'factory', path: 'apps/factory/api/worker.ts', port: 14009, portEnvVar: 'FACTORY_PORT' },
   { name: 'indexer', path: 'apps/indexer/api/worker.ts', port: 14352, portEnvVar: 'INDEXER_PORT' },
   // These apps don't have worker.ts yet - they use server.ts or multiple entry points:
-  // - example: no worker.ts (needs creation)
   // - gateway: multiple servers (rpc-server.ts, x402-server.ts, etc.)
   // - monitoring: multiple servers (heartbeat.ts, database-monitor.ts, etc.)
   // - oauth3: api/index.ts (needs worker.ts wrapper)

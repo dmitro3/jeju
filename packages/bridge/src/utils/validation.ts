@@ -168,13 +168,6 @@ export const PhalaConfigSchema = z.object({
   useMock: z.boolean().default(false),
 })
 
-export const AWSNitroConfigSchema = z.object({
-  region: z.string().min(1),
-  instanceType: z.string().default('c5.xlarge'),
-  enclaveMemory: z.number().positive().default(512),
-  enclaveCpus: z.number().positive().default(2),
-})
-
 export const GCPConfidentialConfigSchema = z.object({
   project: z.string().min(1),
   zone: z.string().default('us-central1-a'),
@@ -554,7 +547,6 @@ export type PhalaAttestationResponse = z.infer<
 export type NitroDocument = z.infer<typeof NitroDocumentSchema>
 export type SP1Config = z.infer<typeof SP1ConfigSchema>
 export type PhalaConfig = z.infer<typeof PhalaConfigSchema>
-export type AWSNitroConfig = z.infer<typeof AWSNitroConfigSchema>
 export type GCPConfidentialConfig = z.infer<typeof GCPConfidentialConfigSchema>
 export type WormholeVAAResponse = z.infer<typeof WormholeVAAResponseSchema>
 export type HyperCoreMarket = z.infer<typeof HyperCoreMarketSchema>

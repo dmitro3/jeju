@@ -241,7 +241,7 @@ export function createServer(config: ServerConfig) {
     )
     .use(
       cors({
-        origin: (request) => {
+        origin: (request: Request) => {
           const origin = request.headers.get('origin')
           // Allow requests without origin (same-origin/server-to-server)
           if (!origin) return true

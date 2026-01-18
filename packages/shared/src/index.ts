@@ -56,7 +56,7 @@ export {
   type TransactionRequest,
 } from './api/moderation'
 // Auth Types
-export type { SIWEMessage, SIWFMessage } from './auth/types'
+export type { OAuth3AppConfig, OAuth3Network, SIWEMessage, SIWFMessage } from './auth/types'
 // Branding
 export {
   applyBrandingToDocument,
@@ -399,8 +399,6 @@ export {
 } from './middleware/cache'
 // Content Moderation Pipeline (multi-provider)
 export {
-  type AWSRekognitionConfig,
-  AWSRekognitionProvider,
   type CategoryScore,
   CloudflareModerationProvider,
   type CloudflareProviderConfig,
@@ -654,8 +652,6 @@ export {
   createIPNSClient,
   // JNS
   createJNSService,
-  // KMS
-  createKMSService,
   createPreviewManager,
   // Storage
   createStorageService,
@@ -679,6 +675,8 @@ export {
   type JNSService,
   type KMSConfig,
   type KMSServiceClient,
+  createKMSService,
+  getKMSServiceFromEnv,
   type PinOptions,
   PreviewDeploymentManager,
   type QueryParam,

@@ -2,8 +2,13 @@ import { Elysia, t } from 'elysia'
 import type { Address, Hex } from 'viem'
 import { isAddress, isHex, verifyMessage } from 'viem'
 import type { AuthConfig, WalletAuthChallenge } from '../../lib/types'
-import { getEphemeralKey } from '../services/kms'
-import { authCodeState, clientState, sessionState } from '../services/state'
+import { getEphemeralKey, initializeKMS } from '../services/kms'
+import {
+  authCodeState,
+  clientState,
+  initializeState,
+  sessionState,
+} from '../services/state'
 import {
   createHtmlPage,
   escapeHtml,
@@ -174,35 +179,68 @@ function generateWalletConnectPage(
     let address = null;
     let selectedProvider = null;
     
-    // Detect available wallets
+    // Detect available EVM wallets (excludes Solana-only wallets like Phantom)
     function detectWallets() {
       const wallets = [];
+      const seen = new Set();
       
-      // Check for MetaMask specifically (has isMetaMask flag)
-      if (window.ethereum?.isMetaMask && !window.ethereum?.isPhantom) {
-        wallets.push({ name: 'MetaMask', provider: window.ethereum, icon: '🦊' });
+      // Helper to check if provider supports EVM methods
+      function isEVMProvider(provider) {
+        return provider && typeof provider.request === 'function';
       }
       
-      // Check for Phantom EVM
-      if (window.phantom?.ethereum) {
-        wallets.push({ name: 'Phantom', provider: window.phantom.ethereum, icon: '👻' });
-      } else if (window.ethereum?.isPhantom) {
-        wallets.push({ name: 'Phantom', provider: window.ethereum, icon: '👻' });
+      // Check for MetaMask (most common EVM wallet)
+      if (window.ethereum?.isMetaMask && !window.ethereum?.isPhantom && isEVMProvider(window.ethereum)) {
+        wallets.push({ name: 'MetaMask', provider: window.ethereum, icon: '🦊' });
+        seen.add('metamask');
       }
       
       // Check for Coinbase Wallet
-      if (window.ethereum?.isCoinbaseWallet) {
-        wallets.push({ name: 'Coinbase', provider: window.ethereum, icon: '🔵' });
+      if (window.ethereum?.isCoinbaseWallet && isEVMProvider(window.ethereum) && !seen.has('coinbase')) {
+        wallets.push({ name: 'Coinbase Wallet', provider: window.ethereum, icon: '🔵' });
+        seen.add('coinbase');
       }
       
       // Check for Rainbow
-      if (window.ethereum?.isRainbow) {
+      if (window.ethereum?.isRainbow && isEVMProvider(window.ethereum) && !seen.has('rainbow')) {
         wallets.push({ name: 'Rainbow', provider: window.ethereum, icon: '🌈' });
+        seen.add('rainbow');
       }
       
+      // Check for Rabby
+      if (window.ethereum?.isRabby && isEVMProvider(window.ethereum) && !seen.has('rabby')) {
+        wallets.push({ name: 'Rabby', provider: window.ethereum, icon: '🐰' });
+        seen.add('rabby');
+      }
+      
+      // Check for Trust Wallet
+      if (window.ethereum?.isTrust && isEVMProvider(window.ethereum) && !seen.has('trust')) {
+        wallets.push({ name: 'Trust Wallet', provider: window.ethereum, icon: '🛡️' });
+        seen.add('trust');
+      }
+      
+      // Check for Brave Wallet
+      if (window.ethereum?.isBraveWallet && isEVMProvider(window.ethereum) && !seen.has('brave')) {
+        wallets.push({ name: 'Brave Wallet', provider: window.ethereum, icon: '🦁' });
+        seen.add('brave');
+      }
+      
+      // Check for Frame
+      if (window.ethereum?.isFrame && isEVMProvider(window.ethereum) && !seen.has('frame')) {
+        wallets.push({ name: 'Frame', provider: window.ethereum, icon: '🖼️' });
+        seen.add('frame');
+      }
+      
+      // NOTE: Phantom is excluded as it's primarily a Solana wallet
+      // Its EVM support is limited and may cause issues with signing
+      
       // Fallback to generic ethereum provider if no specific wallet detected
-      if (wallets.length === 0 && window.ethereum) {
-        wallets.push({ name: 'Browser Wallet', provider: window.ethereum, icon: '🔐' });
+      // but only if it looks like a valid EVM provider (not Phantom/Solana)
+      if (wallets.length === 0 && window.ethereum && isEVMProvider(window.ethereum)) {
+        // Skip if it's Phantom (Solana wallet)
+        if (!window.ethereum.isPhantom && !window.ethereum.isSolana) {
+          wallets.push({ name: 'Browser Wallet', provider: window.ethereum, icon: '🔐' });
+        }
       }
       
       return wallets;
@@ -214,7 +252,7 @@ function generateWalletConnectPage(
       const status = document.getElementById('status');
       
       if (wallets.length === 0) {
-        status.textContent = 'No wallet found. Install MetaMask or another browser wallet.';
+        status.textContent = 'No EVM wallet found. Install MetaMask, Coinbase Wallet, or Rainbow.';
         status.className = 'status error';
         btn.disabled = true;
         return;
@@ -327,11 +365,40 @@ function generateWalletConnectPage(
   })
 }
 
-export function createWalletRouter(_config: AuthConfig) {
+// Lazy initialization for wallet routes
+let walletInitialized = false
+let walletInitPromise: Promise<void> | null = null
+
+async function ensureWalletInitialized(config: AuthConfig): Promise<void> {
+  if (walletInitialized) return
+  if (walletInitPromise) {
+    await walletInitPromise
+    return
+  }
+
+  walletInitPromise = (async () => {
+    await initializeState()
+    await initializeKMS({
+      jwtSigningKeyId: config.jwtSigningKeyId ?? 'oauth3-jwt-signing',
+      jwtSignerAddress:
+        config.jwtSignerAddress ??
+        '0x0000000000000000000000000000000000000000',
+      serviceAgentId: config.serviceAgentId,
+      chainId: config.chainId ?? 'eip155:420691',
+    })
+    walletInitialized = true
+  })()
+
+  await walletInitPromise
+}
+
+export function createWalletRouter(config: AuthConfig) {
   return new Elysia({ name: 'wallet', prefix: '/wallet' })
     .get(
       '/challenge',
       async ({ query, set }) => {
+        await ensureWalletInitialized(config)
+
         const { client_id: clientId, redirect_uri: redirectUri, state } = query
 
         // SECURITY: Rate limiting per client to prevent DoS
@@ -370,12 +437,8 @@ export function createWalletRouter(_config: AuthConfig) {
         const nonce = crypto.randomUUID()
         const timestamp = new Date().toISOString()
 
-        // Domain should match the OAuth3 server domain
-        const domain = redirectUri.includes('testnet')
-          ? 'oauth3.testnet.jejunetwork.org'
-          : redirectUri.includes('localhost')
-            ? 'localhost'
-            : 'oauth3.jejunetwork.org'
+        // Domain should match the app redirect host for SIWE consistency
+        const domain = new URL(redirectUri).hostname
 
         const message = `Jeju Network sign-in request.
 
@@ -417,6 +480,8 @@ No transaction will be sent. No gas fees.`
     .post(
       '/verify',
       async ({ body, set }) => {
+        await ensureWalletInitialized(config)
+
         if (!isAddress(body.address)) {
           set.status = 400
           return { error: 'invalid_address' }

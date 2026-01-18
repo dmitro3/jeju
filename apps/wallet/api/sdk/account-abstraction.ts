@@ -27,16 +27,26 @@ export interface AAClientConfig {
  * Account Abstraction Client for ERC-4337 operations
  */
 export class AAClient {
-  private chainId: number
+  private _chainId: number
   private publicClient: PublicClient
-  private bundlerUrl: string
+  private _bundlerUrl: string
   private entryPointAddress: Address
 
   constructor(config: AAClientConfig) {
-    this.chainId = config.chainId
+    this._chainId = config.chainId
     this.publicClient = config.publicClient
-    this.bundlerUrl = config.bundlerUrl ?? 'http://localhost:4337'
+    this._bundlerUrl = config.bundlerUrl ?? 'http://localhost:4337'
     this.entryPointAddress = config.entryPointAddress ?? DEFAULT_ENTRY_POINT
+  }
+
+  /** Get the chain ID */
+  get chainId(): number {
+    return this._chainId
+  }
+
+  /** Get the bundler URL */
+  get bundlerUrl(): string {
+    return this._bundlerUrl
   }
 
   /**

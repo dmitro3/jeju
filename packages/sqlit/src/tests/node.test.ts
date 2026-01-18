@@ -32,7 +32,7 @@ function createTestConfig(
     dataDir: TEST_DATA_DIR,
     region: 'global',
     teeEnabled: false,
-    l2RpcUrl: 'http://localhost:8545',
+    l2RpcUrl: 'http://localhost:6546',
     registryAddress: '0x0000000000000000000000000000000000000000',
     version: '2.0.0-test',
     ...overrides,
@@ -653,7 +653,7 @@ describe('Multi-Node Replication', () => {
       dataDir: PRIMARY_DATA_DIR,
       region: 'global',
       teeEnabled: false,
-      l2RpcUrl: 'http://localhost:8545',
+      l2RpcUrl: 'http://localhost:6546',
       registryAddress: '0x0000000000000000000000000000000000000000',
       version: '2.0.0-test',
     })
@@ -674,7 +674,7 @@ describe('Multi-Node Replication', () => {
       dataDir: PRIMARY_DATA_DIR,
       region: 'global',
       teeEnabled: false,
-      l2RpcUrl: 'http://localhost:8545',
+      l2RpcUrl: 'http://localhost:6546',
       registryAddress: '0x0000000000000000000000000000000000000000',
       version: '2.0.0-test',
     })
@@ -726,7 +726,7 @@ describe('Multi-Node Replication', () => {
       dataDir: PRIMARY_DATA_DIR,
       region: 'global',
       teeEnabled: false,
-      l2RpcUrl: 'http://localhost:8545',
+      l2RpcUrl: 'http://localhost:6546',
       registryAddress: '0x0000000000000000000000000000000000000000',
       version: '2.0.0-test',
     })
@@ -738,7 +738,7 @@ describe('Multi-Node Replication', () => {
       dataDir: REPLICA_DATA_DIR,
       region: 'global',
       teeEnabled: false,
-      l2RpcUrl: 'http://localhost:8545',
+      l2RpcUrl: 'http://localhost:6546',
       registryAddress: '0x0000000000000000000000000000000000000000',
       version: '2.0.0-test',
     })

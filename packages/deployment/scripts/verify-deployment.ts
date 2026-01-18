@@ -99,13 +99,20 @@ async function verifyBackend(
     const parsed = HealthResponseSchema.safeParse(json)
 
     if (!parsed.success) {
-      return { ok: false, error: `Invalid health response: ${JSON.stringify(json)}` }
+      return {
+        ok: false,
+        error: `Invalid health response: ${JSON.stringify(json)}`,
+      }
     }
 
     const { status, service } = parsed.data
 
     // Verify service name matches (if expected)
-    if (expectedService && service && !service.toLowerCase().includes(expectedService.toLowerCase())) {
+    if (
+      expectedService &&
+      service &&
+      !service.toLowerCase().includes(expectedService.toLowerCase())
+    ) {
       return {
         ok: false,
         status,
@@ -132,8 +139,16 @@ export async function verifyDeployment(
 
   console.log(`\n[Verify] Checking ${config.name}...`)
 
-  let frontendResult: { ok: boolean; error?: string } = { ok: false, error: 'Not tested' }
-  let backendResult: { ok: boolean; status?: string; service?: string; error?: string } = {
+  let frontendResult: { ok: boolean; error?: string } = {
+    ok: false,
+    error: 'Not tested',
+  }
+  let backendResult: {
+    ok: boolean
+    status?: string
+    service?: string
+    error?: string
+  } = {
     ok: false,
     error: 'Not tested',
   }
@@ -184,7 +199,9 @@ export async function verifyDeployment(
 /**
  * Verify deployment and throw if failed
  */
-export async function verifyDeploymentOrFail(config: VerificationConfig): Promise<void> {
+export async function verifyDeploymentOrFail(
+  config: VerificationConfig,
+): Promise<void> {
   const result = await verifyDeployment(config)
 
   if (!result.success) {
@@ -198,7 +215,9 @@ export async function verifyDeploymentOrFail(config: VerificationConfig): Promis
     throw new Error(`Deployment verification failed:\n  ${errors.join('\n  ')}`)
   }
 
-  console.log(`[Verify] ${config.name} verified successfully (${result.duration}ms)`)
+  console.log(
+    `[Verify] ${config.name} verified successfully (${result.duration}ms)`,
+  )
 }
 
 /**

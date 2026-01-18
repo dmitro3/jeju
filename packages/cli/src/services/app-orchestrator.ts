@@ -80,26 +80,34 @@ export class AppOrchestrator {
         `No RPC URL configured for app ${app.name}. Set L2_RPC_URL or JEJU_RPC_URL in service environment.`,
       )
     }
+
+    // Ensure ALL declared ports are available before starting the app.
+    // Many apps (e.g. oauth3) bind multiple ports (api + frontend) and can
+    // otherwise fail with EADDRINUSE even if the "main" port is free.
+    const declaredPorts = Object.values(app.ports ?? {})
+    const portsToEnsure = [...new Set(declaredPorts)]
+    for (const port of portsToEnsure) {
+      const available = await ensurePortAvailable(port)
+      if (!available) {
+        throw new Error(
+          `FATAL: Port ${port} is already in use and could not be freed for ${app.name}`,
+        )
+      }
+    }
+
     const appEnv: Record<string, string> = {
       ...(process.env as Record<string, string>),
       ...this.serviceEnv,
       JEJU_RPC_URL: rpcUrl,
       RPC_URL: rpcUrl,
-      CHAIN_ID: '31337',
+      CHAIN_ID: this.serviceEnv.CHAIN_ID ?? '31337',
+      JEJU_NO_WATCH: '1',
+      JEJU_TEST_MODE: '1',
     }
 
     if (mainPort) {
       appEnv.PORT = String(mainPort)
       appEnv.PUBLIC_PORT = String(mainPort)
-    }
-
-    if (mainPort) {
-      const available = await ensurePortAvailable(mainPort)
-      if (!available) {
-        throw new Error(
-          `FATAL: Port ${mainPort} is already in use and could not be freed for ${app.name}`,
-        )
-      }
     }
 
     const [cmd, ...args] = command.split(' ')

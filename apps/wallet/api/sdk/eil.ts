@@ -79,13 +79,13 @@ export interface RequestInfo {
  * EIL Client for cross-chain operations
  */
 export class EILClient {
-  private chainId: number
+  private _chainId: number
   private publicClient: PublicClient
   private walletClient?: WalletClient
   private paymasterAddress: Address
 
   constructor(config: EILClientConfig) {
-    this.chainId = config.chainId
+    this._chainId = config.chainId
     this.publicClient = config.publicClient
     this.walletClient = config.walletClient
 
@@ -95,6 +95,11 @@ export class EILClient {
       config.paymasterAddress ??
       contracts?.paymaster ??
       (ZERO_ADDRESS as Address)
+  }
+
+  /** Get the chain ID */
+  get chainId(): number {
+    return this._chainId
   }
 
   /**
@@ -414,7 +419,3 @@ export class EILClient {
 export function createEILClient(config: EILClientConfig): EILClient {
   return new EILClient(config)
 }
-
-
-
-

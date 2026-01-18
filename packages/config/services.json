@@ -203,9 +203,9 @@
       "ceo": "https://autocrat.testnet.jejunetwork.org/ceo"
     },
     "kms": {
-      "api": "https://kms.testnet.jejunetwork.org",
-      "mpc": "https://kms.testnet.jejunetwork.org/mpc",
-      "defaultProvider": "aws"
+      "api": "https://dws.testnet.jejunetwork.org/kms",
+      "mpc": "https://dws.testnet.jejunetwork.org/kms",
+      "defaultProvider": "mpc"
     },
     "factory": {
       "ui": "https://factory.testnet.jejunetwork.org",
@@ -213,8 +213,8 @@
       "mcp": "https://factory.testnet.jejunetwork.org/api/mcp"
     },
     "oauth3": {
-      "api": "https://oauth3.testnet.jejunetwork.org",
-      "tee": "https://oauth3.testnet.jejunetwork.org"
+      "api": "https://auth.testnet.jejunetwork.org",
+      "tee": "https://auth.testnet.jejunetwork.org"
     },
     "tee": {
       "mode": "phala",
@@ -337,9 +337,9 @@
       "ceo": "https://autocrat.jejunetwork.org/ceo"
     },
     "kms": {
-      "api": "https://kms.jejunetwork.org",
-      "mpc": "https://kms.jejunetwork.org/mpc",
-      "defaultProvider": "aws"
+      "api": "https://dws.jejunetwork.org/kms",
+      "mpc": "https://dws.jejunetwork.org/kms",
+      "defaultProvider": "mpc"
     },
     "factory": {
       "ui": "https://factory.jejunetwork.org",
@@ -347,8 +347,8 @@
       "mcp": "https://factory.jejunetwork.org/api/mcp"
     },
     "oauth3": {
-      "api": "https://oauth3.jejunetwork.org",
-      "tee": "https://oauth3.jejunetwork.org"
+      "api": "https://auth.jejunetwork.org",
+      "tee": "https://auth.jejunetwork.org"
     },
     "tee": {
       "mode": "phala",

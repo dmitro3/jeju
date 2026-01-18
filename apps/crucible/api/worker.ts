@@ -87,10 +87,15 @@ const AGENT_VAULT_WRITE_ABI = parseAbi([
 ])
 
 const TX_HASH_SCHEMA = z.string().regex(/^0x[a-fA-F0-9]{64}$/)
+const OAUTH3_SESSION_ID_SCHEMA = z.union([
+  z.string().uuid(),
+  z.string().regex(/^0x[a-fA-F0-9]+$/),
+])
+
 const OAUTH3_SESSION_SCHEMA = z.object({
-  sessionId: z.string().regex(/^0x[a-fA-F0-9]+$/),
-  identityId: z.string().regex(/^0x[a-fA-F0-9]+$/),
-  smartAccount: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  sessionId: OAUTH3_SESSION_ID_SCHEMA,
+  identityId: z.string().min(1),
+  smartAccount: z.union([z.string().regex(/^0x[a-fA-F0-9]{40}$/), z.null()]),
   expiresAt: z.number().int().positive(),
 })
 
@@ -100,6 +105,17 @@ function normalizeAddress(addr: string): Address {
     .regex(/^0x[a-fA-F0-9]{40}$/)
     .parse(addr)
   return parsed.toLowerCase() as Address
+}
+
+function getSessionSmartAccount(
+  session: z.infer<typeof OAUTH3_SESSION_SCHEMA>,
+  set: { status?: number | string },
+): Address | null {
+  if (!session.smartAccount) {
+    set.status = 401
+    return null
+  }
+  return normalizeAddress(session.smartAccount)
 }
 
 function getBearerToken(headerValue: string | null): string | null {
@@ -1100,7 +1116,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
             }
 
             const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-            const smartAccount = normalizeAddress(session.smartAccount)
+            const smartAccount = getSessionSmartAccount(session, set)
+            if (!smartAccount) {
+              return { error: 'Unauthorized: wallet address missing' }
+            }
             const headerAddress = request.headers.get('x-jeju-address')
             const expectedHeaderAddress = headerAddress
               ? normalizeAddress(headerAddress)
@@ -1241,7 +1260,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
 
           // OAuth3-backed user registration
           const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-          const smartAccount = normalizeAddress(session.smartAccount)
+          const smartAccount = getSessionSmartAccount(session, set)
+          if (!smartAccount) {
+            return { error: 'Unauthorized: wallet address missing' }
+          }
           const expectedHeaderAddress = headerAddress
             ? normalizeAddress(headerAddress)
             : null
@@ -1300,7 +1322,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           }
 
           const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-          const smartAccount = normalizeAddress(session.smartAccount)
+          const smartAccount = getSessionSmartAccount(session, set)
+          if (!smartAccount) {
+            return { error: 'Unauthorized: wallet address missing' }
+          }
           const headerAddress = request.headers.get('x-jeju-address')
           const expectedHeaderAddress = headerAddress
             ? normalizeAddress(headerAddress)
@@ -1466,7 +1491,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
       }
 
       const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-      const smartAccount = normalizeAddress(session.smartAccount)
+      const smartAccount = getSessionSmartAccount(session, set)
+      if (!smartAccount) {
+        return { error: 'Unauthorized: wallet address missing' }
+      }
       const headerAddress = request.headers.get('x-jeju-address')
       const expectedHeaderAddress = headerAddress
         ? normalizeAddress(headerAddress)
@@ -1720,7 +1748,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           }
 
           const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-          const smartAccount = normalizeAddress(session.smartAccount)
+          const smartAccount = getSessionSmartAccount(session, set)
+          if (!smartAccount) {
+            return { error: 'Unauthorized: wallet address missing' }
+          }
           const headerAddress = request.headers.get('x-jeju-address')
           const expectedHeaderAddress = headerAddress
             ? normalizeAddress(headerAddress)
@@ -1811,7 +1842,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
           }
 
           const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-          const smartAccount = normalizeAddress(session.smartAccount)
+          const smartAccount = getSessionSmartAccount(session, set)
+          if (!smartAccount) {
+            return { error: 'Unauthorized: wallet address missing' }
+          }
           const headerAddress = request.headers.get('x-jeju-address')
           const expectedHeaderAddress = headerAddress
             ? normalizeAddress(headerAddress)
@@ -2309,7 +2343,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
                 return { error: 'Unauthorized: login required' }
               }
               const session = await validateOAuth3Session(ctx.teeUrl, authToken)
-              const smartAccount = normalizeAddress(session.smartAccount)
+              const smartAccount = getSessionSmartAccount(session, set)
+              if (!smartAccount) {
+                return { error: 'Unauthorized: wallet address missing' }
+              }
               const headerAddress = request.headers.get('x-jeju-address')
               const expectedHeaderAddress = headerAddress
                 ? normalizeAddress(headerAddress)
@@ -2487,7 +2524,10 @@ export function createCrucibleApp(env?: Partial<CrucibleEnv>) {
                   ctx.teeUrl,
                   authToken,
                 )
-                const smartAccount = normalizeAddress(session.smartAccount)
+                const smartAccount = getSessionSmartAccount(session, set)
+                if (!smartAccount) {
+                  return { error: 'Unauthorized: wallet address missing' }
+                }
                 const headerAddress = request.headers.get('x-jeju-address')
                 const expectedHeaderAddress = headerAddress
                   ? normalizeAddress(headerAddress)

@@ -156,7 +156,3 @@ export function createPaymentRequestLink(params: PaymentRequestParams): string {
 
   return buildUniversalLink('send', linkParams)
 }
-
-
-
-

@@ -3,8 +3,13 @@ import QRCode from 'qrcode'
 import type { Address, Hex } from 'viem'
 import { isAddress, isHex, verifyMessage } from 'viem'
 import type { AuthConfig } from '../../lib/types'
-import { getEphemeralKey } from '../services/kms'
-import { authCodeState, clientState, sessionState } from '../services/state'
+import { getEphemeralKey, initializeKMS } from '../services/kms'
+import {
+  authCodeState,
+  clientState,
+  initializeState,
+  sessionState,
+} from '../services/state'
 import { createHtmlPage, escapeJsString } from '../shared/html-templates'
 
 /**
@@ -269,11 +274,46 @@ function generateFarcasterPage(
   })
 }
 
-export function createFarcasterRouter(_config: AuthConfig) {
+// Lazy initialization for farcaster routes
+let farcasterInitialized = false
+let farcasterInitPromise: Promise<void> | null = null
+
+async function ensureFarcasterInitialized(config: AuthConfig): Promise<void> {
+  if (farcasterInitialized) return
+  if (farcasterInitPromise) {
+    await farcasterInitPromise
+    return
+  }
+
+  farcasterInitPromise = (async () => {
+    await initializeState()
+    try {
+      await initializeKMS({
+        jwtSigningKeyId: config.jwtSigningKeyId ?? 'oauth3-jwt-signing',
+        jwtSignerAddress:
+          config.jwtSignerAddress ??
+          ('0x0000000000000000000000000000000000000000' as `0x${string}`),
+        serviceAgentId: config.serviceAgentId,
+        chainId: config.chainId ?? 'eip155:420691',
+      })
+    } catch (_err) {
+      console.warn(
+        '[OAuth3/Farcaster] KMS initialization failed, using fallback',
+      )
+    }
+    farcasterInitialized = true
+  })()
+
+  await farcasterInitPromise
+}
+
+export function createFarcasterRouter(config: AuthConfig) {
   return new Elysia({ name: 'farcaster', prefix: '/farcaster' })
     .get(
       '/init',
       async ({ query, set }) => {
+        await ensureFarcasterInitialized(config)
+
         const { client_id: clientId, redirect_uri: redirectUri, state } = query
 
         // SECURITY: Rate limiting per client to prevent DoS

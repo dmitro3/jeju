@@ -364,8 +364,6 @@ const DIRECT_ROUTE_SERVICES = new Set([
   'indexer', // Indexer serves its own frontend
   'git', // JejuGit - routes to DWS
   'pkg', // JejuPkg - routes to DWS
-  'auth', // OAuth3 authentication gateway API
-  'oauth3', // OAuth3 lander/frontend page
   'vpn', // VPN app - serves its own frontend in dev
   // 'dws' is NOT here - it has a frontend served via JNS Gateway
 ])
@@ -401,7 +399,6 @@ const HYBRID_SERVICES: Record<string, { port: number; apiPaths: string[] }> = {
       '/registry/*',
       '/k3s/*',
       '/helm/*',
-      '/terraform/*',
       '/ingress/*',
       '/mesh/*',
       '/containers/*',
@@ -430,11 +427,7 @@ const HYBRID_SERVICES: Record<string, { port: number; apiPaths: string[] }> = {
   },
   bazaar: {
     port: 4007,
-    apiPaths: [
-      '/api/*',
-      '/health',
-      '/.well-known/*',
-    ],
+    apiPaths: ['/api/*', '/health', '/.well-known/*'],
   },
 }
 

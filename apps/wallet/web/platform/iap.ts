@@ -28,13 +28,18 @@ export interface IAPConfig {
  */
 export class IAPService {
   private platform: 'ios' | 'android' | 'web'
-  private sandbox: boolean
+  private _sandbox: boolean
   private products: Map<string, IAPProduct> = new Map()
   private purchases: IAPPurchase[] = []
 
   constructor(config: IAPConfig) {
     this.platform = config.platform
-    this.sandbox = config.sandbox ?? false
+    this._sandbox = config.sandbox ?? false
+  }
+
+  /** Check if running in sandbox mode */
+  get isSandbox(): boolean {
+    return this._sandbox
   }
 
   /**

@@ -273,7 +273,7 @@ export default function MarketDetailPage() {
                 }
               >
                 {!isConnected
-                  ? 'Connect Wallet'
+                  ? 'Sign In'
                   : isBuying
                     ? 'Buying...'
                     : selectedOutcome

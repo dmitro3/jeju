@@ -20,6 +20,7 @@ import {
   getLocalhostHost,
 } from '@jejunetwork/config'
 import { Elysia } from 'elysia'
+import { z } from 'zod'
 import { configureFactory, getFactoryConfig } from './config'
 import { closeDB, initDB } from './db/sqlit-client'
 import { a2aRoutes } from './routes/a2a'
@@ -228,33 +229,24 @@ async function ensureDbInitialized(env: FactoryEnv): Promise<void> {
   }
 
   dbInitPromise = (async () => {
-    try {
-      // Configure factory with env vars from DWS
-      configureFactory({
-        sqlitEndpoint: env.SQLIT_NODES || '',
-        sqlitDatabaseId: env.SQLIT_DATABASE_ID || 'factory',
-        isDev: env.NETWORK === 'localnet',
-      })
-
-      // Try to init DB, but don't fail if SQLit isn't available
-      if (env.SQLIT_NODES) {
-        await initDB()
-        console.log('[factory] Database initialized')
-      } else {
-        console.warn(
-          '[factory] SQLit not configured - database features disabled',
-        )
-      }
-
-      dbInitialized = true
-    } catch (err) {
-      console.error(
-        '[factory] Database init failed (continuing without DB):',
-        err,
-      )
-      // Don't throw - allow health checks and non-DB routes to work
-      dbInitialized = true // Mark as "done" even if failed
+    if (!env.SQLIT_NODES) {
+      throw new Error('[factory] SQLIT_NODES is required')
     }
+
+    if (!env.SQLIT_DATABASE_ID) {
+      throw new Error('[factory] SQLIT_DATABASE_ID is required')
+    }
+
+    // Configure factory with env vars from DWS
+    configureFactory({
+      sqlitEndpoint: env.SQLIT_NODES,
+      sqlitDatabaseId: env.SQLIT_DATABASE_ID,
+      isDev: env.NETWORK === 'localnet',
+    })
+
+    await initDB()
+    console.log('[factory] Database initialized')
+    dbInitialized = true
   })()
 
   await dbInitPromise
@@ -282,6 +274,59 @@ export default {
     _ctx: ExecutionContext,
   ): Promise<Response> {
     const url = new URL(request.url)
+
+    if (url.pathname === '/invoke' && request.method === 'POST') {
+      const InvokePayloadSchema = z.object({
+        payload: z.object({
+          method: z.string(),
+          path: z.string(),
+          headers: z.record(z.string(), z.string()).optional(),
+          query: z.record(z.string(), z.string()).optional(),
+          body: z.string().nullable().optional(),
+        }),
+      })
+
+      const parsed = InvokePayloadSchema.safeParse(await request.json())
+      if (!parsed.success) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid invoke payload' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+
+      await ensureDbInitialized(env)
+
+      const { method, path, headers, query, body } = parsed.data.payload
+      const search = query ? new URLSearchParams(query).toString() : ''
+      const targetUrl = `http://worker${path}${search ? `?${search}` : ''}`
+      const forwardHeaders = new Headers(headers ? headers : {})
+
+      const app = getAppForEnv(env)
+      const response = await app.handle(
+        new Request(targetUrl, {
+          method,
+          headers: forwardHeaders,
+          body: typeof body === 'string' ? body : undefined,
+        }),
+      )
+
+      const responseBody = await response.text()
+      const responseHeaders: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+        responseHeaders[key] = value
+      })
+
+      return new Response(
+        JSON.stringify({
+          result: {
+            statusCode: response.status,
+            headers: responseHeaders,
+            body: responseBody,
+          },
+        }),
+        { headers: { 'Content-Type': 'application/json' } },
+      )
+    }
 
     // Health check bypasses DB initialization for fast response
     if (url.pathname === '/health') {

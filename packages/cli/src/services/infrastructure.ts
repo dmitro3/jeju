@@ -116,7 +116,7 @@ export class InfrastructureService {
         ['compose', '-f', composeFile, 'up', '-d'],
         {
           cwd: this.rootDir,
-          stdio: 'pipe',
+          stdio: 'inherit',
         },
       )
 
@@ -148,6 +148,9 @@ export class InfrastructureService {
       cwd: this.rootDir,
       env: {
         ...process.env,
+        // Ensure SQLit always targets the Jeju localnet L2 RPC by default
+        L2_RPC_URL: process.env.L2_RPC_URL ?? getL2RpcUrl(),
+        JEJU_RPC_URL: process.env.JEJU_RPC_URL ?? getL2RpcUrl(),
         PORT: String(SQLIT_PORT),
         SQLIT_PORT: String(SQLIT_PORT),
       },
@@ -407,7 +410,7 @@ export class InfrastructureService {
         ['compose', '-f', composePath, 'up', '-d', 'ipfs'],
         {
           cwd: this.rootDir,
-          stdio: 'pipe',
+          stdio: 'inherit',
         },
       )
 
@@ -480,7 +483,7 @@ export class InfrastructureService {
     )
     await execa('docker', ['compose', '-f', composePath, 'down'], {
       cwd: this.rootDir,
-      stdio: 'pipe',
+      stdio: 'inherit',
       reject: false,
     })
     logger.success('Docker services stopped')
@@ -604,7 +607,7 @@ export class InfrastructureService {
           ? { ENTRY_POINT_ADDRESS: entryPointAddress }
           : {}),
       },
-      stdio: 'pipe',
+      stdio: 'inherit',
     })
 
     // Wait for bundler to start
@@ -734,7 +737,7 @@ export class InfrastructureService {
           L1_MESSENGER_ADDRESS: deployment.l1Messenger,
           L2_MESSENGER_ADDRESS: deployment.l2Messenger,
         },
-        stdio: 'pipe',
+        stdio: 'inherit',
       })
 
       // Give it a moment to start
@@ -818,19 +821,7 @@ export class InfrastructureService {
       return false
     }
 
-    // Start independent services in parallel
-    const startTasks: Promise<{ name: string; success: boolean }>[] = []
-
-    // SQLit can start independently
-    if (!sqlitRunning) {
-      startTasks.push(
-        this.startSQLit().then((success) => ({ name: 'SQLit', success })),
-      )
-    } else {
-      logger.success(`SQLit already running on port ${SQLIT_PORT}`)
-    }
-
-    // Docker + services need to be sequential, but can run parallel to SQLit
+    // Docker + services need to be sequential, but can run parallel to Localnet
     const dockerTask = async (): Promise<{
       name: string
       success: boolean
@@ -885,19 +876,40 @@ export class InfrastructureService {
       return { name: 'Docker', success: true }
     }
 
-    startTasks.push(dockerTask())
+    const dockerPromise = dockerTask()
 
-    // Localnet can start in parallel with everything else
+    // Localnet first (SQLit depends on L2 RPC for on-chain integration)
+    let localnetResult: { name: string; success: boolean }
     if (!localnetRunning) {
-      startTasks.push(
-        this.startLocalnet().then((success) => ({ name: 'Localnet', success })),
-      )
+      const success = await this.startLocalnet()
+      localnetResult = { name: 'Localnet', success }
     } else {
       logger.success('Localnet already running (L1 + L2)')
+      localnetResult = { name: 'Localnet', success: true }
     }
 
-    // Wait for all parallel tasks to complete
-    const results = await Promise.all(startTasks)
+    // Start SQLit after Localnet is ready
+    let sqlitPromise: Promise<{ name: string; success: boolean }>
+    if (!sqlitRunning) {
+      if (!localnetResult.success) {
+        sqlitPromise = Promise.resolve({ name: 'SQLit', success: false })
+      } else {
+        sqlitPromise = this.startSQLit().then((success) => ({
+          name: 'SQLit',
+          success,
+        }))
+      }
+    } else {
+      logger.success(`SQLit already running on port ${SQLIT_PORT}`)
+      sqlitPromise = Promise.resolve({ name: 'SQLit', success: true })
+    }
+
+    // Wait for Docker + Localnet + SQLit
+    const results = await Promise.all([
+      dockerPromise,
+      Promise.resolve(localnetResult),
+      sqlitPromise,
+    ])
 
     // Start bundler after localnet is up (needs chain connection)
     const bundlerRunning = await this.isBundlerRunning()

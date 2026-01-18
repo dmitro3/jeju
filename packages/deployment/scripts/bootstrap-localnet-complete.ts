@@ -562,11 +562,25 @@ class CompleteBootstrapper {
       }
     }
 
-    return this.deployContract(
+    const address = this.deployContract(
       'src/tokens/NetworkUSDC.sol:NetworkUSDC',
       [this.deployerAddress, '100000000000000', 'true'],
       'USDC (with EIP-3009 x402 support)',
     )
+    if (this.isErc20Token(address)) {
+      return address
+    }
+
+    console.log('  ⚠️  USDC deployment invalid, retrying...')
+    const retryAddress = this.deployContract(
+      'src/tokens/NetworkUSDC.sol:NetworkUSDC',
+      [this.deployerAddress, '100000000000000', 'true'],
+      'USDC (with EIP-3009 x402 support)',
+    )
+    if (!this.isErc20Token(retryAddress)) {
+      throw new Error('USDC deployment failed validation')
+    }
+    return retryAddress
   }
 
   private async deployPriceOracle(): Promise<string> {
@@ -600,9 +614,23 @@ class CompleteBootstrapper {
       [usdc, jeju],
       'CreditManager (Prepaid Balance System)',
     )
+    if (this.isCreditManagerContract(address)) {
+      console.log('     ✨ Credit system enables zero-latency payments!')
+      return address
+    }
+
+    console.log('  ⚠️  CreditManager deployment invalid, retrying...')
+    const retryAddress = this.deployContract(
+      'src/services/CreditManager.sol:CreditManager',
+      [usdc, jeju],
+      'CreditManager (Prepaid Balance System)',
+    )
+    if (!this.isCreditManagerContract(retryAddress)) {
+      throw new Error('CreditManager deployment failed validation')
+    }
 
     console.log('     ✨ Credit system enables zero-latency payments!')
-    return address
+    return retryAddress
   }
 
   private async deployMultiTokenPaymaster(
@@ -2537,6 +2565,30 @@ class CompleteBootstrapper {
     usdc: string,
     jeju: string,
   ): Promise<Array<{ name: string; address: string; privateKey: string }>> {
+    const weiPerEth = BigInt(10) ** BigInt(18)
+    const deployerBalanceWei = BigInt(
+      execSync(
+        `cast balance ${this.deployerAddress} --rpc-url ${this.rpcUrl}`,
+        { encoding: 'utf-8' },
+      ).trim(),
+    )
+    const reserveWei = BigInt(5) * weiPerEth
+    const recipients = this.TEST_ACCOUNTS.filter(
+      (account) =>
+        this.getAddress(account.key).toLowerCase() !==
+        this.deployerAddress.toLowerCase(),
+    )
+    const availableWei =
+      deployerBalanceWei > reserveWei ? deployerBalanceWei - reserveWei : 0n
+    const maxPerWalletWei = BigInt(10) * weiPerEth
+    const perWalletWei = availableWei / BigInt(recipients.length)
+    const sendWei =
+      perWalletWei > maxPerWalletWei ? maxPerWalletWei : perWalletWei
+
+    if (sendWei <= 0n) {
+      throw new Error('Insufficient ETH to fund test wallets')
+    }
+
     const wallets = []
 
     for (const account of this.TEST_ACCOUNTS) {
@@ -2565,8 +2617,8 @@ class CompleteBootstrapper {
       // ETH: 100 ETH (skip if same as deployer)
       if (address.toLowerCase() !== this.deployerAddress.toLowerCase()) {
         execSync(
-          `cast send ${address} --value 100ether --rpc-url ${this.rpcUrl} --private-key ${this.deployerKey}`,
-          { stdio: 'pipe' },
+          `cast send ${address} --value ${sendWei.toString()} --rpc-url ${this.rpcUrl} --private-key ${this.deployerKey}`,
+          { stdio: 'inherit' },
         )
       }
 
@@ -2576,7 +2628,7 @@ class CompleteBootstrapper {
           : ''
       const ethStr =
         address.toLowerCase() !== this.deployerAddress.toLowerCase()
-          ? ', 100 ETH'
+          ? `, ${sendWei / weiPerEth} ETH`
           : ' (deployer has remaining ETH)'
       console.log(`    ✅ 10,000 USDC${jejuStr}${ethStr}`)
       console.log('')
@@ -2812,6 +2864,46 @@ class CompleteBootstrapper {
       execSync(cmd, { stdio: 'pipe' })
     }
     if (label) console.log(`     ${label}`)
+  }
+
+  private isErc20Token(address: string): boolean {
+    const cmd = `cast call ${address} "balanceOf(address)(uint256)" ${this.deployerAddress} --rpc-url ${this.rpcUrl}`
+    try {
+      execSync(cmd, { stdio: 'pipe' })
+      return true
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      if (!this.isRpcConnectivityFailure(errorMessage)) {
+        return false
+      }
+
+      console.log('     ⚠️  RPC unavailable while validating token. Waiting...')
+      this.waitForRpcReady(60_000)
+      execSync(cmd, { stdio: 'pipe' })
+      return true
+    }
+  }
+
+  private isCreditManagerContract(address: string): boolean {
+    const cmd = `cast call ${address} "authorizedServices(address)(bool)" ${this.deployerAddress} --rpc-url ${this.rpcUrl}`
+    try {
+      execSync(cmd, { stdio: 'pipe' })
+      return true
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error)
+      if (!this.isRpcConnectivityFailure(errorMessage)) {
+        return false
+      }
+
+      console.log(
+        '     ⚠️  RPC unavailable while validating CreditManager. Waiting...',
+      )
+      this.waitForRpcReady(60_000)
+      execSync(cmd, { stdio: 'pipe' })
+      return true
+    }
   }
 
   private getAddress(privateKey: string): string {

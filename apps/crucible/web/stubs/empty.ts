@@ -128,3 +128,29 @@ export async function writeContract<
 ): Promise<Hex> {
   throw new Error('writeContract is not available in browser builds')
 }
+
+export class SecureSigningService {
+  hasKey(_keyId: string): boolean {
+    return false
+  }
+
+  getAddress(_keyId: string): Address {
+    throw new Error('SecureSigningService is not available in browser builds')
+  }
+
+  async sign(_request: {
+    keyId: string
+    message: string
+    messageHash: Hex
+  }): Promise<{ signature: Hex }> {
+    throw new Error('SecureSigningService is not available in browser builds')
+  }
+}
+
+export function getSecureSigningService(): SecureSigningService {
+  throw new Error('SecureSigningService is not available in browser builds')
+}
+
+export function createMPCClient(..._args: AnyValue[]): never {
+  throw new Error('createMPCClient is not available in browser builds')
+}

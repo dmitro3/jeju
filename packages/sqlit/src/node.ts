@@ -35,7 +35,7 @@ const devChain: Chain = {
   id: 31337,
   name: 'Development',
   rpcUrls: {
-    default: { http: ['http://localhost:8545'] },
+    default: { http: ['http://localhost:6546'] },
   },
 }
 
@@ -1827,7 +1827,7 @@ WHERE embedding MATCH ?
         "SELECT sql FROM sqlite_master WHERE type='table' ORDER BY name",
       )
       .all()
-      .map((r) => r.sql)
+      .map((r: { sql: string }) => r.sql)
       .join('\n')
     return `0x${createHash('sha256').update(schema).digest('hex')}` as Hex
   }

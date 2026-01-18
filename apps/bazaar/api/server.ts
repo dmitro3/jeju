@@ -30,7 +30,9 @@ configureBazaar({
   sqlitPrivateKey: getSqlitPrivateKey(),
 })
 
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : CORE_PORTS.BAZAAR_API.get()
+const PORT = process.env.PORT
+  ? parseInt(process.env.PORT, 10)
+  : CORE_PORTS.BAZAAR_API.get()
 
 const app = createBazaarApp({
   NETWORK: getCurrentNetwork(),

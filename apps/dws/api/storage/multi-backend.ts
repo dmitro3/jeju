@@ -198,19 +198,37 @@ export class MultiBackendManager {
             options?.filename ?? 'file',
           )
 
-          const response = await fetch(`${ipfsApiUrl}/api/v0/add`, {
-            method: 'POST',
-            body: formData,
-          })
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 180_000)
+            try {
+              const response = await fetch(`${ipfsApiUrl}/api/v0/add`, {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal,
+              }).finally(() => clearTimeout(timeout))
 
-          if (!response.ok)
-            throw new Error(`IPFS upload failed: ${response.statusText}`)
-          const data = expectValid(
-            IpfsAddResponseSchema,
-            await response.json(),
-            'IPFS add response',
-          )
-          return { cid: data.Hash, url: `${ipfsGatewayUrl}/ipfs/${data.Hash}` }
+              if (!response.ok) {
+                throw new Error(`IPFS upload failed: ${response.statusText}`)
+              }
+              const data = expectValid(
+                IpfsAddResponseSchema,
+                await response.json(),
+                'IPFS add response',
+              )
+              return {
+                cid: data.Hash,
+                url: `${ipfsGatewayUrl}/ipfs/${data.Hash}`,
+              }
+            } catch (err) {
+              if (attempt === 3) throw err
+              const message = err instanceof Error ? err.message : String(err)
+              console.warn(
+                `[IPFS] Upload attempt ${attempt} failed: ${message}`,
+              )
+            }
+          }
+          throw new Error('IPFS upload failed after 3 attempts')
         },
         async download(cid: string): Promise<Buffer> {
           const response = await fetch(`${ipfsGatewayUrl}/ipfs/${cid}`)

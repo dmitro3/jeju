@@ -10,13 +10,13 @@ import { type AAClient, createAAClient } from './account-abstraction'
 import { createEILClient, type EILClient } from './eil'
 import { createGasService, type GasAbstractionService } from './gas-abstraction'
 
-// Supported chains
-const SUPPORTED_CHAINS = new Map([
+// Supported chains - using unknown cast due to viem chain type variance
+const SUPPORTED_CHAINS = new Map<number, typeof mainnet>([
   [1, mainnet],
-  [8453, base],
-  [42161, arbitrum],
-  [10, optimism],
-  [11155111, sepolia],
+  [8453, base as unknown as typeof mainnet],
+  [42161, arbitrum as unknown as typeof mainnet],
+  [10, optimism as unknown as typeof mainnet],
+  [11155111, sepolia as unknown as typeof mainnet],
 ])
 
 export interface WalletCoreConfig {

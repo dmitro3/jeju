@@ -66,7 +66,7 @@ const LOCALHOST_HOST =
 const API_BASE =
   typeof window !== 'undefined' && window.location.port === '4355'
     ? `http://${LOCALHOST_HOST}:4352`
-    : '/api'
+    : '' // No /api prefix - routes are at root
 
 const GRAPHQL_URL =
   typeof window !== 'undefined' && window.location.port === '4355'
@@ -315,9 +315,18 @@ export default function App() {
         setTransactions(txsResult.value.transactions ?? [])
       }
 
+      // Check for database errors in responses
+      const hasDbError =
+        (blocksResult.status === 'fulfilled' && blocksResult.value.error) ||
+        (txsResult.status === 'fulfilled' && txsResult.value.error)
+
       if (results.every((r) => r.status === 'rejected')) {
         setError(
           'Unable to reach the indexer. Verify the API server is running.',
+        )
+      } else if (hasDbError) {
+        setError(
+          'Indexer database is currently unavailable. Data may be limited.',
         )
       }
 

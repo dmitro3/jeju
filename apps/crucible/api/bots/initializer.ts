@@ -480,10 +480,9 @@ export class BotInitializer {
     }
     log.info('Using KMS-backed signing for trading bots')
 
-    // Check if any agents already exist (indicates prior initialization)
-    const existingAgent = await this.config.agentSdk.getAgent(1n)
-    if (existingAgent) {
-      log.info('Agents already exist on chain, skipping bot initialization')
+    // Idempotency: if we've already initialized bots in this process, do nothing
+    if (this.bots.size > 0) {
+      log.info('Bots already initialized, skipping bot initialization')
       return this.bots
     }
 

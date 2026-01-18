@@ -144,7 +144,7 @@ class IPFSBackend implements StorageBackend {
 
     // If no pinning services available, generate CID locally
     // This uses the same algorithm as IPFS (sha256 + multihash)
-    const { sha256 } = await import('@noble/hashes/sha256')
+    const { sha256 } = await import('@noble/hashes/sha2.js')
     const hash = sha256(new Uint8Array(content))
     // Create CIDv1 with raw codec (0x55) and sha256 (0x12)
     const multihash = new Uint8Array([0x12, 0x20, ...hash])

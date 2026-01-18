@@ -376,6 +376,12 @@ export async function discoverExistingServices(): Promise<void> {
   // First, load from SQLit persistence
   await loadPersistedServices()
 
+  if (process.env.KUBERNETES_SERVICE_HOST) {
+    console.log('[Services] Skipping Docker discovery in Kubernetes')
+    discoveryComplete = true
+    return
+  }
+
   // List all containers with dws- prefix (including stopped ones)
   const result = await dockerCommand([
     'ps',

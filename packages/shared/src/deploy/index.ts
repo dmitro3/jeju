@@ -22,7 +22,7 @@
  *   await verifyDeployment(result)
  */
 
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { z } from 'zod'
 
@@ -34,12 +34,14 @@ const UploadResponseSchema = z.object({
 
 const AppRegistrationResponseSchema = z.object({
   success: z.boolean(),
-  app: z.object({
-    name: z.string(),
-    frontendCid: z.string().nullable(),
-    staticFiles: z.record(z.string(), z.string()).nullable(),
-    backendWorkerId: z.string().nullable(),
-  }).optional(),
+  app: z
+    .object({
+      name: z.string(),
+      frontendCid: z.string().nullable(),
+      staticFiles: z.record(z.string(), z.string()).nullable(),
+      backendWorkerId: z.string().nullable(),
+    })
+    .optional(),
 })
 
 export interface DeployAppOptions {
@@ -92,7 +94,6 @@ export function getDWSUrlForNetwork(network: string): string {
       return 'https://dws.jejunetwork.org'
     case 'testnet':
       return 'https://dws.testnet.jejunetwork.org'
-    case 'localnet':
     default:
       return 'http://localhost:4030'
   }
@@ -209,10 +210,13 @@ async function uploadFrontendDirectory(
 /**
  * Deploy an app to DWS
  */
-export async function deployApp(options: DeployAppOptions): Promise<DeployResult> {
+export async function deployApp(
+  options: DeployAppOptions,
+): Promise<DeployResult> {
   const network = process.env.NETWORK ?? process.env.JEJU_NETWORK ?? 'testnet'
   const dwsUrl = options.dwsUrl ?? getDWSUrlForNetwork(network)
-  const deployerAddress = options.deployerAddress ?? '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
+  const deployerAddress =
+    options.deployerAddress ?? '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266'
   const timeout = options.uploadTimeout ?? 60000
 
   console.log(`\nDeploying ${options.name} to DWS`)
@@ -301,15 +305,17 @@ export async function deployApp(options: DeployAppOptions): Promise<DeployResult
   }).catch(() => {})
 
   // Determine app URL based on network
-  const domain = network === 'mainnet'
-    ? 'jejunetwork.org'
-    : network === 'testnet'
-      ? 'testnet.jejunetwork.org'
-      : 'localhost:4030'
+  const domain =
+    network === 'mainnet'
+      ? 'jejunetwork.org'
+      : network === 'testnet'
+        ? 'testnet.jejunetwork.org'
+        : 'localhost:4030'
 
-  const appUrl = network === 'localnet'
-    ? `http://${options.name}.${domain}`
-    : `https://${options.name}.${domain}`
+  const appUrl =
+    network === 'localnet'
+      ? `http://${options.name}.${domain}`
+      : `https://${options.name}.${domain}`
 
   const result: DeployResult = {
     name: options.name,
@@ -366,7 +372,8 @@ export async function verifyDeployment(
         checks.frontend.error = 'Response is not HTML'
       }
     } catch (error) {
-      checks.frontend.error = error instanceof Error ? error.message : 'Unknown error'
+      checks.frontend.error =
+        error instanceof Error ? error.message : 'Unknown error'
       if (attempt < retries) {
         console.log(`  Frontend: Retrying (${attempt}/${retries})...`)
         await new Promise((r) => setTimeout(r, 2000))
@@ -402,7 +409,8 @@ export async function verifyDeployment(
         checks.health.error = `Unexpected status: ${status}`
       }
     } catch (error) {
-      checks.health.error = error instanceof Error ? error.message : 'Unknown error'
+      checks.health.error =
+        error instanceof Error ? error.message : 'Unknown error'
       if (attempt < retries) {
         console.log(`  Health: Retrying (${attempt}/${retries})...`)
         await new Promise((r) => setTimeout(r, 2000))
@@ -431,7 +439,9 @@ export async function verifyDeployment(
  * Deploy and verify an app in one call
  * Throws an error if verification fails
  */
-export async function deployAndVerify(options: DeployAppOptions): Promise<DeployResult> {
+export async function deployAndVerify(
+  options: DeployAppOptions,
+): Promise<DeployResult> {
   const result = await deployApp(options)
   await verifyDeployment(result)
   return result

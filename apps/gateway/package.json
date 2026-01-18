@@ -43,8 +43,10 @@
   "main": "api/a2a-server.ts",
   "scripts": {
     "dev": "bun run scripts/dev.ts",
+    "dev:worker": "bun --watch api/worker.ts",
     "build": "bun run scripts/build.ts",
     "start": "bun run scripts/serve.ts",
+    "start:worker": "bun api/worker.ts",
     "deploy": "bun run scripts/deploy.ts",
     "test": "bun test tests/unit/",
     "test:unit": "bun test tests/unit/",

@@ -1271,8 +1271,8 @@ class ServicesOrchestrator {
       }
     }
 
-    // All provisioning MUST go through DWS interfaces for decentralized experience
-    // DWS handles Docker locally, k8s in production
+    // All provisioning goes through DWS interfaces for decentralized experience
+    // DWS handles Docker locally, SQLit/Workers in production
     if (await this.isDWSAvailable()) {
       const result = await this.provisionPostgresViaDWS()
       if (result) return true

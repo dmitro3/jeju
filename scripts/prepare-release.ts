@@ -71,7 +71,6 @@ const APPS = [
   'crucible',
   'documentation',
   'dws',
-  'example',
   'factory',
   'gateway',
   'indexer',

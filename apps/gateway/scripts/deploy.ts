@@ -632,7 +632,10 @@ async function deploy(): Promise<void> {
     jnsName: 'gateway.jeju',
     frontendCid: webAssets.get('index.html')?.cid ?? '',
     staticFiles: Object.fromEntries(
-      Array.from(webAssets.entries()).map(([k, v]) => [k.startsWith('/') ? k : `/${k}`, v.cid]),
+      Array.from(webAssets.entries()).map(([k, v]) => [
+        k.startsWith('/') ? k : `/${k}`,
+        v.cid,
+      ]),
     ),
     backendWorkerId: worker?.id,
     appUrl: `https://${domain}`,

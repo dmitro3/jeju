@@ -108,7 +108,3 @@ export function extractEntities(text: string): ExtractedEntities {
 
   return result
 }
-
-
-
-
